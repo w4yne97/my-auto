@@ -1,0 +1,41 @@
+name: auto-reading
+display_name: Auto-Reading
+description: 论文每日跟踪 / Insight 知识图谱 / 研究 Idea 挖掘
+version: 1.0.0
+
+# G3 module contract — two artifacts (paths relative to module dir)
+daily:
+  today_script: scripts/today.py
+  today_skill: SKILL_TODAY.md
+  section_title: "📚 今日论文"      # used in P2 daily-note assembly
+
+# Vault subdirectories owned by this module (declarative; not enforced in P1)
+vault_outputs:
+  - "10_Daily/YYYY-MM-DD-论文推荐.md"
+  - "20_Papers/<domain>/<paper>.md"
+  - "30_Insights/<topic>/"
+  - "40_Ideas/"
+
+# Cross-module dependencies (used in P2; P1 leaves empty)
+depends_on: []
+
+# Module config files (documentation only; e.g. for /reading-config to locate)
+configs:
+  - config/research_interests.yaml
+
+# SKILLs owned by this module (J2 naming policy: short names + ownership declaration)
+owns_skills:
+  - paper-search
+  - paper-analyze
+  - paper-import
+  - paper-deep-read
+  - insight-init
+  - insight-update
+  - insight-absorb
+  - insight-review
+  - insight-connect
+  - idea-generate
+  - idea-develop
+  - idea-review
+  - reading-config
+  - weekly-digest
