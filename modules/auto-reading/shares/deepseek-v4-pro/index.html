@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeepSeek-V4: Towards Highly Efficient Million-Token Context Intelligence</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Noto+Serif+SC:wght@400;500;600&display=swap" rel="stylesheet">
+
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$', '$']], displayMath: [['$$', '$$']] },
+  svg: { fontCache: 'global' }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+
+<style>
+:root {
+  --bg: #ffffff;
+  --bg-soft: #f7f7f5;
+  --text: #1a1a1a;
+  --text-muted: #666;
+  --border: #e5e5e2;
+  --accent: #1a56db;
+  --code-bg: #f4f4f2;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Inter', 'Noto Serif SC', -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.8;
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  max-width: 1180px;
+  margin: 0 auto;
+  gap: 64px;
+  padding: 0 32px;
+}
+
+/* ===== TOC ===== */
+.toc {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  padding: 56px 0;
+  border-right: 1px solid var(--border);
+  font-size: 13.5px;
+}
+.toc-title {
+  font-weight: 600;
+  color: var(--text-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 16px;
+}
+.toc ol { list-style: none; }
+.toc li { margin: 2px 0; }
+.toc a {
+  display: block;
+  padding: 5px 0;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+.toc a:hover { color: var(--accent); }
+.toc .sub { padding-left: 16px; font-size: 12.5px; }
+
+/* ===== Main ===== */
+main {
+  padding: 56px 0 120px;
+  max-width: 760px;
+}
+
+.header {
+  margin-bottom: 56px;
+  padding-bottom: 32px;
+  border-bottom: 1px solid var(--border);
+}
+.header .kicker {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 12px;
+}
+h1 {
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+  margin-bottom: 16px;
+}
+.header .meta {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+.header .meta span { margin-right: 20px; }
+
+section { margin-bottom: 64px; scroll-margin-top: 24px; }
+
+h2 {
+  font-size: 24px;
+  font-weight: 700;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  letter-spacing: -0.01em;
+}
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 32px 0 12px;
+  color: #111;
+}
+h4 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 20px 0 8px;
+  color: #222;
+}
+
+p { margin-bottom: 14px; color: #2a2a2a; }
+strong { color: #0a0a0a; font-weight: 600; }
+em { font-style: italic; color: #0a0a0a; }
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+ul, ol { padding-left: 24px; margin-bottom: 14px; }
+li { margin-bottom: 6px; }
+
+code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.88em;
+  background: var(--code-bg);
+  padding: 2px 6px;
+  border-radius: 3px;
+  color: #b91c1c;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+}
+th, td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+th {
+  font-weight: 600;
+  background: var(--bg-soft);
+  border-bottom: 2px solid var(--border);
+}
+
+blockquote {
+  border-left: 3px solid var(--accent);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.formula {
+  background: var(--bg-soft);
+  padding: 12px 20px;
+  border-radius: 4px;
+  margin: 14px 0;
+  overflow-x: auto;
+  font-size: 15px;
+}
+
+.note {
+  font-size: 14px;
+  color: var(--text-muted);
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-radius: 4px;
+  margin: 14px 0;
+}
+
+pre {
+  background: var(--bg-soft);
+  padding: 14px 18px;
+  border-radius: 4px;
+  overflow-x: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 14px 0;
+  white-space: pre;
+  color: #333;
+}
+
+.figure {
+  margin: 24px 0 8px;
+  padding: 20px 16px 12px;
+  background: #fdfdfb;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  text-align: center;
+  overflow-x: auto;
+}
+.figure svg,
+.figure img { max-width: 100%; height: auto; display: block; margin: 0 auto; border-radius: 4px; }
+.figure-caption {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 10px;
+  font-style: italic;
+  padding: 0 12px;
+}
+.walkthrough {
+  counter-reset: step;
+  list-style: none;
+  padding: 0;
+  margin: 20px 0;
+}
+.walkthrough li {
+  counter-increment: step;
+  position: relative;
+  padding: 14px 16px 14px 56px;
+  margin-bottom: 10px;
+  background: #fafaf8;
+  border-left: 3px solid var(--accent);
+  border-radius: 0 4px 4px 0;
+}
+.walkthrough li::before {
+  content: counter(step);
+  position: absolute;
+  left: 16px;
+  top: 14px;
+  width: 26px;
+  height: 26px;
+  background: var(--accent);
+  color: white;
+  border-radius: 50%;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.walkthrough li strong { display: block; margin-bottom: 4px; }
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; gap: 0; padding: 0 20px; }
+  .toc { display: none; }
+  h1 { font-size: 26px; }
+}
+</style>
+</head>
+
+<body>
+
+<div class="layout">
+
+<aside class="toc">
+  <div class="toc-title">目录</div>
+  <ol>
+  <li><a href="#s0">摘要与核心卖点</a>
+  </li>
+  <li><a href="#s1">1. 动机:撞上二次方注意力的墙</a>
+  </li>
+  <li><a href="#s2">2. 架构:三项核心创新</a>
+    <ol class="sub">
+      <li><a href="#s2-1">2.1 从 V3 继承 · 调整的细节</a></li>
+      <li><a href="#s2-2">2.2 mHC · 流形约束的超连接</a></li>
+      <li><a href="#s2-3">2.3 Hybrid Attention · CSA + HCA</a></li>
+      <li><a href="#s2-4">2.4 Muon Optimizer</a></li>
+    </ol>
+  </li>
+  <li><a href="#s3">3. 基础设施</a>
+    <ol class="sub">
+      <li><a href="#s3-1">3.1 Fine-Grained Expert-Parallelism 重叠</a></li>
+      <li><a href="#s3-2">3.2 TileLang · 批量不变 · FP4 QAT</a></li>
+    </ol>
+  </li>
+  <li><a href="#s4">4. Pre-Training</a>
+    <ol class="sub">
+      <li><a href="#s4-1">4.1 Flash vs Pro 配置</a></li>
+      <li><a href="#s4-2">4.2 训练稳定性 · Anticipatory Routing</a></li>
+      <li><a href="#s4-3">4.3 Base 模型评估</a></li>
+    </ol>
+  </li>
+  <li><a href="#s5">5. Post-Training</a>
+    <ol class="sub">
+      <li><a href="#s5-1">5.1 Pipeline:Specialist → OPD</a></li>
+      <li><a href="#s5-2">5.2 三档 Reasoning Effort · Thinking Management</a></li>
+      <li><a href="#s5-3">5.3 On-Policy Distillation 公式推导</a></li>
+      <li><a href="#s5-4">5.4 DSec · 容错 rollout 基础设施</a></li>
+    </ol>
+  </li>
+  <li><a href="#s6">6. Evaluation</a>
+    <ol class="sub">
+      <li><a href="#s6-1">6.1 标准 Benchmarks</a></li>
+      <li><a href="#s6-2">6.2 长上下文 + 形式化数学</a></li>
+      <li><a href="#s6-3">6.3 Real-World 任务</a></li>
+    </ol>
+  </li>
+  <li><a href="#s7">7. Conclusion 与局限</a>
+  </li>
+</ol>
+</aside>
+
+<main>
+
+<div class="header">
+  <div class="kicker">Technical Report · DeepSeek-AI · 2026-04-24 · HuggingFace preview</div>
+  <h1>DeepSeek-V4: Towards Highly Efficient Million-Token Context Intelligence</h1>
+  <div class="meta">
+    <span>DeepSeek-AI</span>
+    <span>2026-04-24</span>
+  </div>
+</div>
+
+<!-- ============ 0 ============ -->
+<section id="s0">
+<h2>摘要与核心卖点</h2>
+
+<p>DeepSeek-V4 系列是 DeepSeek-AI 在 2026-04-24 发布的 MoE 语言模型 <strong>preview 版本</strong>,包含两档:<strong>DeepSeek-V4-Pro</strong>(1.6T 总参 / 49B 激活)与 <strong>DeepSeek-V4-Flash</strong>(284B 总参 / 13B 激活),两者都原生支持 <strong>1M token 上下文</strong>。</p>
+
+<p>整篇报告的核心论点只有一个:<em>推理模型与长程 agent 工作流都撞上了 vanilla attention 的二次方墙,要突破只能从架构层动刀</em>。V4 给出的答案是三件事捆绑:<strong>(1)混合注意力 CSA + HCA</strong>、<strong>(2)Manifold-Constrained Hyper-Connections(mHC)</strong> 替代朴素残差、<strong>(3)Muon 优化器</strong> 替代 AdamW(除少数模块外)。</p>
+
+<div class="figure">
+  <img src="figures/fig1-benchmarks.png" alt="Figure 1 — Benchmarks and efficiency">
+  <div class="figure-caption">Figure 1 · 左:V4-Pro-Max 在 Knowledge & Reasoning(SimpleQA / HLE / Apex / Codeforces)与 Agentic(SWE / Terminal Bench / Toolathlon)上与 Claude Opus 4.6-Max / GPT-5.4-xHigh / Gemini-3.1-Pro-High 的对比柱状图。右:V4 系列与 V3.2 在 single-token inference FLOPs 与累积 KV cache 随 token 位置增长的对比——Pro 在 1M 处取得 <strong>3.7× lower FLOPs / 9.5× smaller KV cache</strong>,Flash 达到 <strong>9.8× lower FLOPs / 13.7× smaller KV cache</strong>(原论文 p.1)。</div>
+</div>
+
+<h4>核心效率数字(1M-token 场景,相对 DeepSeek-V3.2)</h4>
+
+<table>
+  <thead><tr><th>指标</th><th>V4-Pro</th><th>V4-Flash</th><th>对比基线(BF16 GQA8)</th></tr></thead>
+  <tbody>
+    <tr><td>single-token inference FLOPs(vs V3.2)</td><td><strong>27%</strong></td><td><strong>10%</strong></td><td>—</td></tr>
+    <tr><td>accumulated KV cache(vs V3.2)</td><td><strong>10%</strong></td><td><strong>7%</strong></td><td>—</td></tr>
+    <tr><td>accumulated KV cache(vs BF16 GQA8)</td><td colspan="2"><strong>≈ 2% 在 1M 设置</strong></td><td>100%</td></tr>
+    <tr><td>预训练 tokens</td><td>33T</td><td>32T</td><td>—</td></tr>
+  </tbody>
+</table>
+
+<div class="note">
+  <strong>一句话总结</strong>:V4 不是"把 V3 加大一倍再训",而是"用一套新架构把 1M 长度的推理成本压到 V3.2 的 1/10 以下"。这个定位很干脆——<em>拿效率作为长程推理(reasoning + agentic)的入场券</em>,不是直接追平 GPT-5.4 / Gemini 3.1 Pro 的最高分。
+</div>
+
+</section>
+
+<!-- ============ 1 ============ -->
+<section id="s1">
+<h2>1. 动机:撞上二次方注意力的墙</h2>
+
+<p>作者把 2026 年的 LLM 研究绑在两个趋势上:<strong>推理模型 test-time scaling</strong> 与 <strong>long-horizon agent 工作流</strong>——两者都对模型处理超长上下文提出刚性需求。而 vanilla attention 的 O(n²) 复杂度让这条路在 1M 量级直接失效。报告没有把叙事包装成"三个挑战",而是直接给出<strong>三项正交架构创新</strong>,每一项对准一个不同的瓶颈:</p>
+
+<table>
+  <thead>
+    <tr><th style="width:22%">创新</th><th style="width:30%">解决什么问题</th><th style="width:48%">具体做法</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>① Hybrid Attention(CSA + HCA)</strong></td>
+      <td>二次方 attention 在长上下文成本爆炸,vanilla softmax 无法承受 1M</td>
+      <td>两种互补压缩:<em>CSA</em> 把 KV 沿序列压缩到 1/m,再做 <strong>DeepSeek Sparse Attention(DSA)</strong> 稀疏选 top-k;<em>HCA</em> 用更激进的比例 m' ≫ m 压缩但保持 dense attention。两者 interleaved 部署。</td>
+    </tr>
+    <tr>
+      <td><strong>② Manifold-Constrained Hyper-Connections(mHC)</strong></td>
+      <td>朴素 HC(Zhu et al 2025)堆层就训不稳定,但残差带宽不够会影响表达力</td>
+      <td>把 HC 的 residual mapping 矩阵 B_l 约束在 <em>doubly stochastic matrices 流形(Birkhoff polytope)</em>,保证 spectral norm ≤ 1 → non-expansive。通过 Sinkhorn-Knopp 迭代投影。</td>
+    </tr>
+    <tr>
+      <td><strong>③ Muon Optimizer(+ Hybrid Newton-Schulz)</strong></td>
+      <td>AdamW 收敛慢、MoE 长训练不稳</td>
+      <td>对除 embedding / prediction head / mHC 权重 / RMSNorm 之外的大多数模块使用 Muon(Jordan et al 2024, Liu et al 2025)。Newton-Schulz 10 步:前 8 步快速收敛系数,后 2 步稳定系数。</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>这三项共同作用,使 <em>1M-token context 从理论可能变成工程可部署</em>。预训练 token 总量:Pro 33T,Flash 32T。</p>
+
+</section>
+
+<!-- ============ 2 ============ -->
+<section id="s2">
+<h2>2. 架构:三项核心创新</h2>
+
+<h3 id="s2-1">2.1 从 V3 继承 · 调整的细节</h3>
+
+<p>V4 保留了 V3 的两大骨架:<strong>DeepSeekMoE</strong> FFN(细粒度 routed expert + shared expert)与 <strong>Multi-Token Prediction(MTP)</strong>。但做了四处细节调整,每一处都值得注意:</p>
+
+<ul>
+  <li>MoE 亲和度函数从 <code>Sigmoid(·)</code> 改为 <code>Sqrt(Softplus(·))</code>——细节未说明动机,但与后续 auxiliary-loss-free balancing 搭配</li>
+  <li>保留 auxiliary-loss-free 负载均衡,但额外加一个<em>极轻微的 sequence-wise balance loss</em>(权重 0.0001)防止单序列内极端不平衡</li>
+  <li>取消 V3 对 routing target node 数量的约束,重新设计并行策略</li>
+  <li><strong>前几层 MoE 改用 Hash routing</strong>(Roller et al 2021)——根据输入 token ID 的哈希函数静态决定专家,替代 dense FFN,作用是稳定早期层的路由</li>
+</ul>
+
+<div class="figure">
+  <img src="figures/fig2-overall-architecture.png" alt="Figure 2 — Overall architecture of DeepSeek-V4 series">
+  <div class="figure-caption">Figure 2 · DeepSeek-V4 Transformer block:Attention 层是 CSA/HCA(交替部署),FFN 层是 DeepSeekMoE,残差连接用 mHC(Pre-Block / Residual / Post-Block Mixing 三件套);顶层有 MTP Modules + LM Prediction Head,双 loss 训练(原论文 p.6)。</div>
+</div>
+
+<h3 id="s2-2">2.2 mHC · 流形约束的超连接</h3>
+
+<p>Hyper-Connections(Zhu et al 2025)把残差流的宽度从 ℝ^d 扩展到 ℝ^{n_hc × d},引入三个线性映射 A_l、B_l、C_l 决定残差更新:</p>
+
+<div class="formula">
+  $$X_{l+1} = B_l X_l + C_l\, \mathcal{F}_l(A_l X_l) \tag{1}$$
+</div>
+
+<p>这套扩展残差带宽的方案理论上能提升表达力,但 <em>堆层之后数值不稳定</em>——这是 V4 作者明确观察到的。mHC 的核心贡献是把 B_l 投影到<strong>双随机矩阵流形(Birkhoff polytope)</strong>:</p>
+
+<div class="formula">
+  $$B_l \in \mathcal{M} := \{M \in \mathbb{R}^{n \times n} \mid M \mathbf{1}_n = \mathbf{1}_n,\ \mathbf{1}_n^T M = \mathbf{1}_n^T,\ M \geq 0\} \tag{2}$$
+</div>
+
+<p>这个约束的意义是:</p>
+
+<ol>
+  <li><strong>谱范数 ‖B_l‖₂ ≤ 1</strong> → 残差变换是 non-expansive,不会放大梯度,前向/反向都稳</li>
+  <li><strong>ℳ 在矩阵乘法下封闭</strong> → 深堆叠时稳定性保留</li>
+  <li>A_l、C_l 通过 Sigmoid 约束为非负有界,避免信号相消</li>
+</ol>
+
+<p>投影到 ℳ 的实现用 <strong>Sinkhorn-Knopp 算法</strong>——先 exp 保证正值,再交替做行/列归一化:</p>
+
+<div class="formula">
+  $$M^{(t)} = \mathcal{T}_r\!\left(\mathcal{T}_c(M^{(t-1)})\right) \tag{8}$$
+</div>
+
+<p>收敛到 t_max = 20 步(论文实测的实用取值),最终得到 B_l = M^(t_max)。</p>
+
+<div class="note">
+<strong>为什么这里必须约束到流形而不是普通正则化</strong>:普通的权重衰减或 SVD 截断只能给出"近似"约束,无法给出 <em>closed under multiplication</em> 这个性质。而深层堆叠的 mHC 就是无数个 B_l 的乘积——一旦有一层跳出流形,后续层的累积误差会爆炸。流形约束是<em>结构性保证</em>而不是<em>后验修正</em>。
+</div>
+
+<h3 id="s2-3">2.3 Hybrid Attention · CSA + HCA</h3>
+
+<p>V4 用两种互补的压缩注意力,<strong>在不同的 Transformer 层交替出现</strong>。这一节有两张图,分别刻画两种机制。</p>
+
+<h4>CSA(Compressed Sparse Attention)</h4>
+
+<div class="figure">
+  <img src="figures/fig3-csa.png" alt="Figure 3 — CSA architecture">
+  <div class="figure-caption">Figure 3 · CSA 把每 m 个 token 的 KV 压缩成一条 entry,再经 Lightning Indexer(多头 MQA 算 index score)做 top-k 选择,外加一个 Sliding Window 分支提供最近 token 的 fine-grained 访问(原论文 p.9)。</div>
+</div>
+
+<ol class="walkthrough">
+  <li>
+    <strong>Token-Level Compressor:压缩 KV 到 1/m</strong>
+    从 n × d 的 hidden state 计算两组 KV 与压缩权重 C^a, C^b, Z^a, Z^b ∈ ℝ^{n×c}(公式 9, 10)。然后每 m 个原始 KV 用可学习的位置 bias B^a, B^b 组合:
+    <br>
+    $$[S^a_{mi:m(i+1)-1};\ S^b_{m(i-1):mi-1}] = \text{Softmax}_{\text{row}}([Z^a_{mi:m(i+1)-1} + B^a;\ Z^b_{m(i-1):mi-1} + B^b]) \tag{11}$$
+    $$C_i^{\text{Comp}} = \sum_{j=mi}^{m(i+1)-1} S^a_j \odot C^a_j + \sum_{j=m(i-1)}^{mi-1} S^b_j \odot C^b_j \tag{12}$$
+    <em>注意 C^a 和 C^b 在相邻压缩块之间是<strong>重叠的</strong></em>——这是为了让压缩 entry 跨边界时不会丢信息。
+  </li>
+  <li>
+    <strong>Lightning Indexer:FP4 精度选 top-k</strong>
+    用 low-rank 方式生成 indexer query(公式 13-14),然后 index score:
+    <br>
+    $$I_{t,s} = \sum_{h=1}^{n_h^I} w_{t,h}^I \cdot \text{ReLU}\!\left(\mathbf{q}_{t,h}^I \cdot K_s^{\text{IComp}}\right) \tag{16}$$
+    <br>
+    关键工程细节:<strong>indexer 的 QK 路径全程跑 FP4 MXFP4 量化</strong>(§3.4),在 top-k 选择器环节取得 2× 加速,同时保持 99.7% 的 KV entry 召回率。
+  </li>
+  <li>
+    <strong>Shared Key-Value MQA + Grouped Output Projection</strong>
+    对 top-k 选中的压缩 KV 做 Multi-Query Attention(公式 18-19)。由于 c·n_h 维度大,输出通过分组投影(g 组,d_g < c·n_h/g)压到 d 维,避免 projection 层的计算负担。
+  </li>
+  <li>
+    <strong>Sliding Window Branch</strong>
+    为了捕捉 fine-grained 局部依赖,每个 query token 额外关注最近 n_win(=128)个<em>未压缩</em>的 KV entry,与 top-k 压缩 entry 拼接做 attention。
+  </li>
+</ol>
+
+<h4>HCA(Heavily Compressed Attention)</h4>
+
+<div class="figure">
+  <img src="figures/fig4-hca.png" alt="Figure 4 — HCA architecture">
+  <div class="figure-caption">Figure 4 · HCA 用更激进的压缩比 m' ≫ m,把每 m' 个 token 合并成一条 entry;但<strong>不做稀疏选择</strong>——保留 dense attention。同样搭配 Sliding Window 分支(原论文 p.11)。</div>
+</div>
+
+<p>HCA 的 compressor 简化版(单路 KV,无 overlap,公式 22-23),其余沿用 CSA 的 shared KV MQA + grouped output projection 策略。</p>
+
+<h4>CSA vs HCA 粒度对比</h4>
+
+<table>
+  <thead>
+    <tr><th>维度</th><th>CSA</th><th>HCA</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>压缩比</td><td>1/m(m = 4)</td><td>1/m'(m' = 128,≫ m)</td></tr>
+    <tr><td>压缩块 overlap</td><td>有(C^a, C^b 互相重叠)</td><td>无</td></tr>
+    <tr><td>Attention 模式</td><td>稀疏(top-k via Lightning Indexer)</td><td>Dense</td></tr>
+    <tr><td>FP4 精度范围</td><td>Indexer QK 路径</td><td>无 FP4</td></tr>
+    <tr><td>适合的层级</td><td>需要 fine-grained 检索的中间层</td><td>需要 coarse 全局整合的层</td></tr>
+  </tbody>
+</table>
+
+<p>论文还给出若干工程细节:<strong>Partial RoPE</strong>(只对最后 64 维应用,query 用 +i、output 用 -i 的反向位置)、<strong>Attention Sink</strong>(OpenAI 2025,加可学习 sink logit z'_h 到 softmax 分母,公式 27)、<strong>BF16/FP8 混合存储</strong>(RoPE 维度 BF16,其余 FP8,节省 ~½ KV 缓存)。</p>
+
+<div class="note">
+  <strong>效率结论</strong>:相对 BF16 GQA8 基线,V4 在 1M 上下文的 KV cache 可压到 <strong>~2%</strong>;相对 V3.2(本身已是高效基线),V4-Pro 也只需 10% 的 KV 与 27% 的 FLOPs。这是"长上下文能真正跑起来"的算术基础。
+</div>
+
+<h3 id="s2-4">2.4 Muon Optimizer</h3>
+
+<p>Muon(Jordan et al 2024,Liu et al 2025)是 V4 的主要优化器——<em>除 embedding / prediction head / mHC 模块 / 所有 RMSNorm 之外</em>都用 Muon,其余仍保留 AdamW(β₁ = 0.9, β₂ = 0.95, ε = 1e-20, weight_decay = 0.1)。</p>
+
+<p>关键实现是 <strong>Hybrid Newton-Schulz 迭代</strong>做矩阵正交化——总共 10 步,分两阶段:</p>
+
+<div class="formula">
+  $$M_k = a M_{k-1} + b (M_{k-1} M_{k-1}^T) M_{k-1} + c (M_{k-1} M_{k-1}^T)^2 M_{k-1} \tag{28}$$
+</div>
+
+<ul>
+  <li><strong>前 8 步</strong>:(a, b, c) = (3.4445, −4.7750, 2.0315)——高系数,快速把奇异值推近 1</li>
+  <li><strong>后 2 步</strong>:(a, b, c) = (2, −1.5, 0.5)——低系数,精确收敛到 1 不过冲</li>
+</ul>
+
+<p>为什么不用传统 QK-Clip?作者的答案很干脆:<em>RMSNorm 直接加在 attention queries 和 KV entries 上</em>(§2.3.3)已经防止了 attention logit 爆炸,所以 QK-Clip 被省略。</p>
+
+</section>
+
+<!-- ============ 3 ============ -->
+<section id="s3">
+<h2>3. 基础设施</h2>
+
+<h3 id="s3-1">3.1 Fine-Grained Expert-Parallelism 重叠</h3>
+
+<p>MoE 的最大性能瓶颈是 Expert Parallelism 的 all-to-all 通信。V4 提出一套更激进的 comm-compute 重叠方案:</p>
+
+<div class="figure">
+  <img src="figures/fig5-ep-scheme.png" alt="Figure 5 — Fine-grained EP scheme">
+  <div class="figure-caption">Figure 5 · 三档 EP 方案对比。(a) Naive:Dispatch / L1 / Act / L2 / Combine 串行。(b) Comet(Zhang et al 2025b):Dispatch 与 L1 重叠,L2 与 Combine 重叠,理论加速 1.42×。(c) V4:切分专家成 waves,在 steady state 下 dispatch / L1 / L2 / act / combine 全部并行执行,<strong>理论加速 1.92×</strong>(原论文 p.15)。</div>
+</div>
+
+<p>关键 insight:<em>单个 MoE 层的通信时间小于计算时间</em>——所以把通信完全藏在计算之下是可能的。V4 把专家切分成 wave,每个 wave 只包含一小部分专家:只要当前 wave 的通信完成,下一 wave 的计算立即开始,三个阶段(dispatch / compute / combine)在稳态下持续并发。</p>
+
+<p>论文给出一个<strong>硬件设计建议公式</strong>:通信能被计算完全隐藏当且仅当 C/B ≤ V_comp/V_comm。对 V4-Pro(每 token-expert 对需 6hd FLOPs 与 3h bytes 通信),简化为:</p>
+
+<div class="formula">
+  $$\frac{C}{B} \leq 2d = 6144\ \text{FLOPs/Byte}$$
+</div>
+
+<p>即每 GBps 带宽可以藏住 6.1 TFLOP/s 的计算——<em>超过这个带宽的额外投入就是浪费</em>。论文把开源 CUDA mega-kernel 命名 <strong>MegaMoE</strong>,作为 DeepGEMM 组件发布,在 NVIDIA GPU 与华为 Ascend NPU 上实测 1.50–1.73× 加速,高延迟敏感场景(RL rollout、高速 agent serving)最高 1.96×。</p>
+
+<h3 id="s3-2">3.2 TileLang · 批量不变 · FP4 QAT</h3>
+
+<p>另外三项工程同样关键,但我只抓 crux:</p>
+
+<ul>
+  <li><strong>TileLang DSL</strong>(Wang et al 2026):把精细 attention 变体从数百个 Torch ATen 算子收敛到一套融合 kernel。两个亮点——(1)Host Codegen 把 Python 侧每 invocation 的验证开销从几十/几百 μs 压到 &lt;1 μs;(2)集成 <strong>Z3 SMT solver</strong> 做形式化整数分析,支持向量化、屏障插入、代码简化等优化 pass。</li>
+  <li><strong>批量不变 + 确定性 kernel</strong>:训练/推理 bitwise 一致。attention decoding 用 dual-kernel 策略——主 kernel 单 SM 处理全序列,second kernel 用多 SM 处理最后 wave 弥补延迟,两者对齐累加顺序做到 bit-identical。矩阵乘法抛弃 cuBLAS 与 split-k,改用 DeepGEMM。</li>
+  <li><strong>FP4 QAT</strong>:用 MXFP4 量化两处——(1) MoE 专家权重(GPU 显存大头),(2) CSA Lightning Indexer 的 QK 路径。<em>FP4→FP8 dequantize 是 lossless 的</em>——因为 FP8(E4M3)比 FP4(E2M1)多两个 exponent bit,只要 FP8 128×128 block 内的 FP4 1×32 subblock 最大/最小 scale 比小于某阈值,fine-grained scale 能被 FP8 的 dynamic range 完全吸收。这使得整个 QAT pipeline 能无缝复用 FP8 训练框架。</li>
+</ul>
+
+<div class="note">
+  <strong>mHC 的工程代价</strong>:mHC 引入了额外的激活 memory 与流水线通信开销,作者通过 <em>fused kernel + 选择性 checkpoint + DualPipe 1F1B 调整</em>把总 wall-time 开销控制在 <strong>1F1B pipeline stage 的 6.7%</strong>——这是论文非常诚实地披露的数字。
+</div>
+
+</section>
+
+<!-- ============ 4 ============ -->
+<section id="s4">
+<h2>4. Pre-Training</h2>
+
+<h3 id="s4-1">4.1 Flash vs Pro 配置</h3>
+
+<table>
+  <thead><tr><th>配置项</th><th>DeepSeek-V4-Flash</th><th>DeepSeek-V4-Pro</th></tr></thead>
+  <tbody>
+    <tr><td>Transformer layers</td><td>43</td><td>61</td></tr>
+    <tr><td>Hidden dimension d</td><td>4096</td><td>7168</td></tr>
+    <tr><td>前 2 层 attention</td><td>纯 SWA(sliding window only)</td><td>纯 HCA</td></tr>
+    <tr><td>CSA: m / top-k / indexer head c^I</td><td>4 / 512 / 128(64 head)</td><td>4 / 1024 / 128(64 head)</td></tr>
+    <tr><td>HCA: m' / c</td><td>128 / 512</td><td>128 / 512</td></tr>
+    <tr><td>Query heads n_h / query compression d_c</td><td>64 / 1024</td><td>128 / 1536</td></tr>
+    <tr><td>Output projection groups g / d_g</td><td>8 / 1024</td><td>16 / 1024</td></tr>
+    <tr><td>SWA window n_win</td><td>128</td><td>128</td></tr>
+    <tr><td>MoE: shared / routed experts, intermediate</td><td>1 + 256,int 2048</td><td>1 + 384,int 3072</td></tr>
+    <tr><td>Activated experts per token</td><td>6</td><td>6</td></tr>
+    <tr><td>Hash routing layers</td><td>前 3 层 MoE</td><td>前 3 层 MoE</td></tr>
+    <tr><td>MTP depth / mHC n_hc / Sinkhorn-Knopp t_max</td><td>1 / 4 / 20</td><td>1 / 4 / 20</td></tr>
+    <tr><td>总参 / 激活参</td><td><strong>284B / 13B</strong></td><td><strong>1.6T / 49B</strong></td></tr>
+    <tr><td>训练 tokens / batch size / peak LR</td><td>32T / 75.5M / 2.7e-4</td><td>33T / 94.4M / 2.0e-4</td></tr>
+    <tr><td>序列长度 warmup</td><td colspan="2">4K → 16K → 64K → 1M(两档均同)</td></tr>
+    <tr><td>稀疏注意力引入时机</td><td colspan="2">前 1T tokens 用 dense,然后 64K 起引入 sparse</td></tr>
+  </tbody>
+</table>
+
+<h3 id="s4-2">4.2 训练稳定性 · Anticipatory Routing</h3>
+
+<p>作者坦率承认:trillion-parameter MoE 训练<em>会遇到 loss spike</em>,经验上发现这些 spike 与 MoE 路由选择出现 outlier 紧密相关。两个实用技巧:</p>
+
+<h4>Anticipatory Routing(预见式路由)</h4>
+
+<ol class="walkthrough">
+  <li>
+    <strong>解耦 backbone 与 routing 的同步更新</strong>
+    Step t 的 feature 计算用当前参数 θ_t,但 <strong>routing indices 用历史参数 θ_{t-Δt} 计算</strong>。这打破了"当前 bad routing 反馈到当前 gradient 再强化同一个 bad pattern"的恶性循环。
+  </li>
+  <li>
+    <strong>Anticipatory 的工程实现</strong>
+    朴素做法需要每步加载两份参数。V4 的优化是:在 step t-Δt 时<em>提前</em>计算并缓存 routing indices,到 step t 时直接消费。额外 wall-clock 开销控制在 ~20%。
+  </li>
+  <li>
+    <strong>自动启用机制</strong>
+    训练时默认不开——用一个自动检测机制监听 loss spike,spike 出现时立刻短暂 rollback 并激活 Anticipatory Routing,稳定一段时间后恢复 standard training。<em>loss spike 避免 + 几乎零整体训练开销</em>。
+  </li>
+</ol>
+
+<h4>SwiGLU Clamping</h4>
+
+<p>SwiGLU 的线性分量限制在 [−10, 10],gate 分量上界 10。一行代码级的修改,经验上显著抑制 outlier——不损性能。</p>
+
+<div class="note">
+  <strong>论文的诚实披露</strong>:作者明确写道"虽然 Anticipatory Routing 和 SwiGLU Clamping 在实践中被证明有效,但<em>底层原理尚未充分理解</em>,我们公开分享这些技术以推动社区进一步研究"。这种"经验有效,理论不懂"的开放态度在工业报告里难得。
+</div>
+
+<h3 id="s4-3">4.3 Base 模型评估(Table 1)</h3>
+
+<p>统一内部评估框架下,V4-Flash-Base(13B 激活)vs V3.2-Base(37B 激活)vs V4-Pro-Base(49B 激活):</p>
+
+<table>
+  <thead><tr><th>类别</th><th>Benchmark</th><th>V3.2-Base (37B)</th><th>V4-Flash-Base (13B)</th><th>V4-Pro-Base (49B)</th></tr></thead>
+  <tbody>
+    <tr><td rowspan="3">World Knowledge</td><td>MMLU-Pro</td><td>65.5</td><td>68.3</td><td><strong>73.5</strong></td></tr>
+    <tr><td>Simple-QA verified</td><td>28.3</td><td>30.1</td><td><strong>55.2</strong></td></tr>
+    <tr><td>FACTS Parametric</td><td>27.1</td><td>33.9</td><td><strong>62.6</strong></td></tr>
+    <tr><td>Language & Reasoning</td><td>BBH</td><td>87.6</td><td>86.9</td><td>87.5</td></tr>
+    <tr><td rowspan="2">Code & Math</td><td>HumanEval Pass@1</td><td>62.8</td><td>69.5</td><td><strong>76.8</strong></td></tr>
+    <tr><td>MATH</td><td>60.5</td><td>57.4</td><td><strong>64.5</strong></td></tr>
+    <tr><td>Long Context</td><td>LongBench-V2</td><td>40.2</td><td>44.7</td><td><strong>51.5</strong></td></tr>
+  </tbody>
+</table>
+
+<p>两个关键观察:</p>
+
+<ul>
+  <li><strong>V4-Flash-Base 用 13B 激活胜过 V3.2-Base 37B 激活</strong> 在大多数任务上——这是对新架构 + 新数据 pipeline 价值的直接验证。</li>
+  <li>V4-Pro-Base 几乎全线领先,<strong>最大跳跃在 FACTS Parametric(+35.5pp)和 Simple-QA verified(+26.9pp)</strong>——这些是知识密集型任务,验证了 33T 预训练 token 的知识注入效果。</li>
+</ul>
+
+</section>
+
+<!-- ============ 5 ============ -->
+<section id="s5">
+<h2>5. Post-Training</h2>
+
+<h3 id="s5-1">5.1 Pipeline:Specialist → OPD</h3>
+
+<p>V4 的 post-training 相比 V3.2 有一个关键替换:<strong>mixed RL stage 整个被 On-Policy Distillation(OPD)替代</strong>。两阶段流程:</p>
+
+<pre>Stage 1: Specialist Training    (每个领域独立:SFT → GRPO RL)
+Stage 2: Unified OPD Merging    (Student 学 10+ 个 Specialist Teacher 的 distribution)</pre>
+
+<p>领域覆盖数学、coding、agent、instruction following 等。GRPO 超参与 DeepSeek-R1 / V3.2 对齐。</p>
+
+<h4>Generative Reward Model(GRM)</h4>
+
+<p>易验证任务用规则验证器,<em>难验证任务不走传统 RLHF 的 scalar reward model 路线</em>——V4 的做法是:用 rubric-guided RL data,让 <strong>actor network 本身充当 GRM</strong>,对 GRM 直接做 RL 优化。结果:(1)模型的推理能力被"注入"到评估过程;(2)只需极少量多样化人工标注即可工作;(3)避免了维护单独 RM 的工程负担。</p>
+
+<h3 id="s5-2">5.2 三档 Reasoning Effort · Thinking Management</h3>
+
+<table>
+  <thead><tr><th>Reasoning Mode</th><th>特点</th><th>典型场景</th><th>Response format</th></tr></thead>
+  <tbody>
+    <tr><td>Non-think</td><td>基于直觉/习惯的快速响应</td><td>日常例行任务、紧急反应、低风险决策</td><td><code>&lt;/think&gt; summary</code></td></tr>
+    <tr><td>Think High</td><td>有意识的逻辑分析,慢但更准</td><td>复杂问题求解、规划、中等风险决策</td><td><code>&lt;think&gt;…&lt;/think&gt; summary</code></td></tr>
+    <tr><td>Think Max</td><td>推理到极限,慢但最强</td><td>探索推理能力边界</td><td>注入系统提示 + <code>&lt;think&gt;…&lt;/think&gt; summary</code></td></tr>
+  </tbody>
+</table>
+
+<p>Think Max 的系统提示原文 <em>"Reasoning Effort: Absolute maximum with no shortcuts permitted. You MUST be very thorough in your thinking and comprehensively decompose the problem…"</em>——明确要求显式写出中间每一步与被拒绝的假设。</p>
+
+<div class="figure">
+  <img src="figures/fig7-thinking-management.png" alt="Figure 7 — Thinking management">
+  <div class="figure-caption">Figure 7 · V4 的 thinking 管理策略。(a) 工具调用场景下,所有 turn 的 &lt;think&gt; 内容<strong>跨 user message 持续保留</strong>,让模型维护一个累积的思维链;(b) 纯对话场景下,新 user message 到来时丢弃此前 thinking(与 V3.2 相同策略),保持上下文紧凑(原论文 p.32)。</div>
+</div>
+
+<h4>Tool-Call Schema(新)</h4>
+
+<p>V4 用一个新的 XML-based tool-call 格式,以 <code>&lt;|DSML|&gt;</code> 特殊 token 划分——论文指出这显著降低了 escape 失败与 tool-call 错误率,相比旧的 JSON 格式更 robust。</p>
+
+<h4>Quick Instruction</h4>
+
+<p>Chatbot 场景里常有"是否该触发网页搜索"、"识别用户意图"这类辅助判断。传统做法要跑一个独立小模型,每次需要重新 prefill。V4 的 Quick Instruction 把这些辅助任务打包成<em>特殊 token</em>(<code>&lt;|action|&gt;</code>、<code>&lt;|query|&gt;</code>、<code>&lt;|authority|&gt;</code>、<code>&lt;|domain|&gt;</code>、<code>&lt;|extracted_url|&gt;</code>、<code>&lt;|read_url|&gt;</code>、<code>&lt;|title|&gt;</code>),<strong>复用已算好的 KV cache</strong> 直接产出——零额外 prefill,显著降低 TTFT。</p>
+
+<h3 id="s5-3">5.3 On-Policy Distillation 公式推导</h3>
+
+<p>给定 N 个专家模型 {π_{E_1}, …, π_{E_N}},OPD 的目标是训练一个统一的 Student π_θ:</p>
+
+<div class="formula">
+  $$\mathcal{L}_{\text{OPD}}(\theta) = \sum_{i=1}^{N} w_i \cdot D_{\text{KL}}\!\left(\pi_\theta\ \|\ \pi_{E_i}\right) \tag{29}$$
+</div>
+
+<p>关键细节:</p>
+
+<ol>
+  <li><strong>Reverse KL 而非 forward KL</strong> → 样本从 Student 自己采样(on-policy),避免 exposure bias</li>
+  <li><strong>w_i 代表专家重要度</strong>,根据当前 task 动态设定(math 任务给 math expert 高权重,coding 给 coding expert 高权重)</li>
+  <li><strong>全词表 logit 蒸馏</strong>,而不是 prior work 常用的 token-level KL 估计——后者把 KL 近似为 <code>sg[log(π_{E_i}/π_θ)]</code> 作为 per-token advantage 塞进 RL 框架,<em>梯度估计方差太高,导致训练不稳</em>。V4 坚持完整 logit 分布,即使这带来更高工程成本</li>
+</ol>
+
+<div class="note">
+<strong>Teacher Scheduling 的工程挑战</strong>:10+ 个 teacher × 每个 trillion-scale 参数 × 词表 |V| &gt; 100k——直接展开 logits 内存就爆炸。V4 的做法是<em>只缓存最后一层 teacher hidden states</em>(不缓存 logits),训练时通过对应 prediction head 在线重构 logits。再把训练样本按 teacher index 排序,使每个 teacher head 只加载到显存一次(一个 mini-batch 内只驻留一个)。Exact KL 通过 TileLang 专门的 kernel 计算。
+</div>
+
+<h3 id="s5-4">5.4 DSec · 容错 rollout 基础设施</h3>
+
+<p>为支持 agent 训练的多样化工作负载,V4 自建了 <strong>DeepSeek Elastic Compute(DSec)</strong>——一套 3 Rust 组件(Apiserver / Edge / Watcher)基于 <strong>3FS 分布式文件系统</strong>运行的生产级沙箱平台,单集群管理"数十万并发 sandbox 实例"。四种执行基板统一在 <code>libdsec</code> Python SDK 下:</p>
+
+<ul>
+  <li><strong>Function Call</strong>:无状态调用分派到预热容器池,零冷启动</li>
+  <li><strong>Container</strong>:Docker 兼容,EROFS 按需加载镜像</li>
+  <li><strong>microVM</strong>:Firecracker 驱动,VM 级隔离,适合高密度安全敏感部署</li>
+  <li><strong>fullVM</strong>:QEMU 驱动,支持任意 guest OS</li>
+</ul>
+
+<p>另外一个必须指出的 RL 工程亮点:<strong>token-granular Write-Ahead Log(WAL)</strong>。每生成一个 token 立刻 append 到 WAL。抢占时保存 KV cache,恢复时从 WAL + KV cache 继续 decode。</p>
+
+<div class="note">
+  <strong>为什么 WAL 很重要</strong>:论文明确指出,从头重跑未完成的请求<em>在数学上是错误的</em>——更短的回复更容易存活 interrupt,整体训练会引入 <strong>length bias</strong>,模型被迫生成偏短输出。Token-granular WAL 是唯一不引入偏差的恢复方法。
+</div>
+
+</section>
+
+<!-- ============ 6 ============ -->
+<section id="s6">
+<h2>6. Evaluation</h2>
+
+<h3 id="s6-1">6.1 标准 Benchmarks(Table 6)</h3>
+
+<p>DS-V4-Pro-Max(Think Max 模式)vs 当前 frontier 闭源/开源 6 家:</p>
+
+<table>
+  <thead>
+    <tr><th>Benchmark(metric)</th><th>Opus-4.6 Max</th><th>GPT-5.4 xHigh</th><th>Gemini-3.1-Pro High</th><th>K2.6 Thinking</th><th>GLM-5.1 Thinking</th><th>DS-V4-Pro Max</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>MMLU-Pro</td><td>89.1</td><td>87.5</td><td><strong>91.0</strong></td><td>87.1</td><td>86.0</td><td>87.5</td></tr>
+    <tr><td>SimpleQA-Verified</td><td>46.2</td><td>45.3</td><td><strong>75.6</strong></td><td>36.9</td><td>38.1</td><td>57.9</td></tr>
+    <tr><td>Chinese-SimpleQA</td><td>76.4</td><td>76.8</td><td><strong>85.9</strong></td><td>75.9</td><td>75.0</td><td>84.4</td></tr>
+    <tr><td>GPQA Diamond</td><td>91.3</td><td>93.0</td><td><strong>94.3</strong></td><td>90.5</td><td>86.2</td><td>90.1</td></tr>
+    <tr><td>HLE</td><td>40.0</td><td>39.8</td><td><strong>44.4</strong></td><td>36.4</td><td>34.7</td><td>37.7</td></tr>
+    <tr><td>LiveCodeBench</td><td>88.8</td><td>—</td><td>91.7</td><td>89.6</td><td>—</td><td><strong>93.5</strong></td></tr>
+    <tr><td>Codeforces(Rating)</td><td>—</td><td>3168</td><td>3052</td><td>—</td><td>—</td><td><strong>3206</strong></td></tr>
+    <tr><td>HMMT 2026 Feb</td><td>96.2</td><td><strong>97.7</strong></td><td>94.7</td><td>92.7</td><td>89.4</td><td>95.2</td></tr>
+    <tr><td>IMOAnswerBench</td><td>75.3</td><td><strong>91.4</strong></td><td>81.0</td><td>86.0</td><td>83.8</td><td>89.8</td></tr>
+    <tr><td>Apex Shortlist</td><td>85.9</td><td>78.1</td><td>89.1</td><td>75.5</td><td>72.4</td><td><strong>90.2</strong></td></tr>
+    <tr><td>MRCR 1M</td><td><strong>92.9</strong></td><td>—</td><td>76.3</td><td>—</td><td>—</td><td>83.5</td></tr>
+    <tr><td>CorpusQA 1M</td><td><strong>71.7</strong></td><td>—</td><td>53.8</td><td>—</td><td>—</td><td>62.0</td></tr>
+    <tr><td>SWE Verified</td><td><strong>80.8</strong></td><td>—</td><td>80.6</td><td>80.2</td><td>—</td><td>80.6</td></tr>
+    <tr><td>Terminal Bench 2.0</td><td>65.4</td><td><strong>75.1</strong></td><td>68.5</td><td>66.7</td><td>63.5</td><td>67.9</td></tr>
+    <tr><td>BrowseComp</td><td>83.7</td><td>82.7</td><td><strong>85.9</strong></td><td>83.2</td><td>79.3</td><td>83.4</td></tr>
+  </tbody>
+</table>
+
+<p>结论快览:</p>
+<ul>
+  <li><strong>V4-Pro 在 LiveCodeBench(93.5)、Codeforces(3206)、Apex Shortlist(90.2)三项拿到全场第一</strong>——代码竞赛是首次开源模型追平 frontier 闭源</li>
+  <li>Codeforces Rating 3206 在人类选手排位里约等于<strong>第 23 名</strong></li>
+  <li>Knowledge 任务整体仍落后 Gemini-3.1-Pro(MMLU-Pro -3.5pp、HLE -6.7pp、GPQA Diamond -4.2pp)</li>
+  <li>SWE Verified 三家打平在 80.2–80.8 区间,V4-Pro 80.6 齐肩 Gemini / K2.6</li>
+  <li>MRCR 1M 超 Gemini(83.5 vs 76.3),但 Opus 4.6 的 92.9 仍领先</li>
+</ul>
+
+<h3 id="s6-2">6.2 长上下文 + 形式化数学</h3>
+
+<div class="figure">
+  <img src="figures/fig8-long-context-formal.png" alt="Figure 8+9 — Formal reasoning and MRCR">
+  <div class="figure-caption">Figure 8(上)· 形式化证明:Practical Regime(Putnam-200 Pass@8,minimal tools + bounded sampling)上 V4-Flash-Max 取得 <strong>81.00</strong>,大幅超越 Seed-Prover 系列(26.5–35.5)。Frontier Regime(Putnam-2025,hybrid formal-informal + 大 compute)上 V4 达到 <strong>120/120</strong>——与 Axiom 并列最佳。Figure 9(下)· MRCR 8-needle 从 8k 延伸到 1024k:Pro-Max 在 8k–128k 保持 0.85-0.94,128k 后出现衰减但 1M 仍有 0.59/0.49(Flash-Max)(原论文 p.40)。</div>
+</div>
+
+<div class="figure">
+  <img src="figures/fig10-reasoning-effort.png" alt="Figure 10 — Reasoning effort scaling">
+  <div class="figure-caption">Figure 10 · 两个任务上推理努力换性能的曲线。HLE:V4-Pro 的 None → High 跃迁最大,Max 达 ~37;V4-Flash Max 达 ~34。TerminalBench 2.0:V4-Pro 从 None 59 → High 63 → Max 68;V3.2-Speciale 在 ~30k token 后饱和在 30%(灰色虚线)。<strong>V4 系列展现出远胜 V3.2 的 test-time scaling 斜率</strong>(原论文 p.41)。</div>
+</div>
+
+<h3 id="s6-3">6.3 Real-World 任务</h3>
+
+<h4>中文写作(vs Gemini-3.1-Pro)</h4>
+
+<table>
+  <thead><tr><th>任务</th><th>V4-Pro 胜率</th><th>Gemini-3.1-Pro 胜率</th></tr></thead>
+  <tbody>
+    <tr><td>功能写作 overall</td><td><strong>62.7%</strong></td><td>34.1%</td></tr>
+    <tr><td>创作写作 instruction following</td><td><strong>60.0%</strong></td><td>40.0%</td></tr>
+    <tr><td>创作写作 writing quality</td><td><strong>77.5%</strong></td><td>22.5%</td></tr>
+    <tr><td>高难度子集(vs Claude Opus 4.5)</td><td>45.9%</td><td><strong>52.0%</strong>(Opus)</td></tr>
+  </tbody>
+</table>
+
+<p>结论:<em>日常中文写作全面压过 Gemini-3.1-Pro</em>(Gemini 常让自身风格偏好凌驾用户显式要求),但在最难的子集上仍不敌 Claude Opus 4.5。</p>
+
+<h4>White-Collar 任务(vs Opus-4.6-Max,30 个中文专业任务 × 13 行业)</h4>
+
+<table>
+  <thead><tr><th>任务</th><th>V4-Pro Win</th><th>Tie</th><th>Opus-4.6 Win</th></tr></thead>
+  <tbody>
+    <tr><td>Analysis</td><td><strong>55%</strong></td><td>8%</td><td>37%</td></tr>
+    <tr><td>Generation</td><td><strong>52%</strong></td><td>10%</td><td>38%</td></tr>
+    <tr><td>Editing</td><td><strong>47%</strong></td><td>18%</td><td>35%</td></tr>
+    <tr><td>Overall</td><td><strong>53%</strong></td><td>10%</td><td>37%</td></tr>
+  </tbody>
+</table>
+
+<p>详细维度分数:Task Completion(V4 98.32 vs Opus 96.68)、Content Quality(83.32 vs 78.00)、Formatting Aesthetics(76.98 vs 72.68)V4 胜;但 <strong>Instruction Following</strong>(V4 87.76 vs Opus 88.68)Opus 微幅领先——论文明确承认 V4 在严格格式约束上偶有疏漏。</p>
+
+<h4>Code Agent(vs Claude 全家,200 个真实内部 R&D 任务)</h4>
+
+<table>
+  <thead><tr><th>Model</th><th>Pass Rate</th></tr></thead>
+  <tbody>
+    <tr><td>Haiku 4.5</td><td>13%</td></tr>
+    <tr><td>Sonnet 4.5</td><td>47%</td></tr>
+    <tr><td><strong>DeepSeek-V4-Pro-Max</strong></td><td><strong>67%</strong></td></tr>
+    <tr><td>Opus 4.5</td><td>70%</td></tr>
+    <tr><td>Opus 4.5 Thinking</td><td>73%</td></tr>
+    <tr><td>Opus 4.6 Thinking</td><td><strong>80%</strong></td></tr>
+  </tbody>
+</table>
+
+<p>V4-Pro 坐落在 Sonnet 4.5 与 Opus 4.5 之间,<strong>逼近 Opus 4.5 但落后 Opus 4.6 Thinking 13pp</strong>。对 85 位 DeepSeek 内部开发者的调查:52% 已把 V4-Pro 作为默认 coding 模型,39% 倾向于是,&lt;9% 说不。</p>
+
+</section>
+
+<!-- ============ 7 ============ -->
+<section id="s7">
+<h2>7. Conclusion 与局限</h2>
+
+<p>DeepSeek-V4 preview 版的三层价值:</p>
+
+<ol>
+  <li><strong>架构层</strong>:混合 CSA + HCA + mHC + Muon 把 1M 上下文从"理论可能"变成"工程可部署",重新定义长上下文 LLM 的效率基线</li>
+  <li><strong>基础设施层</strong>:Fine-Grained EP Overlap + TileLang + 批量不变 kernel + FP4 QAT + DSec 沙箱,构成支撑 trillion-MoE + 1M-context + agentic RL 的完整工业栈</li>
+  <li><strong>训练层</strong>:Anticipatory Routing(spike 缓解)+ Specialist → OPD 两阶段 post-training(多 teacher full-vocabulary KL 蒸馏)+ GRM(actor 本身作 reward model)</li>
+</ol>
+
+<div class="note">
+<strong>论文自己诚实披露的主要局限</strong>:
+<ul>
+  <li><strong>Preview 版本</strong>——不是最终发布,训练未完,架构保留了许多"preliminarily validated components",总体设计<em>相对复杂</em></li>
+  <li>Anticipatory Routing 与 SwiGLU Clamping <em>底层原理未充分理解</em>,是实证有效的经验技巧</li>
+  <li>推理能力 <strong>仍落后 GPT-5.4 / Gemini-3.1-Pro 约 3-6 个月轨迹</strong>(HLE、GPQA、HMMT 等任务上)</li>
+  <li>Knowledge 任务上 <strong>明显落后 Gemini-3.1-Pro</strong>(SimpleQA -17.7pp、MMLU-Pro -3.5pp)</li>
+  <li>Long-context 上 <strong>Claude Opus 4.6 仍领先</strong>(MRCR 1M 92.9 vs V4-Pro 83.5)</li>
+  <li>White-Collar 上 Instruction Following 略输 Opus 4.6</li>
+  <li>Code Agent 上落后 Opus 4.6 Thinking 13pp(67% vs 80%)</li>
+  <li>内部开发者反馈"偶有低级错误、对模糊 prompt 偶有误解、偶尔过度思考"</li>
+</ul>
+</div>
+
+<p>Future directions(作者明确列出):<strong>精简架构</strong>到最核心设计 + <strong>深入训练稳定性的基础原理</strong> + 更激进的 sparsity(sparse embedding modules,Cheng et al 2026)+ 低延迟架构 + 长程 multi-round agentic + 多模态扩展。</p>
+
+<p class="note">
+<strong>最后一个观察</strong>:这份报告与传统"自吹自擂"的 tech report 风格不同——效率数字(27% FLOPs / 10% KV)是用来<em>说清楚 V4 系列的定位是把长上下文变成可负担</em>,而不是声称综合最强。作者把自己描述为<em>"逼近 frontier 闭源模型 3–6 个月的开源 SOTA"</em>,这种位置感很清醒。
+</p>
+
+</section>
+
+
+</main>
+</div>
+
+</body>
+</html>

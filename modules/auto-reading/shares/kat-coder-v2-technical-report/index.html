@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KAT-Coder-V2 Technical Report</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Noto+Serif+SC:wght@400;500;600&display=swap" rel="stylesheet">
+
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$', '$']], displayMath: [['$$', '$$']] },
+  svg: { fontCache: 'global' }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+
+<style>
+:root {
+  --bg: #ffffff;
+  --bg-soft: #f7f7f5;
+  --text: #1a1a1a;
+  --text-muted: #666;
+  --border: #e5e5e2;
+  --accent: #1a56db;
+  --code-bg: #f4f4f2;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Inter', 'Noto Serif SC', -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.8;
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  max-width: 1180px;
+  margin: 0 auto;
+  gap: 64px;
+  padding: 0 32px;
+}
+
+/* ===== TOC ===== */
+.toc {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  padding: 56px 0;
+  border-right: 1px solid var(--border);
+  font-size: 13.5px;
+}
+.toc-title {
+  font-weight: 600;
+  color: var(--text-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 16px;
+}
+.toc ol { list-style: none; }
+.toc li { margin: 2px 0; }
+.toc a {
+  display: block;
+  padding: 5px 0;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+.toc a:hover { color: var(--accent); }
+.toc .sub { padding-left: 16px; font-size: 12.5px; }
+
+/* ===== Main ===== */
+main {
+  padding: 56px 0 120px;
+  max-width: 760px;
+}
+
+.header {
+  margin-bottom: 56px;
+  padding-bottom: 32px;
+  border-bottom: 1px solid var(--border);
+}
+.header .kicker {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 12px;
+}
+h1 {
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+  margin-bottom: 16px;
+}
+.header .meta {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+.header .meta span { margin-right: 20px; }
+
+section { margin-bottom: 64px; scroll-margin-top: 24px; }
+
+h2 {
+  font-size: 24px;
+  font-weight: 700;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  letter-spacing: -0.01em;
+}
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 32px 0 12px;
+  color: #111;
+}
+h4 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 20px 0 8px;
+  color: #222;
+}
+
+p { margin-bottom: 14px; color: #2a2a2a; }
+strong { color: #0a0a0a; font-weight: 600; }
+em { font-style: italic; color: #0a0a0a; }
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+ul, ol { padding-left: 24px; margin-bottom: 14px; }
+li { margin-bottom: 6px; }
+
+code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.88em;
+  background: var(--code-bg);
+  padding: 2px 6px;
+  border-radius: 3px;
+  color: #b91c1c;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+}
+th, td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+th {
+  font-weight: 600;
+  background: var(--bg-soft);
+  border-bottom: 2px solid var(--border);
+}
+
+blockquote {
+  border-left: 3px solid var(--accent);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.formula {
+  background: var(--bg-soft);
+  padding: 12px 20px;
+  border-radius: 4px;
+  margin: 14px 0;
+  overflow-x: auto;
+  font-size: 15px;
+}
+
+.note {
+  font-size: 14px;
+  color: var(--text-muted);
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-radius: 4px;
+  margin: 14px 0;
+}
+
+pre {
+  background: var(--bg-soft);
+  padding: 14px 18px;
+  border-radius: 4px;
+  overflow-x: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 14px 0;
+  white-space: pre;
+  color: #333;
+}
+
+.figure {
+  margin: 24px 0 8px;
+  padding: 20px 16px 12px;
+  background: #fdfdfb;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  text-align: center;
+  overflow-x: auto;
+}
+.figure svg,
+.figure img { max-width: 100%; height: auto; display: block; margin: 0 auto; border-radius: 4px; }
+.figure-caption {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 10px;
+  font-style: italic;
+  padding: 0 12px;
+}
+.walkthrough {
+  counter-reset: step;
+  list-style: none;
+  padding: 0;
+  margin: 20px 0;
+}
+.walkthrough li {
+  counter-increment: step;
+  position: relative;
+  padding: 14px 16px 14px 56px;
+  margin-bottom: 10px;
+  background: #fafaf8;
+  border-left: 3px solid var(--accent);
+  border-radius: 0 4px 4px 0;
+}
+.walkthrough li::before {
+  content: counter(step);
+  position: absolute;
+  left: 16px;
+  top: 14px;
+  width: 26px;
+  height: 26px;
+  background: var(--accent);
+  color: white;
+  border-radius: 50%;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.walkthrough li strong { display: block; margin-bottom: 4px; }
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; gap: 0; padding: 0 20px; }
+  .toc { display: none; }
+  h1 { font-size: 26px; }
+}
+</style>
+</head>
+
+<body>
+
+<div class="layout">
+
+<aside class="toc">
+  <div class="toc-title">目录</div>
+  <ol>
+  <li><a href="#s0">摘要与基本信息</a>
+  </li>
+  <li><a href="#s1">1. Introduction — 三个根本性挑战</a>
+  </li>
+  <li><a href="#s2">2. KwaiEnv 基础设施</a>
+    <ol class="sub">
+      <li><a href="#s2-1">2.1 为什么需要解耦</a></li>
+      <li><a href="#s2-2">2.2 Dataset 模块</a></li>
+      <li><a href="#s2-3">2.3 Verifier 模块</a></li>
+      <li><a href="#s2-4">2.4 Scaffold 模块</a></li>
+      <li><a href="#s2-5">2.5 Sandbox 与 Trajectory Manager</a></li>
+    </ol>
+  </li>
+  <li><a href="#s3">3. Training Recipe</a>
+    <ol class="sub">
+      <li><a href="#s3-1">3.1 Specialize-then-Unify 范式</a></li>
+      <li><a href="#s3-2">3.2 五个专家的 SFT 数据</a></li>
+      <li><a href="#s3-3">3.3 RL 算法创新</a></li>
+      <li><a href="#s3-4">3.4 Agentic Engineering</a></li>
+      <li><a href="#s3-5">3.5 OPD 融合</a></li>
+    </ol>
+  </li>
+  <li><a href="#s4">4. Evaluation</a>
+  </li>
+  <li><a href="#s5">5. Conclusion 与局限</a>
+  </li>
+</ol>
+</aside>
+
+<main>
+
+<div class="header">
+  <div class="kicker">Technical Report · arXiv 2603.27703 · KwaiKAT @ Kuaishou</div>
+  <h1>KAT-Coder-V2 Technical Report</h1>
+  <div class="meta">
+    <span>Fengxiang Li, Han Zhang, Haoyang Huang, Jinghui Wang, Jinhua Hao, Kun Yuan, Mengtong Li, Minglei Zhang, Pengcheng Xu, Wenhao Zhuang, Yizhen Shao, Zongxian Feng, Can Tang, Chao Wang, Chengxiao Tong, Fan Yang, Gang Xiong, Haixuan Gao, Han Gao, Hao Wang, Haochen Liu, Hongliang Sun, Jiabao Li, Jingwen Chang, Jun Du, Junyi Peng, Leizhen Cui, Meimei Jing, Mingqi Wu, Shangpeng Yan, Shaotong Qi, Suzhe Xu, Wenxuan Zhao, Xianda Sun, Xuan Xie, Yanbo Wang, Yao Xia, Yinghan Cui, Yingpeng Chen, Yong Wang, Yuze Shi, Zhiwei Shen, Ziyu Wang, Ming Sun, Lin Ye, Bin Chen</span>
+    <span>2026-03-29</span>
+  </div>
+</div>
+
+<!-- ============ 0 ============ -->
+<section id="s0">
+<h2>摘要与基本信息</h2>
+
+<p>KAT-Coder-V2 是快手 KwaiKAT 团队发布的 agentic coding 模型。整篇报告围绕一个核心范式展开:<strong>Specialize-then-Unify</strong>——把 agentic coding 分解为 SWE、WebCoding、Terminal、WebSearch、General 五个正交专家领域,各自独立做 SFT 与 RL,最终通过 on-policy distillation 融合为单一可部署模型。</p>
+
+<p>为了支撑这一训练流程,团队构建了模块化基础设施 <strong>KwaiEnv</strong>,支持万级并发 sandbox。算法层面提出 <strong>MCLA</strong>(Monte-Carlo Log-probability Averaging,稳定 MoE RL 训练)与 <strong>Tree Training</strong>(消除树形轨迹冗余计算,训练加速 6.2×)。</p>
+
+<h4>主要实验结果</h4>
+<ul>
+  <li>SWE-bench Verified:<strong>79.6%</strong>(Claude Opus 4.6 为 80.8%)</li>
+  <li>PinchBench Best:<strong>88.7</strong>,超越 GLM-5(86.4)、MiniMax M2.7(87.1)、Claude Opus 4.6(87.4),仅次于 GPT-5.4(90.5)</li>
+  <li>前端美学三项第一:Landing Page 59.8、Slides 57.6、Data Visualization 67.6</li>
+  <li>Terminal-Bench Hard 46.8,τ²-Bench Telecom 93.9</li>
+</ul>
+
+<div class="note">
+  <strong>一句话总结</strong>:这份报告的价值不在单一数字,而在它把"多领域 agentic coding 如何工业化训练"这件事拆成了<em>范式 × 基础设施 × 算法</em>三层可独立迭代的模块,并诚实披露了"专家融合后 general 任务的能力代价"。
+</div>
+</section>
+
+<!-- ============ 1 ============ -->
+<section id="s1">
+<h2>1. Introduction — 三个根本性挑战</h2>
+
+<p>Agentic Coding 区别于传统 code QA 的关键在于:模型需要在真实代码仓库里完成多轮工具调用、依赖管理、执行反馈接入的长 horizon 工作流,优化目标从"单轮代码正确性"变为"端到端工程结果"。</p>
+
+<p>论文作者把走到这一目标面前的障碍凝练为<strong>三个根本性挑战</strong>,并逐一给出对应的对策——这三对"挑战 → 对策"是整篇报告的叙事主线,§2 展开 KwaiEnv,§3 展开 Specialize-then-Unify + 算法创新,§4 给出实验验证。</p>
+
+<table>
+  <thead>
+    <tr><th style="width:28%">挑战(论文原文)</th><th style="width:36%">具体含义</th><th style="width:36%">KAT-Coder-V2 的对策</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>① Capability Fragmentation</strong><br>能力碎片化</td>
+      <td>SWE 需要基于测试验证的长链代码编辑;WebCoding 需要在稀疏口语输入下做美学判断;Terminal 需要持续的环境状态追踪。各领域训练信号不仅<em>不同</em>,而且常常<em>冲突</em>——单一 pipeline 无法同时在所有领域达到最优。</td>
+      <td><strong>Specialize-then-Unify 范式</strong>:把能力谱系分解为 5 个正交专家领域(SWE / WebCoding / Terminal / WebSearch / General),各自独立做数据构造 + SFT + RL,最后通过 <strong>OPD</strong> 融合——以 on-policy 探索避免 exposure bias,以专家提供 dense step-level 监督。</td>
+    </tr>
+    <tr>
+      <td><strong>② Infrastructure Coupling</strong><br>基础设施耦合</td>
+      <td>Agentic RL 训练同时要求高吞吐 sandbox 编排、异构 benchmark 支持、与快速演化的 agent scaffold 生态(Claude Code / OpenClaw / OpenCode 等)的无缝兼容。现有系统把这些关切<em>紧耦合</em>在一起,每接入一个新 scaffold 或数据集都需要昂贵的工程改造。</td>
+      <td><strong>KwaiEnv 模块化基础设施</strong>:解耦 Dataset / Sandbox / Scaffold / Verifier 四大关切,支撑万级并发 sandbox。核心工程决策是用<em>网络代理层</em>拦截 LLM 请求——任何 agent 只需改 API endpoint 即可接入,零源码改动。</td>
+    </tr>
+    <tr>
+      <td><strong>③ Scaling Agentic RL</strong><br>Agentic RL 扩展难</td>
+      <td>有效训练 coding agent 需沿多维度同时 scaling——任务复杂度、prompt 多样性、scaffold 泛化——同时要处理 MoE 架构带来的训练<em>不稳定</em>,以及树形多轮轨迹带来的<em>计算冗余</em>。</td>
+      <td><strong>Agentic Scaling 范式 + 两项算法创新</strong>:沿三个维度系统 scaling,产出 100K+ 高难度 RL 样本;提出 <strong>MCLA</strong> 降低 log-prob 估计方差以稳定 MoE RL;提出 <strong>Tree Training</strong> 消除树形轨迹冗余计算,训练加速最高 6.2×。</td>
+    </tr>
+  </tbody>
+</table>
+
+</section>
+
+<!-- ============ 2 ============ -->
+<section id="s2">
+<h2>2. KwaiEnv 基础设施</h2>
+
+<h3 id="s2-1">2.1 为什么需要解耦</h3>
+
+<p>KwaiEnv 的设计哲学是 <strong>Separation of Concerns</strong>:把 agentic RL 训练中的五个关注点(数据、验证、脚手架、沙箱、轨迹)解耦为独立模块,通过标准接口通信,任一模块都可独立替换或迭代。论文给出的三条直接动因是:<em>Dataset Heterogeneity</em>(不同 benchmark 的 sandbox 镜像和评分机制差异大)、<em>Scaffold Proliferation</em>(新 agent 层出不穷,接入成本高)、<em>High-Throughput Demands</em>(RL rollout 需要并发万级 sandbox)。</p>
+
+<p>Figure 2 把五个模块在一次完整 rollout 中的协作关系讲清楚了——这张图是理解后续所有训练与评估流程的地图。</p>
+
+<div class="figure">
+  <img src="figures/fig2-kwaienv-workflow.png" alt="Figure 2 — KwaiEnv Workflow for SWE Tasks">
+  <div class="figure-caption">Figure 2 · KwaiEnv Workflow for SWE Tasks, Supporting Key Processes Including Data Synthesis, RL, and Evaluation(原论文 p.4)</div>
+</div>
+
+<h4>围绕 Figure 2 的逐步讲解</h4>
+
+<p>关键洞察是:五个模块并不是两两耦合,而是通过 <strong>LLM Proxy</strong> 这一个中心枢纽编排。整个 rollout 从左上角的 Task Config 开始,最终分流到右侧三个出口——这正是 KwaiEnv 能同时支撑 SFT、RL、Evaluation 三种工作模式的结构原因。</p>
+
+<ol class="walkthrough">
+  <li>
+    <strong>Task Config 下发配置</strong>
+    用户通过一份配置文件声明任务参数——数据集、目标 LLM、scaffold 类型、验证器策略。KwaiEnv 读取配置后自动编排,无需人工介入。
+  </li>
+  <li>
+    <strong>LLM Proxy 作为统一网络代理</strong>
+    这是 KwaiEnv 最关键的工程决策。所有 Coding Agent 的 LLM 调用都经过 LLM Proxy 转发到 LLM Model。收益有二:<em>一</em>,任何 agent 只要把 API base_url 指向 Proxy 就能接入,无需修改源码;<em>二</em>,Proxy 在转发的同时自然拦截并记录了完整交互轨迹。
+  </li>
+  <li>
+    <strong>Sandbox 执行 rollout</strong>
+    LLM Proxy 把任务分派到 Sandbox——大规模并发隔离容器(万级量级)。Sandbox 内部由 Scaffold 驱动,产生若干 sub-agent,每个 sub-agent 运行多个 turn(Turn 0 → Turn 1 → … → Turn N)。
+    <br><br>
+    <em>注意图中两个 sub-agent 的 turn 数不同(一个 N turn,一个 2 turn)——这刻画了现代 agent 轨迹的<strong>树形异构结构</strong>。这正是 §3.4 Tree Training 要优化的对象。</em>
+  </li>
+  <li>
+    <strong>SWE-like dataset + Scaffold 作为输入</strong>
+    Sandbox 底部接收两类输入:<em>SWE-like dataset</em> 提供 repo / issue / test cases 等任务素材;<em>Scaffold</em> 提供 agent 逻辑(Claude Code / Kilo Code / OpenClaw / …)。两者可自由组合,支撑 §3.3.1 Agentic Scaling 里的 <strong>scaffold generalization</strong> 维度。
+  </li>
+  <li>
+    <strong>Trajectory Manager 汇聚并格式化</strong>
+    整个 rollout 过程中 LLM Proxy 记录下所有 I/O、tool-call、token 使用、时间戳,交给 Trajectory Manager。Trajectory Manager 按下游用途 reorder、truncate、重组,输出到三条独立通道。
+  </li>
+  <li>
+    <strong>三条出口对应三种工作模式</strong>
+    <em>①</em> SFT Traj → Data synthesis → SFT:生成监督微调数据;<br>
+    <em>②</em> RL Traj → Reinforcement Learning:适配不同 RL 算法(GSPO / Turn-level / GRPO)的输入规范;<br>
+    <em>③</em> Model Patch + Verifier Score → Evaluation:对照金标 patch 或调用官方 scoring 得到评估指标。
+  </li>
+</ol>
+
+<div class="note">
+  <strong>为什么 Figure 2 是整篇论文的 crux</strong>:它把 §2.4 的四个收益——Data Scalability、Scaffold Scalability、Evaluation Agility、Algorithmic Adaptability——都具象化了。新增数据集只需扩展底部输入;新增 scaffold 只需在 Scaffold 模块注册;训练和评估共享同一主干管线(只在 Trajectory Manager 处分叉)。这就是"高一致性 + 短迭代周期"的结构根源——也是 Specialize-then-Unify 范式能在工业界真正跑通的基础设施地基。
+</div>
+
+<h3 id="s2-2">2.2 Dataset 模块</h3>
+<p>集成 SWE-bench、LiveCodeBench 等公开基准与内部数据。通过<strong>统一抽象接口</strong>屏蔽不同数据源在 task 格式、容器镜像、scoring 机制上的差异。新增基准只需实现接口,无需关心上游产生数据的细节。</p>
+
+<h3 id="s2-3">2.3 Verifier 模块</h3>
+<p>提供三类互补的验证策略:</p>
+<ul>
+  <li><strong>Deterministic Scoring</strong>:对照金标 patch、执行 test cases、标准输出比对——适用于有明确答案的任务(数学证明、代码生成)</li>
+  <li><strong>LLM-as-Judge + Rubric</strong>:用于开放式任务(instruction following、长文档理解)的主观质量评估,评估维度和权重可配置</li>
+  <li><strong>SWE Evaluation</strong>:直接调用 benchmark 官方评分模块,在 sandbox 内跑测试套件,返回 pass rate 等关键指标</li>
+</ul>
+
+<h3 id="s2-4">2.4 Scaffold 模块</h3>
+<p>这是 KwaiEnv 最关键的工程决策。Scaffold 模块<strong>黑盒集成 10+ 个开源 coding agent</strong>(Claude Code、Kilo Code、Cline、OpenClaw、OpenCode 等)。</p>
+
+<p>实现方式是<em>网络代理层拦截 LLM 请求</em>:任何通过 HTTP 调用 LLM API 的 agent,只需把 <code>base_url</code> 指向 KwaiEnv 代理,即可被纳入训练与评估流程,<strong>无需修改 agent 源码</strong>。这一设计直接支撑了后续的 multi-scaffold 训练策略。</p>
+
+<h3 id="s2-5">2.5 Sandbox 与 Trajectory Manager</h3>
+<p><strong>Sandbox</strong>:基于快手 <strong>Wanqing</strong> 容器云平台,支持<em>万级并发</em>隔离容器,秒级触发。这是整个 RL 流程的算力底座——大规模 rollout 必须依赖这种规模的沙箱能力。</p>
+
+<p><strong>Trajectory Manager</strong>:作为 KwaiEnv 与 RL 引擎之间的桥梁,通过网络代理拦截所有 LLM 请求,记录 I/O、tool-call、token 使用、时间戳。针对 SFT 和 RL 两类算法的输入规范差异,提供不同的格式化策略,可对原始轨迹做 assemble、reorder、truncate。</p>
+
+</section>
+
+<!-- ============ 3 ============ -->
+<section id="s3">
+<h2>3. Training Recipe</h2>
+
+<h3 id="s3-1">3.1 Specialize-then-Unify 范式</h3>
+
+<p>整个训练流程分三个阶段:</p>
+
+<pre>Phase 1: 5 × SFT      (五个领域各自训练专家模型)
+Phase 2: 5 × RL       (在 KwaiEnv 上各自做环境反馈 RL)
+Phase 3: OPD 融合     (五个专家蒸馏为单一可部署模型)</pre>
+
+<p>五个专家领域基于部署场景的直接需求:SWE(代码修改与工程)、WebCoding(前端 UI 生成)、Terminal(命令行操作)、WebSearch(检索与信息聚合)、General(通用指令与推理)。Table 1 概括了每个专家的场景与关键方法。</p>
+
+<table>
+  <thead><tr><th>Expert</th><th>场景</th><th>关键方法</th></tr></thead>
+  <tbody>
+    <tr><td>SWE</td><td>Issue resolution</td><td>Issue-PR 配对(merge-status 监督)+ AutoBuilder(F2P+P2P 验证)+ Code Comprehension trajectory</td></tr>
+    <tr><td>WebCoding</td><td>UI generation</td><td>Tri-Perspective label system + Prompt rewriting(designer → ordinary user)+ designer-panel evaluation</td></tr>
+    <tr><td>Terminal</td><td>CLI reasoning</td><td>SWE→Terminal 格式转换 + multi-agent 合成 + Docker verification</td></tr>
+    <tr><td>WebSearch</td><td>Agentic search</td><td>搜索轨迹构造知识图谱 + Pass@8 过滤 + rejection sampling fine-tuning</td></tr>
+    <tr><td>General</td><td>Instr / QA / Code-Math</td><td>Compositional constraint training + long-conversation + online-judge verification</td></tr>
+  </tbody>
+</table>
+
+<h3 id="s3-2">3.2 五个专家的 SFT 数据</h3>
+
+<h4>SWE Expert · 三个互补 pipeline</h4>
+
+<p><strong>Issue-PR Pipeline(2M+ 样本)</strong>:从 100K+ repos × 11 种语言挖掘 PR 与 Issue,用 embedding 余弦相似度配对,merge status 作为 correctness 监督信号。产出长上下文 cross-file 的 retrieval + editing 任务。相关性分数定义为:</p>
+
+<div class="formula">
+  $$s(i,\, p) = \cos(\mathbf{e}_i,\, \mathbf{e}_p)$$
+</div>
+
+<p>对每个 merged PR,保留 $s(i,p) > \tau$ 的配对建立双向映射,然后抽取合并前后的 code diff,重建 <em>problem discovery → fault localization → code repair</em> 完整工程链。</p>
+
+<div class="figure">
+  <img src="figures/fig3-issue-pr.png" alt="Figure 3 — Issue-PR data construction pipeline">
+  <div class="figure-caption">Figure 3 · Issue-PR 数据构造流水线:Merged PR 作为锚点,双向联系 Issue 描述与代码 diff,形成带测试验证的自然工程监督信号;重构出的工程链被拆解为 Retrieval + Editing 两类子任务,再经多阶段质量门控产出 2M+ 训练样本(原论文 p.7)。</div>
+</div>
+
+<p><strong>AutoBuilder Pipeline(30K verified 样本)</strong>:针对 8000+ repos × 6 种语言,由三个 agent 协作(Dependency / Environment / Build Verification Agent)自动构建可运行 sandbox,LLM 生成 leak-free 任务指令,F2P + P2P 双验证。</p>
+
+<div class="figure">
+  <img src="figures/fig4-autobuilder.png" alt="Figure 4 — AutoBuilder pipeline">
+  <div class="figure-caption">Figure 4 · AutoBuilder 三阶段流水线:Stage 1 多 agent 迭代构建可复现 sandbox,Stage 2 基于 commit diff + issue 合成无泄漏的任务指令,Stage 3 通过 F2P(Fail-to-Pass)与 P2P(Pass-to-Pass)双门槛筛选——同时通过才保留(原论文 p.8)。</div>
+</div>
+
+<p>F2P + P2P 的双条件验证是这条 pipeline 的 crux:</p>
+
+<div class="formula">
+  $$\underbrace{\forall\, t \in \mathcal{T}_{\text{fail}}: t(\hat{c}) = \text{Pass}}_{\text{Fail-to-Pass (F2P)}} \quad \land \quad \underbrace{\forall\, t \in \mathcal{T}_{\text{pass}}: t(\hat{c}) = \text{Pass}}_{\text{Pass-to-Pass (P2P)}}$$
+</div>
+
+<p>F2P 保证修复有效,P2P 排除回归——同时满足才保留,最终产出(环境 / Buggy 代码 / 指令 / 验证器)四元组训练实例。</p>
+
+<p><strong>Code Comprehension Pipeline</strong>:7 阶段 trajectory synthesis,6 种 question types × 4 个 difficulty levels,Claude Code Agent 在 Docker 中自主探索(上限 150 turns),产出中英双语数据。</p>
+
+<h4>WebCoding Expert · 解决"美学坍塌"问题</h4>
+
+<p>论文指出通用模型在前端任务上有 <em>aesthetic collapse</em> 现象——在稀疏口语输入("make it cool and street-style")下,模型会退化到蓝白配色、单列布局的模板化输出。两个核心策略:</p>
+
+<p><strong>Tri-Perspective Label System</strong>:构建 7 层结构化映射 $\mathcal{L}: V_{\text{user}} \to V_{\text{design}} \to V_{\text{impl}}$,从用户感知(L₁)到技术实现(L₇)。日常输入往往只覆盖 L₁,模型需要自回归推断其余层次:</p>
+
+<div class="formula">
+  $$\hat{L}_k = f_\theta(L_1,\, \hat{L}_2,\, \ldots,\, \hat{L}_{k-1}), \quad k = 2, \ldots, 7$$
+</div>
+
+<p>这把生成过程从"黑盒输出"变成"可追溯的结构化推导"。</p>
+
+<p><strong>Prompt Rewriting</strong>:同一份 HTML 配三种 prompt 变体——designer(>1000 词,含色板栅格动效)、professional(200–300 词,产品经理级)、ordinary(~50 词,真实用户口吻)。这让模型学会从稀疏输入恢复完整设计意图。</p>
+
+<h4>其余三个专家</h4>
+
+<table>
+  <thead><tr><th>Expert</th><th>规模</th><th>关键策略</th></tr></thead>
+  <tbody>
+    <tr><td>Terminal</td><td>100K+ × 10 语言</td><td>专家标注 + 20+ 并行 agent 合成 + SWE→Terminal 格式转换 + CLI-Gym/TermiGen 整合(420+ CLI tools, 11 task categories)</td></tr>
+    <tr><td>WebSearch</td><td>100K+</td><td>搜索轨迹构造知识图谱 + 多跳子图采样 + Pass@8 过滤保留中等难度 + 三条件拒绝采样(正确答案 / 无失败工具调用 / 无重复查询)</td></tr>
+    <tr><td>General</td><td>未披露</td><td>compositional instruction following + multi-turn QA + code-math reasoning(online judge 验证)</td></tr>
+  </tbody>
+</table>
+
+<h3 id="s3-3">3.3 RL 算法创新</h3>
+
+<h4>3.3.1 Agentic Scaling:RL 数据的三个维度</h4>
+
+<p>传统 RL 数据大多是"简单 QA + 静态环境"。KAT-V2 沿三个维度系统性扩展:</p>
+
+<ul>
+  <li><strong>Task Complexity</strong>:用 frontier 闭源模型作为 Teacher + Judge,显式过滤容易任务,只保留需要反思和迭代的高难度实例——这些"poised near the model's capability frontier"的任务是解锁深层推理的关键训练信号。</li>
+  <li><strong>Intent Alignment</strong>(Sim-to-Real Gap):一个 commit 对应多个 prompt 变体(详细专家指令 → 模糊口语查询),训练模型从噪声真实输入中推断工程意图。</li>
+  <li><strong>Scaffold Generalization</strong>:同一任务用多个 scaffold(黑盒 Claude Code / OpenCode / Kilo Code,白盒 SWE-agent)训练,培养 scaffold-agnostic 行为。</li>
+</ul>
+
+<p>最终 RL 数据形式化为五元组:</p>
+<div class="formula">
+  $$\mathcal{D}_{\text{RL}} = \{\langle \mathcal{E},\; \mathcal{T}_{\text{tools}},\; \mathcal{S}_{\text{agent}},\; \mathcal{I}_{\text{task}},\; \mathcal{V}_{\text{verifier}} \rangle\}$$
+</div>
+<p>分别对应:环境、工具集、脚手架、任务指令、验证器。总规模 100K+ RL 样本。</p>
+
+<h4>3.3.2 Modified Turn-level GSPO</h4>
+
+<p><strong>动机</strong>:这一节的设计来自对两种主流 policy optimization 算法的权衡。</p>
+
+<p><em>GRPO</em>(token-level importance sampling)——importance ratio 定义在每个 token 粒度,优点是信号最细,但长 horizon agent 场景里逐 token 的 ratio 会把方差累积到整个序列,训练容易发散。</p>
+
+<p><em>GSPO</em>(sequence-level importance sampling)——用整条序列的长度归一化后的几何平均作为单一 ratio,方差显著缩减;代价是整条序列只剩一个 clip 判定——agent 在某一 turn 里犯错、其它 turn 做对,优化信号被粗粒度的整体 ratio 平均掉,<em>turn 级 credit assignment 变得模糊</em>。</p>
+
+<p><strong>KAT-V2 的折中 · Modified Turn-level GSPO</strong>:把生成序列 $y$ 按 scaffold-specific markers 划分为 $N$ 个 turn(每个 turn $\mathcal{T}_n$ 是一段连续 token 集合),在每个 turn 内做序列级 ratio、turn 之间再平均:</p>
+
+<div class="formula">
+  $$r_{\text{turn}}^{(n)}(\theta) = \prod_{i \in \mathcal{T}_n} \frac{\pi_\theta(y_i \mid x,\, y_{<i})}{\pi_{\theta_{\text{old}}}(y_i \mid x,\, y_{<i})}$$
+  $$\mathcal{L}^{\text{Turn}}(\theta) = \mathbb{E}_{\tau \sim \pi_{\theta_{\text{old}}}} \!\left[ \frac{1}{N}\sum_{n=1}^{N} \min\!\left( r_{\text{turn}}^{(n)}(\theta)\, A_n,\; \text{clip}\!\left(r_{\text{turn}}^{(n)}(\theta),\, 1-\epsilon,\, 1+\epsilon\right) A_n \right) \right]$$
+</div>
+
+<p>直观理解这三个算法的粒度关系:</p>
+
+<table>
+  <thead>
+    <tr><th>算法</th><th>ratio 粒度</th><th>clip 单位</th><th>方差</th><th>Credit 分配</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>GRPO</td><td>每个 token</td><td>逐 token</td><td>高(长序列累积)</td><td>最细</td></tr>
+    <tr><td>GSPO</td><td>整条序列(几何平均)</td><td>整条序列 1 次</td><td>低</td><td>粗(整条共享信号)</td></tr>
+    <tr><td><strong>Turn-level GSPO</strong></td><td>每个 turn(段内连乘)</td><td>逐 turn</td><td>中(turn 内缩减)</td><td>中(对齐 MDP)</td></tr>
+  </tbody>
+</table>
+
+<p>既保留了 sequence-level 的方差缩减,又在 turn 边界处恢复了 fine-grained credit assignment——每个 turn 对应 agent 一次完整 action block(推理 + 工具调用 + 观察),与 LLM Agent 的 MDP 结构天然对齐。Turn 边界基于 scaffold-specific markers 动态定义,因此这套算法天然支持多 scaffold 数据混合训练。</p>
+
+<h4>3.3.3 MCLA · Monte-Carlo Logprob Averaging</h4>
+
+<p><strong>问题诊断</strong>:MoE RL 不稳定不仅源于 policy mismatch,更重要的是 <em>trajectory log-probability 估计本身有高方差</em>。MoE 架构的 stochastic expert routing、capacity dropping、数值方差都会让 log-prob 估计偏离真值:</p>
+
+<div class="formula">
+  $$\log \pi(a) = \log \pi^*(a) + \varepsilon$$
+</div>
+
+<p>这会让 importance weight $w(a) = \exp(\log \pi_{\text{rollout}}(a) - \log \pi_{\text{train}}(a))$ 方差爆炸,梯度方向失稳。</p>
+
+<p><strong>解法</strong>:对每个 trajectory 做 $K=8$ 次 forward pass prefetch,把 log-probability 平均:</p>
+
+<div class="formula">
+  $$\overline{\log}\, \pi(a) = \frac{1}{K}\sum_{k=1}^{K} \log \pi^{(k)}(a), \quad K=8$$
+</div>
+
+<p>MCLA 从源头降低 trajectory-level estimator 的方差,与 <strong>IcePop</strong>(clip 高 discrepancy token)互补使用。论文报告训练稳定性、收敛速度、最终性能均显著提升。</p>
+
+<p class="note">代价:每个 trajectory 多做 8 次 forward pass,意味着训练计算开销显著增加。论文未公开总训练成本。</p>
+
+<h3 id="s3-4">3.4 Agentic Engineering</h3>
+
+<h4>3.4.1 Tree Training · 6.2× 加速</h4>
+
+<p><strong>动机</strong>:现代 agent scaffold 的 sub-agent 分叉、并行 tool calls、context 选择性保留让 trajectory 是<em>树形而非线性</em>的。论文 Figure 5 把这一结构讲得很清楚——左侧是平铺后的 5 条 trajectory,右侧是同一组数据的 Prefix Tree 视角:</p>
+
+<div class="figure">
+  <img src="figures/fig5-tree-training.png" alt="Figure 5 — Tree Training in agentic RL">
+  <div class="figure-caption">Figure 5 · Tree Training 在 agentic RL 中的示意。左:5 条 trajectory 中,前缀 r…u 被全体共享,v₁ 又被 traj 1/2/3 共享,v₅ 被 traj 4/5 共享;右:把共享前缀合并后得到的 Prefix Tree(Trie),叶子对应各自的最终输出(原论文 p.14)。</div>
+</div>
+
+<p>朴素的做法是把树展平为多条独立 root-to-leaf 序列独立训练,这样 <em>r…u</em> 这类共享前缀会在每条序列的 forward+backward 中被重复计算,训练成本随分支度线性增长。</p>
+
+<p><strong>方法</strong>:</p>
+<ol>
+  <li>整棵 trajectory tree 通过 DFS 展平为<strong>单一序列</strong></li>
+  <li>对 per-token 应用 <strong>loss weight 重新加权</strong></li>
+  <li>数学上:由 differentiation 的线性性,产生的梯度<em>精确等价于</em>对所有 root-to-leaf 路径独立训练的梯度之和,只额外引入可忽略的 element-wise scalar 乘法</li>
+</ol>
+
+<p><strong>实现组件</strong>(基于 FlashAttention V3):</p>
+<ul>
+  <li>Tree-structured attention mask:限制 token attention 在自身 root-to-leaf 路径内</li>
+  <li>Per-token position IDs:恢复 token 在原序列中的位置</li>
+  <li>Gradient scaling weights</li>
+</ul>
+
+<p>在真实 agentic RL rollout 上实测 <strong>6.2× end-to-end 训练加速</strong>。</p>
+
+<h4>3.4.2 高并发 Sandbox 训练框架(KRL)</h4>
+
+<p>除了 Tree Training 在<em>单条 rollout 内部</em>消除冗余,论文还给出了<em>系统层面</em>的高并发异步流水线——把 sandbox 集群、SGLang 推理集群、Megatron 训练集群三者解耦,用 KRL router 做动态负载均衡,让 rollout 生成与梯度更新在时间上重叠,整体成本降低 2.8×。Figure 6 展示了完整的 9 步循环:</p>
+
+<div class="figure">
+  <img src="figures/fig6-rl-sandbox.png" alt="Figure 6 — RL and sandbox framework">
+  <div class="figure-caption">Figure 6 · KAT-V2 的 RL + sandbox 异步训练框架,图中 ①–⑨ 对应论文描述的 9 步端到端循环(原论文 p.15)。</div>
+</div>
+
+<ol>
+  <li><strong>Instance Sampling</strong>——从数据集中采样一个可执行的任务 batch</li>
+  <li><strong>Agent Allocation</strong>——KwaiEnv 为每个 sample 指派一个 scaffold(SWE-agent / Claude Code / OpenCode / Kilo Code),并把执行请求派发到远程 sandbox 集群</li>
+  <li><strong>Sandbox Initialization</strong>——Wanqing 容器云动态供给 Docker 隔离环境,每个 sandbox 封装一条执行轨迹,开始向 SGLang 推理引擎发起请求</li>
+  <li><strong>Request Routing</strong>——KRL router 在多个 SGLang 推理 server 之间严格负载均衡</li>
+  <li><strong>Rollout Generation</strong>——SGLang 迭代产生 batch_size × group_size 条 trajectory;多 turn 场景下模型与 sandbox 交互直至任务完成、turn 上限或时间约束触发</li>
+  <li><strong>Reward Computation</strong>——按任务规则或 verifier 模型评估 rollout,计算 advantage 并做 trajectory packing</li>
+  <li><strong>Engine Switching</strong>——执行一次关键的 live context switch:把 GPU 资源从 SGLang 推理服务切给 Megatron 训练服务</li>
+  <li><strong>Parameter Optimization</strong>——用 packed trajectory 做策略更新;更新后的权重再同步回 SGLang server</li>
+  <li><strong>Iteration</strong>——整条循环立即进入下一个 batch</li>
+</ol>
+
+<div class="note">
+  <strong>为何这套框架是"Agentic Engineering"的一部分</strong>:Tree Training 解决的是<em>单条 rollout 内部</em>的冗余(6.2×),而 9 步异步循环解决的是<em>跨 rollout 之间</em>的 GPU 空闲(2.8×)。两层相乘是论文能稳定跑通 100K+ RL 样本、多 scaffold、多 turn 训练的真实工程底座。
+</div>
+
+<h3 id="s3-5">3.5 OPD · On-Policy Distillation 融合</h3>
+
+<p>五个专家各自训练完后,如何融合为单一可部署模型?论文先排除三种 baseline:</p>
+
+<table>
+  <thead><tr><th>方案</th><th>失败原因</th></tr></thead>
+  <tbody>
+    <tr><td>Weight averaging</td><td>Catastrophic forgetting</td></tr>
+    <tr><td>纯 RL</td><td>奖励太稀疏,无法定位中间推理错误</td></tr>
+    <tr><td>Off-policy SFT</td><td>Exposure bias(学生看不到自己会犯的错)</td></tr>
+  </tbody>
+</table>
+
+<p><strong>OPD 解法</strong>:</p>
+<ol>
+  <li>Student 模型在混合领域 prompt 上<em>主动生成完整 trajectory</em></li>
+  <li>联合优化两种 loss:
+    <ul>
+      <li><strong>RL loss</strong>:环境提供 sparse grounding reward,保证最终任务成功</li>
+      <li><strong>OPD loss</strong>:为每个 task 动态选择最强专家作为 Teacher,专家评估 Student 的 on-policy rollout,通过 log-probabilities 提供 dense step-level 监督</li>
+    </ul>
+  </li>
+  <li>避免 expensive full-logit distillation,提供 unbiased 优化目标</li>
+</ol>
+
+<p>论文坦承单模型融合不可避免存在轻微性能下降(capacity constraints + cross-domain interference),但 joint optimization 有效缓解 catastrophic forgetting。</p>
+
+</section>
+
+<!-- ============ 4 ============ -->
+<section id="s4">
+<h2>4. Evaluation</h2>
+
+<div class="figure">
+  <img src="figures/fig1-benchmarks.png" alt="Figure 1 — Benchmark comparison">
+  <div class="figure-caption">Figure 1 · KAT-Coder-V2 vs Claude Opus 4.6 on SWE-bench Verified / Multilingual / rebench-V2,横向覆盖 Claude Code / OpenCode / OpenClaw 三种 scaffold(原论文 p.1)。</div>
+</div>
+
+<h3>4.1 SWE 多 scaffold 表现(Table 2)</h3>
+
+<p class="note">表中 KAT-V2 所有数字均在 KwaiEnv 上重新评估;带 <code>*</code> 的 Claude Opus 4.6 数字来自 Anthropic 官方公告,未经本文环境复现。</p>
+
+<table>
+  <thead>
+    <tr><th>Benchmark</th><th>Scaffold</th><th>KAT-V2</th><th>Claude Opus 4.6</th></tr>
+  </thead>
+  <tbody>
+    <tr><td rowspan="3">SWE-bench Verified</td><td>Claude Code</td><td><strong>79.6</strong></td><td>80.8*</td></tr>
+    <tr><td>OpenCode</td><td>74.8</td><td>75.0</td></tr>
+    <tr><td>OpenClaw</td><td>72.8</td><td>75.7</td></tr>
+    <tr><td rowspan="2">SWE-bench Multilingual</td><td>Claude Code</td><td>75.4</td><td>77.8*</td></tr>
+    <tr><td>OpenCode</td><td><strong>71.2</strong></td><td>70.2</td></tr>
+    <tr><td rowspan="2">SWE-rebench-V2</td><td>Claude Code</td><td>43.3</td><td>43.7</td></tr>
+    <tr><td>OpenCode</td><td><strong>38.7</strong></td><td>37.3</td></tr>
+  </tbody>
+</table>
+
+<p>三个观察点:</p>
+<ul>
+  <li>SWE-bench Verified 79.6 紧逼 Claude Opus 4.6(80.8)</li>
+  <li>跨 scaffold 表现稳定(79.6 / 74.8 / 72.8),印证 scaffold-agnostic 训练有效</li>
+  <li>在无污染基准 SWE-rebench-V2 上整体接近 Claude Opus 4.6(43.3 vs 43.7,38.7 vs 37.3),说明不是 SWE-bench 过拟合</li>
+</ul>
+
+<h3>4.2 Real-World Agent Benchmarks(Table 3)</h3>
+
+<table>
+  <thead><tr><th>Benchmark</th><th>Metric</th><th>KAT-V2</th><th>GLM-5</th><th>MiniMax M2.7</th><th>Claude Opus 4.6</th><th>GPT-5.4</th><th>Gemini 3.1 Pro</th></tr></thead>
+  <tbody>
+    <tr><td rowspan="2">PinchBench</td><td>Best</td><td><strong>88.7</strong></td><td>86.4</td><td>87.1</td><td>87.4</td><td>90.5</td><td>86.7</td></tr>
+    <tr><td>Average</td><td>81.9</td><td>80.3</td><td>81.8</td><td>82.3</td><td>81.6</td><td>75.9</td></tr>
+    <tr><td rowspan="2">Claw-Eval</td><td>Pass³</td><td>55.6</td><td>57.7</td><td>51.9</td><td>66.3</td><td>66.3</td><td>50.0</td></tr>
+    <tr><td>Average</td><td>73.4</td><td>73.0</td><td>70.7</td><td>79.3</td><td>80.6</td><td>74.2</td></tr>
+  </tbody>
+</table>
+
+<p>PinchBench Best 88.7 超越 GLM-5、MiniMax M2.7、Claude Opus 4.6,仅次于 GPT-5.4。Claw-Eval Pass³ 落后 Claude / GPT-5.4 约 10 个百分点——论文结尾明确承认这是下一步要缩小的差距。</p>
+
+<h3>4.3 前端美学(Table 4)</h3>
+
+<div class="figure">
+  <img src="figures/fig7-frontend.png" alt="Figure 7 — Frontend generation sample">
+  <div class="figure-caption">Figure 7 · KAT-Coder-V2 前端生成样例(Landing Page 示例)。模型在 colloquial 稀疏输入下仍能给出分明的栅格布局、色彩层次与信息密度,这是 §3.2 WebCoding Expert 的 Tri-Perspective Label System + Prompt Rewriting 直接见效的体现(原论文 p.19)。</div>
+</div>
+
+<table>
+  <thead><tr><th>Scenario</th><th>KAT-V2</th><th>GLM-5</th><th>Kimi K2.5</th></tr></thead>
+  <tbody>
+    <tr><td>Landing Page</td><td><strong>59.8</strong></td><td>57.6</td><td>54.6</td></tr>
+    <tr><td>Slides</td><td><strong>57.6</strong></td><td>42.8</td><td>34.8</td></tr>
+    <tr><td>Data Visualization</td><td><strong>67.6</strong></td><td>42.4</td><td>46.0</td></tr>
+  </tbody>
+</table>
+
+<p>三项场景全部第一。Slides 比 GLM-5 高 14.8pp,Data Visualization 高 25.2pp——WebCoding Expert 的 Tri-Perspective Label System + Prompt Rewriting 是差距的主要来源。</p>
+
+<p>评估方法本身也是论文贡献:这是首个 <strong>reference-free</strong> 的 Text-to-UI 美学评测基准。Landing Page 评估包含 10 个维度(Layout / Typography / Color / Font / Image / Background / Elements / Components / Interaction / Animation)× 4 层(Structural / Visual / Component / Dynamic),0–5 分制,由专业 UI/UX 设计师盲评,标准化条件为 Chrome 1920×1080。</p>
+
+<h3>4.4 General 任务(Table 5)</h3>
+
+<table>
+  <thead><tr><th>Benchmark</th><th>KAT-V2</th><th>GLM-5</th><th>MiniMax M2.7</th><th>Claude Opus 4.6</th><th>GPT-5.4</th><th>Gemini 3.1 Pro</th></tr></thead>
+  <tbody>
+    <tr><td>Terminal-Bench Hard</td><td>46.8</td><td>43.2</td><td>39.4</td><td>46.2</td><td><strong>57.6</strong></td><td>53.8</td></tr>
+    <tr><td>τ²-Bench Telecom</td><td>93.9</td><td><strong>98.2</strong></td><td>84.8</td><td>92.1</td><td>91.5</td><td>95.6</td></tr>
+    <tr><td>AA-LCR</td><td>68.0</td><td>63.3</td><td>68.7</td><td>70.7</td><td><strong>74.0</strong></td><td>72.7</td></tr>
+    <tr><td>IFBench</td><td>67.0</td><td>72.3</td><td>75.7</td><td>53.1</td><td>73.9</td><td><strong>77.1</strong></td></tr>
+  </tbody>
+</table>
+
+<p>Terminal-Bench Hard 落后 GPT-5.4 约 11pp,IFBench 落后 Gemini 3.1 Pro 约 10pp。论文坦承这反映"specialize"的代价——领域专家化会牺牲部分 general 能力。</p>
+
+</section>
+
+<!-- ============ 5 ============ -->
+<section id="s5">
+<h2>5. Conclusion 与局限</h2>
+
+<p>KAT-Coder-V2 给出的完整答案包含三层:</p>
+
+<ol>
+  <li><strong>范式层</strong>:Specialize-then-Unify 证明多领域 agent 可以通过"先分、后合"的两阶段训练达到单一领域专家水平,再通过 OPD 融合为可部署模型。</li>
+  <li><strong>基础设施层</strong>:KwaiEnv 的五模块解耦 + 网络代理 scaffold 接入 + 万级沙箱构成了工业级 agentic RL 的算力与接口底座。</li>
+  <li><strong>算法层</strong>:Modified Turn-level GSPO 在 token 级与序列级之间取得工程折中;MCLA 通过 K=8 forward pass 平均降低 log-prob 估计方差,稳定 MoE RL;Tree Training 通过梯度等价性证明把树形轨迹训练成本摊平,外加高并发异步 sandbox 循环,共同构成"Agentic Engineering"。</li>
+</ol>
+
+<div class="note">
+<strong>论文诚实披露的主要局限</strong>:
+<ul>
+  <li>未公开模型规模(仅说明"基于 KAT-V1")</li>
+  <li>未公开训练计算成本(MCLA K=8 forward pass 代价显著)</li>
+  <li>Specialize-then-Unify 缺与 joint training 的 head-to-head ablation</li>
+  <li>OPD "动态选择最强专家"的具体机制未详述</li>
+  <li>Claw-Eval 等 real-world 任务上仍落后 Claude / GPT-5.4 约 10pp</li>
+  <li>General 任务上的专家化代价明显(Terminal-Bench Hard -11pp vs GPT-5.4,IFBench -10pp vs Gemini 3.1 Pro)</li>
+</ul>
+</div>
+
+<p>作者把这些作为下一步工作的方向,并特别提出:<strong>下一代扩展可能在于 reasoning 与 agentic behavior 的更深融合,以及把 Specialize-then-Unify 范式推广到 coding 以外的 agentic 领域</strong>。</p>
+
+</section>
+
+
+</main>
+</div>
+
+</body>
+</html>
