@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import responses
 
-from tests.conftest import SAMPLE_ARXIV_XML
+from tests.lib.conftest import SAMPLE_ARXIV_XML
 
 
 _EMPTY_XML = '<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"></feed>'

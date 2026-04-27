@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import responses
 
-from tests.conftest import SAMPLE_ARXIV_XML, make_alphaxiv_html
+from tests.lib.conftest import SAMPLE_ARXIV_XML, make_alphaxiv_html
 
 _EMPTY_XML = '<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"></feed>'
 _MOD_PATH = "start-my-day.scripts.search_and_filter"

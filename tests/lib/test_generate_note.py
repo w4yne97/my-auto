@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import responses
 
-from tests.conftest import SAMPLE_ARXIV_XML
+from tests.lib.conftest import SAMPLE_ARXIV_XML
 
 
 class TestGenerateNote:
