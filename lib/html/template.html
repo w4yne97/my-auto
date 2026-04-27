@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{TITLE}}</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Noto+Serif+SC:wght@400;500;600&display=swap" rel="stylesheet">
+
+<script>
+window.MathJax = {
+  tex: { inlineMath: [['$', '$']], displayMath: [['$$', '$$']] },
+  svg: { fontCache: 'global' }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+
+<style>
+:root {
+  --bg: #ffffff;
+  --bg-soft: #f7f7f5;
+  --text: #1a1a1a;
+  --text-muted: #666;
+  --border: #e5e5e2;
+  --accent: #1a56db;
+  --code-bg: #f4f4f2;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Inter', 'Noto Serif SC', -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.8;
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  max-width: 1180px;
+  margin: 0 auto;
+  gap: 64px;
+  padding: 0 32px;
+}
+
+/* ===== TOC ===== */
+.toc {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  padding: 56px 0;
+  border-right: 1px solid var(--border);
+  font-size: 13.5px;
+}
+.toc-title {
+  font-weight: 600;
+  color: var(--text-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 16px;
+}
+.toc ol { list-style: none; }
+.toc li { margin: 2px 0; }
+.toc a {
+  display: block;
+  padding: 5px 0;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+.toc a:hover { color: var(--accent); }
+.toc .sub { padding-left: 16px; font-size: 12.5px; }
+
+/* ===== Main ===== */
+main {
+  padding: 56px 0 120px;
+  max-width: 760px;
+}
+
+.header {
+  margin-bottom: 56px;
+  padding-bottom: 32px;
+  border-bottom: 1px solid var(--border);
+}
+.header .kicker {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 12px;
+}
+h1 {
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+  margin-bottom: 16px;
+}
+.header .meta {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+.header .meta span { margin-right: 20px; }
+
+section { margin-bottom: 64px; scroll-margin-top: 24px; }
+
+h2 {
+  font-size: 24px;
+  font-weight: 700;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  letter-spacing: -0.01em;
+}
+h3 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 32px 0 12px;
+  color: #111;
+}
+h4 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 20px 0 8px;
+  color: #222;
+}
+
+p { margin-bottom: 14px; color: #2a2a2a; }
+strong { color: #0a0a0a; font-weight: 600; }
+em { font-style: italic; color: #0a0a0a; }
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+ul, ol { padding-left: 24px; margin-bottom: 14px; }
+li { margin-bottom: 6px; }
+
+code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.88em;
+  background: var(--code-bg);
+  padding: 2px 6px;
+  border-radius: 3px;
+  color: #b91c1c;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+}
+th, td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+th {
+  font-weight: 600;
+  background: var(--bg-soft);
+  border-bottom: 2px solid var(--border);
+}
+
+blockquote {
+  border-left: 3px solid var(--accent);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.formula {
+  background: var(--bg-soft);
+  padding: 12px 20px;
+  border-radius: 4px;
+  margin: 14px 0;
+  overflow-x: auto;
+  font-size: 15px;
+}
+
+.note {
+  font-size: 14px;
+  color: var(--text-muted);
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-radius: 4px;
+  margin: 14px 0;
+}
+
+pre {
+  background: var(--bg-soft);
+  padding: 14px 18px;
+  border-radius: 4px;
+  overflow-x: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 14px 0;
+  white-space: pre;
+  color: #333;
+}
+
+.figure {
+  margin: 24px 0 8px;
+  padding: 20px 16px 12px;
+  background: #fdfdfb;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  text-align: center;
+  overflow-x: auto;
+}
+.figure svg,
+.figure img { max-width: 100%; height: auto; display: block; margin: 0 auto; border-radius: 4px; }
+.figure-caption {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 10px;
+  font-style: italic;
+  padding: 0 12px;
+}
+.walkthrough {
+  counter-reset: step;
+  list-style: none;
+  padding: 0;
+  margin: 20px 0;
+}
+.walkthrough li {
+  counter-increment: step;
+  position: relative;
+  padding: 14px 16px 14px 56px;
+  margin-bottom: 10px;
+  background: #fafaf8;
+  border-left: 3px solid var(--accent);
+  border-radius: 0 4px 4px 0;
+}
+.walkthrough li::before {
+  content: counter(step);
+  position: absolute;
+  left: 16px;
+  top: 14px;
+  width: 26px;
+  height: 26px;
+  background: var(--accent);
+  color: white;
+  border-radius: 50%;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.walkthrough li strong { display: block; margin-bottom: 4px; }
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; gap: 0; padding: 0 20px; }
+  .toc { display: none; }
+  h1 { font-size: 26px; }
+}
+</style>
+</head>
+
+<body>
+
+<div class="layout">
+
+<aside class="toc">
+  <div class="toc-title">目录</div>
+  {{TOC_HTML}}
+</aside>
+
+<main>
+
+<div class="header">
+  <div class="kicker">{{KICKER}}</div>
+  <h1>{{TITLE}}</h1>
+  <div class="meta">
+    <span>{{AUTHORS}}</span>
+    <span>{{PUBLISHED}}</span>
+  </div>
+</div>
+
+{{BODY_HTML}}
+
+</main>
+</div>
+
+</body>
+</html>
