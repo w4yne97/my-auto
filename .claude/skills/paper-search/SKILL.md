@@ -31,7 +31,7 @@ description: 按关键词搜索 arXiv 论文，在对话中展示排序结果
 ## Step 3: 调用 search_papers.py
 
 ```bash
-python paper-search/scripts/search_papers.py \
+python modules/auto-reading/scripts/search_papers.py \
   --config "$VAULT_PATH/00_Config/research_interests.yaml" \
   --keywords {用户关键词} \
   --output /tmp/auto-reading/search_result.json \

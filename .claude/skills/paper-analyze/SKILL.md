@@ -30,7 +30,7 @@ description: 获取单篇论文元数据并生成详细分析笔记到 Obsidian 
 ## Step 3: 调用 generate_note.py
 
 ```bash
-python paper-analyze/scripts/generate_note.py \
+python modules/auto-reading/scripts/generate_note.py \
   --arxiv-id {arxiv_id} \
   --config "$VAULT_PATH/00_Config/research_interests.yaml" \
   --output /tmp/auto-reading/paper_meta.json

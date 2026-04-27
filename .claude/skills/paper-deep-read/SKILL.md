@@ -21,7 +21,7 @@ description: 逐帧深度阅读单篇论文,产出富样式 HTML 到 shares/<slu
 
 ```bash
 mkdir -p /tmp/auto-reading/deep-read
-python paper-deep-read/scripts/fetch_pdf.py \
+python modules/auto-reading/scripts/fetch_pdf.py \
   --arxiv-id {arxiv_id} \
   --config "$VAULT_PATH/00_Config/research_interests.yaml" \
   --output /tmp/auto-reading/deep-read/{slug}/meta.json
@@ -38,7 +38,7 @@ python paper-deep-read/scripts/fetch_pdf.py \
 ## Step 3: Stage 1 — 候选图池
 
 ```bash
-python paper-deep-read/scripts/extract_figures.py \
+python modules/auto-reading/scripts/extract_figures.py \
   --pdf {pdf_path} \
   --slug {slug} \
   --output-dir /tmp/auto-reading/figures-candidates/{slug}/
@@ -162,7 +162,7 @@ Read(pdf_path, pages: "6-10")
 ## Step 8: Stage 3 — 装配
 
 ```bash
-python paper-deep-read/scripts/assemble_html.py \
+python modules/auto-reading/scripts/assemble_html.py \
   --meta /tmp/auto-reading/deep-read/{slug}/meta.json \
   --outline /tmp/auto-reading/deep-read/{slug}/outline.json \
   --body /tmp/auto-reading/deep-read/{slug}/body.html \

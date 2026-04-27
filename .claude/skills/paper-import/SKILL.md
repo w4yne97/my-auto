@@ -47,7 +47,7 @@ description: 批量导入已有论文到 Obsidian vault 知识体系（支持 ar
 将收集到的输入传给 Python 脚本进行解析、去重和元数据获取：
 
 ```bash
-python paper-import/scripts/resolve_and_fetch.py \
+python modules/auto-reading/scripts/resolve_and_fetch.py \
   --inputs {input1} {input2} ... \
   --config "$VAULT_PATH/00_Config/research_interests.yaml" \
   --output /tmp/auto-reading/import_result.json
