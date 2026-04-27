@@ -1,0 +1,26 @@
+# vault 路径（/config 初始化时设置）
+vault_path: ~/obsidian-vault
+
+# 语言设置
+# - "zh": 纯中文
+# - "en": 纯英文
+# - "mixed": 论文标题/摘要保持英文原文，分析和 insight 用中文
+language: "mixed"
+
+research_domains:
+  "coding-agent":
+    keywords: ["coding agent", "code generation", "code repair"]
+    arxiv_categories: ["cs.AI", "cs.SE", "cs.CL"]
+    priority: 5
+  "rl-for-code":
+    keywords: ["RLHF", "reinforcement learning", "reward model"]
+    arxiv_categories: ["cs.LG", "cs.AI"]
+    priority: 4
+
+excluded_keywords: ["survey", "review", "3D", "medical"]
+
+scoring_weights:
+  keyword_match: 0.4
+  recency: 0.2
+  popularity: 0.3
+  category_match: 0.1

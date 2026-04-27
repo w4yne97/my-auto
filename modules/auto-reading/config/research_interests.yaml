@@ -1,0 +1,134 @@
+# Auto-Reading 配置文件
+# 由 /reading-config 命令生成，可通过 /reading-config 修改
+
+vault_path: "/Users/w4ynewang/Documents/auto-reading-vault"
+
+language: "mixed"
+
+research_domains:
+  "coding-agent":
+    keywords:
+      - "code agent"
+      - "coding agent"
+      - "SWE-bench"
+      - "software engineering agent"
+      - "code generation agent"
+      - "autonomous coding"
+      - "SWE-agent"
+      - "code localization"
+      - "code retrieval"
+      - "issue resolution"
+      - "repository-level"
+      - "multi-agent software"
+    arxiv_categories:
+      - "cs.SE"
+      - "cs.AI"
+      - "cs.CL"
+    priority: 5
+
+  "rl-for-code":
+    keywords:
+      - "reinforcement learning code"
+      - "RLEF"
+      - "RL code generation"
+      - "reward model code"
+      - "execution feedback"
+      - "GRPO"
+      - "RLVR"
+      - "verifiable reward"
+      - "process reward model"
+      - "reward shaping code"
+      - "RL agent training"
+    arxiv_categories:
+      - "cs.LG"
+      - "cs.AI"
+      - "cs.CL"
+    priority: 4
+
+  "sft-for-code":
+    keywords:
+      - "supervised fine-tuning code"
+      - "SFT agent"
+      - "trajectory synthesis"
+      - "trajectory distillation"
+      - "code SFT"
+      - "mid-training"
+      - "curriculum learning code"
+      - "data curation code"
+      - "agent training data"
+    arxiv_categories:
+      - "cs.CL"
+      - "cs.SE"
+      - "cs.AI"
+    priority: 4
+
+  "code-tts":
+    keywords:
+      - "test-time scaling code"
+      - "test-time compute code"
+      - "inference scaling code"
+      - "best-of-N code"
+      - "MCTS code"
+      - "code verifier"
+      - "process reward model code"
+      - "trajectory selection"
+      - "sample scaling"
+    arxiv_categories:
+      - "cs.CL"
+      - "cs.SE"
+      - "cs.AI"
+    priority: 4
+
+  "swe-data":
+    keywords:
+      - "SWE dataset"
+      - "SWE training data"
+      - "SWE environment"
+      - "SWE benchmark"
+      - "trajectory dataset"
+      - "code benchmark"
+      - "software engineering data"
+      - "docker environment code"
+      - "execution environment"
+    arxiv_categories:
+      - "cs.SE"
+      - "cs.AI"
+      - "cs.CL"
+    priority: 4
+
+  "post-training":
+    keywords:
+      - "post-training"
+      - "RLHF"
+      - "DPO"
+      - "PPO alignment"
+      - "instruction tuning"
+      - "preference optimization"
+      - "fine-tuning LLM"
+    arxiv_categories:
+      - "cs.CL"
+      - "cs.LG"
+      - "cs.AI"
+    priority: 3
+
+  "llm-reasoning":
+    keywords:
+      - "LLM reasoning"
+      - "chain-of-thought"
+      - "tree-of-thought"
+      - "reasoning LLM"
+      - "test-time compute"
+      - "mathematical reasoning"
+    arxiv_categories:
+      - "cs.CL"
+      - "cs.AI"
+      - "cs.LG"
+    priority: 3
+
+excluded_keywords: []
+
+scoring_weights:
+  keyword_match: 0.4
+  recency: 0.2
+  popularity: 0.3
+  category_match: 0.1
