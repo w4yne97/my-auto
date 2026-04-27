@@ -1,0 +1,36 @@
+__pycache__/
+*.pyc
+.venv/
+dist/
+*.egg-info/
+.superpowers/
+auto-reading.db
+.env
+
+# Python
+*.py[cod]
+build/
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Temp
+/tmp/auto-reading/
+
+# IDE
+.vscode/
+.idea/
+
+# Claude Code local state (skills should be tracked, local config should not)
+.claude/settings.local.json
+
+# User's local test/scratch files
+*.local.yaml
+*.local.json
+scratch/
+
+# start-my-day platform additions
+*.zip
+/tmp/start-my-day/
