@@ -20,7 +20,7 @@ description: 从 Insight 知识库中挖掘研究机会，生成 Idea 到 40_Ide
 
 ## Step 2: 读取配置
 
-读取 `$VAULT_PATH/00_Config/research_interests.yaml`，获取 research_domains 及其 priority。
+读取 `modules/auto-reading/config/research_interests.yaml`，获取 research_domains 及其 priority。
 
 ## Step 3: 读取 Insight 内容
 

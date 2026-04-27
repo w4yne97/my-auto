@@ -19,7 +19,7 @@ description: 全局评审所有 Idea（看板+排序+停滞预警）或深度评
 
 ## Step 2: 读取配置
 
-读取 `$VAULT_PATH/00_Config/research_interests.yaml`。
+读取 `modules/auto-reading/config/research_interests.yaml`。
 
 ---
 

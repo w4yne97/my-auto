@@ -23,7 +23,7 @@ description: 逐帧深度阅读单篇论文,产出富样式 HTML 到 shares/<slu
 mkdir -p /tmp/auto-reading/deep-read
 python modules/auto-reading/scripts/fetch_pdf.py \
   --arxiv-id {arxiv_id} \
-  --config "$VAULT_PATH/00_Config/research_interests.yaml" \
+  --config "modules/auto-reading/config/research_interests.yaml" \
   --output /tmp/auto-reading/deep-read/{slug}/meta.json
 ```
 
