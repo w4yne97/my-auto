@@ -16,6 +16,7 @@ Usage:
 import argparse
 import logging
 import re
+import shutil
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -84,6 +85,19 @@ def build_manifest(learning_vault: Path, reading_vault: Path) -> Manifest:
             md_count=md_count,
         ))
     return Manifest(folders=tuple(entries))
+
+
+def perform_copy(manifest: Manifest, reading_vault: Path) -> None:
+    """Copy each manifest folder from src to dst. Source is preserved (copytree)."""
+    target_root = reading_vault / "learning"
+    target_root.mkdir(parents=True, exist_ok=True)
+    for entry in manifest.folders:
+        # copytree refuses to overwrite an existing dst by default — that's correct here:
+        # Task 2's preflight has guaranteed dst doesn't already contain .md content.
+        if entry.dst.exists() and not any(entry.dst.iterdir()):
+            entry.dst.rmdir()  # remove empty pre-existing dst so copytree can create it
+        shutil.copytree(entry.src, entry.dst)
+        logger.info("Copied %s -> %s (%d files)", entry.src.name, entry.dst, entry.md_count)
 
 
 def check_preflight(reading_vault: Path, learning_vault: Path) -> None:
@@ -172,9 +186,39 @@ def check_basename_collisions(reading_vault: Path, learning_vault: Path) -> list
     return collisions
 
 
+def _print_plan(reading_vault: Path, learning_vault: Path, manifest: Manifest) -> None:
+    """Print a human-readable plan summary to stdout."""
+    rd_count = len(find_md_files(reading_vault))
+    print(f"Source vaults:")
+    print(f"  reading:  {reading_vault}   ({rd_count} .md files)")
+    print(f"  learning: {learning_vault}  ({manifest.total_md_files} .md files)")
+    print()
+    print("Pre-flight: OK")
+    print("Basename collisions: 0")
+    print()
+    print(f"Planned copies ({manifest.total_md_files} files across {len(manifest.folders)} folders):")
+    for entry in manifest.folders:
+        print(f"  {entry.src.name}/  ->  {entry.dst}  ({entry.md_count} file(s))")
+
+
 def cmd_dry_run(reading_vault: Path, learning_vault: Path) -> int:
     """Print planned migration without writing anything."""
-    raise NotImplementedError("Implemented in Task 5")
+    try:
+        check_preflight(reading_vault, learning_vault)
+    except PreflightError as exc:
+        logger.error("%s", exc)
+        return 1
+    collisions = check_basename_collisions(reading_vault, learning_vault)
+    if collisions:
+        logger.error("Basename collisions detected — aborting:")
+        for rp, lp in collisions:
+            logger.error("  %s  <->  %s", rp, lp)
+        return 1
+    manifest = build_manifest(learning_vault, reading_vault)
+    _print_plan(reading_vault, learning_vault, manifest)
+    print()
+    print("[--dry-run mode: no changes written. Re-run with --apply to execute.]")
+    return 0
 
 
 def cmd_apply(reading_vault: Path, learning_vault: Path) -> int:
@@ -194,7 +238,14 @@ def cmd_apply(reading_vault: Path, learning_vault: Path) -> int:
         return 1
     logger.info("Basename collisions: 0")
 
-    # Subsequent phases added in Tasks 4–8.
+    manifest = build_manifest(learning_vault, reading_vault)
+    logger.info("Manifest: %d folders, %d .md files",
+                len(manifest.folders), manifest.total_md_files)
+
+    # Backups are added in Task 8.
+    perform_copy(manifest, reading_vault)
+    logger.info("Apply complete.")
+    # Cleanup is added in Task 7.
     return 0
 
 

@@ -84,3 +84,58 @@ class TestManifest:
         assert ".obsidian" not in folder_names
         # Total file count
         assert manifest.total_md_files == 4  # 1 + 2 + 1
+
+
+class TestDryRun:
+    def test_dry_run_no_writes(self, synthetic_reading_vault, synthetic_learning_vault, capsys):
+        """T1: --dry-run prints plan, makes no FS changes."""
+        # Snapshot state before
+        before_reading = sorted(p.relative_to(synthetic_reading_vault) for p in synthetic_reading_vault.rglob("*"))
+        before_learning = sorted(p.relative_to(synthetic_learning_vault) for p in synthetic_learning_vault.rglob("*"))
+
+        rc = main([
+            "--dry-run",
+            "--reading-vault", str(synthetic_reading_vault),
+            "--learning-vault", str(synthetic_learning_vault),
+        ])
+        assert rc == 0
+
+        # FS unchanged
+        after_reading = sorted(p.relative_to(synthetic_reading_vault) for p in synthetic_reading_vault.rglob("*"))
+        after_learning = sorted(p.relative_to(synthetic_learning_vault) for p in synthetic_learning_vault.rglob("*"))
+        assert before_reading == after_reading
+        assert before_learning == after_learning
+
+        # Plan shown in stdout
+        out = capsys.readouterr().out
+        assert "Planned copies" in out
+        assert "10_Foundations" in out
+
+
+class TestApply:
+    def test_apply_copies_all_manifest_folders(
+        self, synthetic_reading_vault, synthetic_learning_vault
+    ):
+        """T2: --apply produces learning/ subtree with all source files."""
+        rc = main([
+            "--apply",
+            "--reading-vault", str(synthetic_reading_vault),
+            "--learning-vault", str(synthetic_learning_vault),
+        ])
+        assert rc == 0
+
+        target = synthetic_reading_vault / "learning"
+        # NOTE: Task 3 renamed conftest's two `_index.md` files in synthetic_learning_vault
+        # to avoid colliding with synthetic_reading_vault/30_Insights/topic-x/_index.md
+        # under collision-check. New names: 00_Map/knowledge-index.md, 50_Learning-Log/learning-log-index.md.
+        assert (target / "00_Map" / "knowledge-index.md").is_file()
+        assert (target / "10_Foundations" / "scaling-laws.md").is_file()
+        assert (target / "10_Foundations" / "kv-cache-optimization.md").is_file()
+        assert (target / "50_Learning-Log" / "learning-log-index.md").is_file()
+
+        # Empty/non-prefixed folders must NOT have been copied
+        assert not (target / "40_Classics").exists()
+        assert not (target / "60_Study-Sessions").exists()
+        assert not (target / "90_Templates").exists()
+        assert not (target / "assets").exists()
+        assert not (target / ".obsidian").exists()
