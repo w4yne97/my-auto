@@ -13,6 +13,8 @@ Usage:
     # Audit a previously-migrated vault
     python tools/migrate_vault.py --verify
 """
+from __future__ import annotations
+
 import argparse
 import logging
 import sys
@@ -30,6 +32,10 @@ class MigrationError(Exception):
 
 class PreflightError(MigrationError):
     """Raised when pre-conditions for --apply are not met."""
+
+
+class CollisionError(MigrationError):
+    """Raised when basename collisions would shadow notes after migration."""
 
 
 def check_preflight(reading_vault: Path, learning_vault: Path) -> None:
@@ -90,6 +96,34 @@ def main(argv: list[str] | None = None) -> int:
     return cmd_dry_run(args.reading_vault, args.learning_vault)
 
 
+def find_md_files(vault: Path) -> list[Path]:
+    """Return all .md files under a vault, excluding `.obsidian/` and any pre-existing
+    `learning/` subtree (which is the migration target, not source content)."""
+    excluded_dirs = {".obsidian", "learning"}
+    out: list[Path] = []
+    for path in vault.rglob("*.md"):
+        # Skip if any ancestor folder name (relative to vault) is in excluded_dirs
+        rel_parts = path.relative_to(vault).parts
+        if any(part in excluded_dirs for part in rel_parts[:-1]):
+            continue
+        out.append(path)
+    return out
+
+
+def check_basename_collisions(reading_vault: Path, learning_vault: Path) -> list[tuple[Path, Path]]:
+    """Return list of (reading_path, learning_path) pairs sharing a basename.
+
+    Empty list means no collisions.
+    """
+    reading_files = {p.name: p for p in find_md_files(reading_vault)}
+    learning_files = find_md_files(learning_vault)
+    collisions: list[tuple[Path, Path]] = []
+    for lp in learning_files:
+        if lp.name in reading_files:
+            collisions.append((reading_files[lp.name], lp))
+    return collisions
+
+
 def cmd_dry_run(reading_vault: Path, learning_vault: Path) -> int:
     """Print planned migration without writing anything."""
     raise NotImplementedError("Implemented in Task 5")
@@ -103,7 +137,16 @@ def cmd_apply(reading_vault: Path, learning_vault: Path) -> int:
         logger.error("%s", exc)
         return 1
     logger.info("Pre-flight: OK")
-    # Subsequent phases added in Tasks 3–8.
+
+    collisions = check_basename_collisions(reading_vault, learning_vault)
+    if collisions:
+        logger.error("Basename collisions detected — aborting:")
+        for rp, lp in collisions:
+            logger.error("  %s  <->  %s", rp, lp)
+        return 1
+    logger.info("Basename collisions: 0")
+
+    # Subsequent phases added in Tasks 4–8.
     return 0
 
 

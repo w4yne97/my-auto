@@ -43,10 +43,10 @@ def synthetic_learning_vault(tmp_path: Path) -> Path:
     (vault / ".obsidian").mkdir()
     (vault / ".obsidian" / "app.json").write_text("{}", encoding="utf-8")
     (vault / "assets").mkdir()  # empty, must be skipped
-    _write_md(vault / "00_Map" / "_index.md", body="map\n")
+    _write_md(vault / "00_Map" / "knowledge-index.md", body="map\n")
     _write_md(vault / "10_Foundations" / "scaling-laws.md", body="scaling\n")
     _write_md(vault / "10_Foundations" / "kv-cache-optimization.md", body="kv\n")
-    _write_md(vault / "50_Learning-Log" / "_index.md", body="log\n")
+    _write_md(vault / "50_Learning-Log" / "learning-log-index.md", body="log\n")
     # Empty number-prefixed folders (skipped by manifest because zero .md)
     (vault / "40_Classics").mkdir()
     (vault / "60_Study-Sessions").mkdir()
