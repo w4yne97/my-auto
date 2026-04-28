@@ -161,14 +161,10 @@ def build_dedup_set(cli: ObsidianCLI) -> set[str]:
     vault_path = Path(cli.vault_path)
     papers_dir = vault_path / "20_Papers"
     if not papers_dir.exists():
-        # TODO(P2): silent empty-set return masks a real symptom — when
-        # ObsidianCLI._resolve_vault_path returns "Vault not found" (see TODO
-        # in lib/obsidian_cli.py:_resolve_vault_path), papers_dir resolves to a
-        # bogus path and we land here, which makes /start-my-day skip dedup and
-        # surface the same paper across consecutive days. Found during 2026-04-28
-        # production run. Once the upstream raises instead of silently returning
-        # a bad path, this branch becomes the legitimate "fresh vault, no papers
-        # yet" case only.
+        # Legitimate "fresh vault, no papers yet" case — upstream
+        # ObsidianCLI._resolve_vault_path now raises VaultNotFoundError if the
+        # vault path itself is invalid, so reaching here means the vault is
+        # valid but its 20_Papers/ subdirectory hasn't been created yet.
         return set()
 
     ids: set[str] = set()

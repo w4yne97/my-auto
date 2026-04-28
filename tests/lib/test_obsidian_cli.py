@@ -10,6 +10,7 @@ from lib.obsidian_cli import (
     ObsidianCLI,
     CLINotFoundError,
     ObsidianNotRunningError,
+    VaultNotFoundError,
 )
 
 
@@ -28,6 +29,7 @@ class TestCLIDiscovery:
     def test_finds_cli_from_which(self):
         with patch.dict("os.environ", {}, clear=True), \
              patch("shutil.which", return_value="/usr/local/bin/obsidian"), \
+             patch("pathlib.Path.exists", return_value=True), \
              patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
                 stdout="/tmp/vault", returncode=0, stderr=""
@@ -353,3 +355,58 @@ class TestVaultInfo:
             result = cli.vault_info()
             assert result["name"] == "auto-reading-vault"
             assert result["files"] == "223"
+
+
+class TestVaultPathResolution:
+    """Tests for ObsidianCLI._resolve_vault_path path validity check (P1.5 #2)."""
+
+    def test_resolve_vault_path_raises_on_vault_not_found_string(self, tmp_path):
+        """CLI returns the literal string 'Vault not found' (the legacy silent-fail case)."""
+        with patch.dict("os.environ", {"OBSIDIAN_CLI_PATH": "/fake/obsidian"}), \
+             patch("pathlib.Path.exists", return_value=True), \
+             patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                stdout="Vault not found\n", returncode=0, stderr=""
+            )
+            with pytest.raises(VaultNotFoundError, match="non-path output"):
+                ObsidianCLI()
+
+    def test_resolve_vault_path_raises_on_relative_path(self, tmp_path):
+        """CLI returns a relative path string (rejected by is_absolute check)."""
+        with patch.dict("os.environ", {"OBSIDIAN_CLI_PATH": "/fake/obsidian"}), \
+             patch("pathlib.Path.exists", return_value=True), \
+             patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                stdout="../some-relative\n", returncode=0, stderr=""
+            )
+            with pytest.raises(VaultNotFoundError):
+                ObsidianCLI()
+
+    def test_resolve_vault_path_raises_on_nonexistent_dir(self, tmp_path):
+        """CLI returns an absolute path that doesn't exist on disk."""
+        bogus = str(tmp_path / "this-path-does-not-exist")
+
+        # Selective Path.exists: True for the (fake) CLI binary so _find_cli
+        # passes, False for the bogus vault path so the validation raises.
+        def selective_exists(self):
+            return str(self) == "/fake/obsidian"
+
+        with patch.dict("os.environ", {"OBSIDIAN_CLI_PATH": "/fake/obsidian"}), \
+             patch("pathlib.Path.exists", selective_exists), \
+             patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                stdout=f"{bogus}\n", returncode=0, stderr=""
+            )
+            with pytest.raises(VaultNotFoundError, match="non-path output"):
+                ObsidianCLI()
+
+    def test_resolve_vault_path_returns_valid_dir(self, tmp_path):
+        """CLI returns an absolute path to an existing directory — happy path."""
+        with patch.dict("os.environ", {"OBSIDIAN_CLI_PATH": "/fake/obsidian"}), \
+             patch("pathlib.Path.exists", return_value=True), \
+             patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                stdout=f"{tmp_path}\n", returncode=0, stderr=""
+            )
+            cli = ObsidianCLI()
+            assert cli.vault_path == str(tmp_path)
