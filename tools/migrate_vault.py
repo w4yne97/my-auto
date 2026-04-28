@@ -19,6 +19,7 @@ import re
 import shutil
 import sys
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 logger = logging.getLogger("migrate_vault")
@@ -115,6 +116,26 @@ def cleanup_untitled_stubs(reading_vault: Path) -> list[Path]:
         p.unlink()
         logger.info("Removed zero-byte stub: %s", p.name)
     return stubs
+
+
+def make_backup_paths(
+    reading_vault: Path, learning_vault: Path, now: datetime
+) -> tuple[Path, Path]:
+    """Construct timestamped backup destination paths (siblings of each vault)."""
+    stamp = now.strftime("%Y%m%d-%H%M%S")
+    rd_backup = reading_vault.with_name(f"{reading_vault.name}.premerge-{stamp}")
+    ln_backup = learning_vault.with_name(f"{learning_vault.name}.premerge-{stamp}")
+    return rd_backup, ln_backup
+
+
+def create_backups(reading_vault: Path, learning_vault: Path) -> tuple[Path, Path]:
+    """Copy both vaults to timestamped sibling backup directories. Returns (rd, ln) paths."""
+    rd_backup, ln_backup = make_backup_paths(reading_vault, learning_vault, datetime.now())
+    shutil.copytree(reading_vault, rd_backup)
+    shutil.copytree(learning_vault, ln_backup)
+    logger.info("Backup: reading -> %s", rd_backup)
+    logger.info("Backup: learning -> %s", ln_backup)
+    return rd_backup, ln_backup
 
 
 def check_preflight(reading_vault: Path, learning_vault: Path) -> None:
@@ -259,7 +280,7 @@ def cmd_apply(reading_vault: Path, learning_vault: Path) -> int:
     logger.info("Manifest: %d folders, %d .md files",
                 len(manifest.folders), manifest.total_md_files)
 
-    # Backups are added in Task 8.
+    create_backups(reading_vault, learning_vault)
     perform_copy(manifest, reading_vault)
     deleted = cleanup_untitled_stubs(reading_vault)
     logger.info("Cleanup: removed %d zero-byte Untitled*.md stub(s)", len(deleted))

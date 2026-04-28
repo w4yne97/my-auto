@@ -204,3 +204,30 @@ class TestCleanup:
         # Keeper preserved (had content)
         assert keeper.exists()
         assert keeper.read_text(encoding="utf-8") == "kept content\n"
+
+
+class TestBackups:
+    def test_apply_creates_timestamped_backups(
+        self, synthetic_reading_vault, synthetic_learning_vault
+    ):
+        """T10: --apply creates timestamped sibling backups of both vaults."""
+        rc = main([
+            "--apply",
+            "--reading-vault", str(synthetic_reading_vault),
+            "--learning-vault", str(synthetic_learning_vault),
+        ])
+        assert rc == 0
+
+        parent = synthetic_reading_vault.parent
+        rd_backups = list(parent.glob("auto-reading-vault.premerge-*"))
+        ln_backups = list(synthetic_learning_vault.parent.glob("knowledge-vault.premerge-*"))
+        assert len(rd_backups) == 1
+        assert len(ln_backups) == 1
+
+        # Backup contains the pre-merge content
+        # Reading backup: should NOT have learning/ (it's pre-merge)
+        assert not (rd_backups[0] / "learning").exists()
+        # Reading backup: should still have the Untitled stubs (pre-cleanup)
+        assert (rd_backups[0] / "Untitled.md").exists()
+        # Learning backup: should be byte-identical to current learning vault
+        assert (ln_backups[0] / "10_Foundations" / "scaling-laws.md").is_file()
