@@ -19,16 +19,14 @@ from pathlib import Path
 # Reading-local lib goes on sys.path BEFORE its bare-name imports below
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 
-# Platform — repo root already on sys.path
 from lib.logging import log_event
-from lib.vault import create_cli  # generic; lives in lib/vault.py
+from lib.vault import create_cli
 
-# Reading — via sys.path.insert above, bare-name
 from models import scored_paper_to_dict
 from sources.alphaxiv import fetch_trending, AlphaXivError
 from sources.arxiv_api import search_arxiv
 from scoring import score_papers
-from papers import load_config, build_dedup_set  # was lib.vault, now extracted
+from papers import load_config, build_dedup_set
 
 logger = logging.getLogger("search_and_filter")
 

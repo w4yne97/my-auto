@@ -19,9 +19,10 @@ from pathlib import Path
 
 import importlib.util as _ilu
 
+# Reading-local lib goes on sys.path BEFORE its bare-name imports below
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 
-from lib.obsidian_cli import ObsidianCLI, CLINotFoundError, ObsidianNotRunningError  # platform
+from lib.obsidian_cli import ObsidianCLI, CLINotFoundError, ObsidianNotRunningError
 
 # Load html.template by file path to avoid shadowing the stdlib `html` package
 # in long-running processes where sys.modules["html"] may already be set.

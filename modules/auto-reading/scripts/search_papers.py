@@ -15,9 +15,11 @@ import logging
 import sys
 from pathlib import Path
 
+# Reading-local lib goes on sys.path BEFORE its bare-name imports below
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 
-from lib.vault import create_cli  # platform
+from lib.vault import create_cli
+
 from models import scored_paper_to_dict
 from sources.arxiv_api import search_arxiv
 from scoring import score_papers

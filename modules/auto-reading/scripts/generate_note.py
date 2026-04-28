@@ -15,6 +15,7 @@ import logging
 import sys
 from pathlib import Path
 
+# Reading-local lib goes on sys.path BEFORE its bare-name imports below
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 
 from sources.arxiv_api import fetch_paper

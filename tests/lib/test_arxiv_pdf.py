@@ -1,13 +1,11 @@
 """Tests for lib.sources.arxiv_pdf."""
 
+import sys
 import time
 from pathlib import Path
 
 import pytest
 import responses
-
-import sys
-from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "modules" / "auto-reading" / "lib"))
 from sources.arxiv_pdf import (

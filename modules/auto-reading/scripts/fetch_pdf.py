@@ -17,9 +17,11 @@ from pathlib import Path
 
 import fitz  # PyMuPDF, only to count pages
 
+# Reading-local lib goes on sys.path BEFORE its bare-name imports below
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 
-from lib.obsidian_cli import ObsidianCLI, CLINotFoundError, ObsidianNotRunningError  # platform
+from lib.obsidian_cli import ObsidianCLI, CLINotFoundError, ObsidianNotRunningError
+
 from models import Paper
 from scoring import best_domain
 from sources.arxiv_api import fetch_paper
