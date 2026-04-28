@@ -29,10 +29,3 @@ testpaths = ["tests"]
 markers = [
     "integration: tests requiring real Obsidian CLI (deselect with '-m not integration')",
 ]
-addopts = [
-    # Phase 1.5 leftover: test_search_and_filter.py needs schema adaptation
-    # (tests still reference the pre-envelope output shape). Will be moved
-    # to tests/modules/auto-reading/test_today_full_pipeline.py with adapted
-    # assertions in P1.5 Task 3.
-    "--ignore=tests/lib/test_search_and_filter.py",
-]

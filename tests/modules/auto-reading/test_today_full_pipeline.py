@@ -1,8 +1,15 @@
-"""Integration tests for start-my-day/scripts/search_and_filter.py."""
+"""Integration tests for modules/auto-reading/scripts/today.py — full pipeline.
+
+Schema-aware tests (envelope §3.3) covering: alphaXiv fetch, arxiv fallback,
+vault dedup, exclusion filter, output paper structure. Complements the
+shape-only tests in test_today_script.py.
+"""
 
 import json
 import sys
+from datetime import date
 from importlib import import_module
+from pathlib import Path
 from unittest.mock import patch
 
 import responses
@@ -10,7 +17,8 @@ import responses
 from tests.lib.conftest import SAMPLE_ARXIV_XML, make_alphaxiv_html
 
 _EMPTY_XML = '<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"></feed>'
-_MOD_PATH = "start-my-day.scripts.search_and_filter"
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "modules" / "auto-reading" / "scripts"))
+_MOD_PATH = "today"
 _mod = import_module(_MOD_PATH)
 
 
@@ -24,7 +32,7 @@ def _mock_arxiv_empty():
     )
 
 
-class TestSearchAndFilter:
+class TestTodayFullPipeline:
     @responses.activate
     def test_full_pipeline_with_alphaxiv(self, config_path, mock_cli, output_path):
         """Test: alphaXiv fetch -> dedup -> score -> JSON output."""
@@ -49,12 +57,15 @@ class TestSearchAndFilter:
             _mod.main()
 
         result = json.loads(output_path.read_text())
-        assert "total_fetched" in result
-        assert "total_after_dedup" in result
-        assert "total_after_filter" in result
-        assert "top_n" in result
-        assert "papers" in result
-        assert isinstance(result["papers"], list)
+        assert result["module"] == "auto-reading"
+        assert result["schema_version"] == 1
+        assert result["status"] in ("ok", "empty")
+        assert "total_fetched" in result["stats"]
+        assert "after_dedup" in result["stats"]
+        assert "after_filter" in result["stats"]
+        assert "top_n" in result["stats"]
+        assert "candidates" in result["payload"]
+        assert isinstance(result["payload"]["candidates"], list)
 
     @responses.activate
     def test_alphaxiv_fallback_to_arxiv(self, config_path, mock_cli, output_path):
@@ -64,12 +75,16 @@ class TestSearchAndFilter:
             "https://alphaxiv.org/explore",
             status=500,
         )
-        responses.add(
-            responses.GET,
-            "https://export.arxiv.org/api/query",
-            body=SAMPLE_ARXIV_XML,
-            status=200,
-        )
+        # today.py fans arxiv queries out per research_domain (commit fc7c896);
+        # SAMPLE_CONFIG has 2 domains (coding-agent, rl-for-code), so register
+        # the response twice — responses.add is consume-once.
+        for _ in range(2):
+            responses.add(
+                responses.GET,
+                "https://export.arxiv.org/api/query",
+                body=SAMPLE_ARXIV_XML,
+                status=200,
+            )
 
         argv = [
             "search_and_filter.py",
@@ -77,13 +92,20 @@ class TestSearchAndFilter:
             "--output", str(output_path),
         ]
 
+        # SAMPLE_ARXIV_XML has fixed dates (2026-03-10/12); pin date.today()
+        # so search_arxiv's `days=7` recency filter doesn't drop the fixture.
         with patch.object(sys, "argv", argv), \
              patch.object(_mod, "create_cli", return_value=mock_cli), \
-             patch.object(_mod, "build_dedup_set", return_value=set()):
+             patch.object(_mod, "build_dedup_set", return_value=set()), \
+             patch("lib.sources.arxiv_api.date") as mock_date:
+            mock_date.today.return_value = date(2026, 3, 15)
             _mod.main()
 
         result = json.loads(output_path.read_text())
-        assert result["total_fetched"] >= 1
+        assert result["module"] == "auto-reading"
+        assert result["schema_version"] == 1
+        assert result["status"] in ("ok", "empty")
+        assert result["stats"]["total_fetched"] >= 1
 
     @responses.activate
     def test_dedup_excludes_existing_vault_papers(
@@ -110,7 +132,10 @@ class TestSearchAndFilter:
             _mod.main()
 
         result = json.loads(output_path.read_text())
-        paper_ids = [p["arxiv_id"] for p in result["papers"]]
+        assert result["module"] == "auto-reading"
+        assert result["schema_version"] == 1
+        assert result["status"] in ("ok", "empty")
+        paper_ids = [p["arxiv_id"] for p in result["payload"]["candidates"]]
         assert "2603.12228" not in paper_ids
 
     @responses.activate
@@ -146,7 +171,10 @@ class TestSearchAndFilter:
             _mod.main()
 
         result = json.loads(output_path.read_text())
-        assert result["total_after_filter"] == 0
+        assert result["module"] == "auto-reading"
+        assert result["schema_version"] == 1
+        assert result["status"] in ("ok", "empty")
+        assert result["stats"]["after_filter"] == 0
 
     @responses.activate
     def test_output_paper_structure(self, config_path, mock_cli, output_path):
@@ -171,8 +199,11 @@ class TestSearchAndFilter:
             _mod.main()
 
         result = json.loads(output_path.read_text())
-        if result["papers"]:
-            paper = result["papers"][0]
+        assert result["module"] == "auto-reading"
+        assert result["schema_version"] == 1
+        assert result["status"] in ("ok", "empty")
+        if result["payload"]["candidates"]:
+            paper = result["payload"]["candidates"][0]
             expected_keys = {
                 "arxiv_id", "title", "authors", "abstract", "source",
                 "url", "published", "categories", "rule_score",
