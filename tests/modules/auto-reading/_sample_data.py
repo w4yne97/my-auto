@@ -10,7 +10,7 @@ these imports do:
 import textwrap
 
 
-# COPY VERBATIM from tests/lib/conftest.py — preserve all keys, values, formatting:
+# Canonical research_interests config used by reading-domain test fixtures.
 SAMPLE_CONFIG = {
     "vault_path": "/tmp/test-vault",
     "language": "mixed",
@@ -36,7 +36,7 @@ SAMPLE_CONFIG = {
 }
 
 
-# COPY VERBATIM SAMPLE_ARXIV_XML from tests/lib/conftest.py — preserve the entire XML body:
+# Canonical arXiv API response fixture for testing search/fetch flows.
 SAMPLE_ARXIV_XML = textwrap.dedent("""\
     <?xml version="1.0" encoding="UTF-8"?>
     <feed xmlns="http://www.w3.org/2005/Atom"
@@ -66,7 +66,7 @@ SAMPLE_ARXIV_XML = textwrap.dedent("""\
 """)
 
 
-# COPY VERBATIM SAMPLE_SSR_PAPER from tests/lib/conftest.py:
+# Canonical alphaXiv SSR paper fixture for HTML scraping tests.
 SAMPLE_SSR_PAPER = {
     "id": "2603.12228",
     "title": "Neural Code Agent",
@@ -79,7 +79,6 @@ SAMPLE_SSR_PAPER = {
 }
 
 
-# COPY VERBATIM make_alphaxiv_html function body from tests/lib/conftest.py:
 def make_alphaxiv_html(papers: list[dict] | None = None) -> str:
     """Build minimal HTML mimicking alphaXiv's TanStack Router SSR format."""
     if papers is None:

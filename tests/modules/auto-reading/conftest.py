@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _sample_data import SAMPLE_CONFIG  # noqa: E402
 
 
-@pytest.fixture()
+@pytest.fixture
 def config_path(tmp_path: Path) -> Path:
     """Create a temporary config YAML file."""
     path = tmp_path / "research_interests.yaml"
@@ -20,7 +20,7 @@ def config_path(tmp_path: Path) -> Path:
     return path
 
 
-@pytest.fixture()
+@pytest.fixture
 def output_path(tmp_path: Path) -> Path:
     """Create a temporary output path."""
     out = tmp_path / "output" / "result.json"

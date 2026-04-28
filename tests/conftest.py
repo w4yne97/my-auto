@@ -11,7 +11,7 @@ def isolated_state_root(monkeypatch, tmp_path):
     yield tmp_path
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_cli():
     """Create a mock ObsidianCLI instance for tests that need a CLI without hitting Obsidian.
 

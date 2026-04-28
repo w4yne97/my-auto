@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import responses
 
+# dash-in-package-name workaround — see conftest.py for rationale
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _sample_data import SAMPLE_ARXIV_XML  # noqa: E402
 
