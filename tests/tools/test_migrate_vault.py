@@ -1,7 +1,18 @@
 """Tests for tools/migrate_vault.py — vault merge migration tool."""
+from pathlib import Path
+
 import pytest
 
 from tools.migrate_vault import main
+
+
+def _hash_tree(root: Path) -> dict[str, bytes]:
+    """Return {relative_path: file_bytes} for all files under root, sorted."""
+    out: dict[str, bytes] = {}
+    for p in sorted(root.rglob("*")):
+        if p.is_file():
+            out[str(p.relative_to(root))] = p.read_bytes()
+    return out
 
 
 class TestCLISmoke:
@@ -231,3 +242,46 @@ class TestBackups:
         assert (rd_backups[0] / "Untitled.md").exists()
         # Learning backup: should be byte-identical to current learning vault
         assert (ln_backups[0] / "10_Foundations" / "scaling-laws.md").is_file()
+
+
+class TestPreservation:
+    def test_reading_vault_pre_existing_content_byte_identical(
+        self, synthetic_reading_vault, synthetic_learning_vault
+    ):
+        """T7: pre-existing reading vault content is byte-identical after --apply.
+        (Excludes new learning/ subtree and deleted Untitled stubs.)"""
+        before = _hash_tree(synthetic_reading_vault)
+        # Filter out paths that are EXPECTED to change (cleanup targets)
+        cleanup_targets = {
+            "Untitled.md", "Untitled 1.md", "Untitled 2.md", "Untitled 3.md", "Untitled 4.md",
+        }
+        before_preserved = {k: v for k, v in before.items() if k not in cleanup_targets}
+
+        rc = main([
+            "--apply",
+            "--reading-vault", str(synthetic_reading_vault),
+            "--learning-vault", str(synthetic_learning_vault),
+        ])
+        assert rc == 0
+
+        after = _hash_tree(synthetic_reading_vault)
+        # Strip new learning/ subtree from after-snapshot
+        after_preserved = {
+            k: v for k, v in after.items()
+            if not k.startswith("learning/")
+        }
+        assert before_preserved == after_preserved
+
+    def test_knowledge_vault_byte_identical_after_apply(
+        self, synthetic_reading_vault, synthetic_learning_vault
+    ):
+        """T13: knowledge-vault is byte-identical pre/post --apply (copy, not move)."""
+        before = _hash_tree(synthetic_learning_vault)
+        rc = main([
+            "--apply",
+            "--reading-vault", str(synthetic_reading_vault),
+            "--learning-vault", str(synthetic_learning_vault),
+        ])
+        assert rc == 0
+        after = _hash_tree(synthetic_learning_vault)
+        assert before == after
