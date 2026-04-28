@@ -13,8 +13,6 @@ Usage:
     # Audit a previously-migrated vault
     python tools/migrate_vault.py --verify
 """
-from __future__ import annotations
-
 import argparse
 import logging
 import sys
