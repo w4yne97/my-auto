@@ -71,6 +71,15 @@ class ObsidianCLI:
         )
 
     def _resolve_vault_path(self) -> str:
+        # TODO(P2): under certain conditions (no Obsidian window open, wrong
+        # OBSIDIAN_VAULT_NAME, or stale CLI registration) `obsidian vault info=path`
+        # returns "Vault not found" with exit code 0 instead of raising. The empty/
+        # bogus return path then propagates to lib/vault.py:build_dedup_set, which
+        # silently returns an empty set — manifesting as cross-day duplicate paper
+        # recommendations in /start-my-day. Found during 2026-04-28 production run.
+        # Fix candidate: detect "Vault not found" / non-path output and raise
+        # ObsidianNotRunningError or a new VaultNotFoundError, surfacing the failure
+        # to the orchestrator instead of swallowing it.
         out = self._run("vault", "info=path")
         return out.strip()
 
