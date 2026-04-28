@@ -388,3 +388,55 @@ class TestVerifyDegradedModes:
         assert rc2 == 0  # Mode 3 is degraded but not failed
         all_messages = "\n".join(rec.message.lower() for rec in caplog.records)
         assert "mode 3" in all_messages or "degraded" in all_messages
+
+
+class TestAllowCollisions:
+    def test_allowed_basename_collision_does_not_abort(
+        self, synthetic_reading_vault, synthetic_learning_vault
+    ):
+        """`--allow-collisions <basename>` whitelists folder-index conventions
+        (e.g. `_index.md`) so a cross-vault basename clash does NOT abort apply."""
+        (synthetic_reading_vault / "30_Insights" / "topic-x" / "_index.md").write_text(
+            "---\ntitle: reading-side index\n---\n", encoding="utf-8"
+        )
+        (synthetic_learning_vault / "10_Foundations" / "_index.md").write_text(
+            "---\ntitle: learning-side index\n---\n", encoding="utf-8"
+        )
+
+        rc = main([
+            "--apply",
+            "--reading-vault", str(synthetic_reading_vault),
+            "--learning-vault", str(synthetic_learning_vault),
+            "--allow-collisions", "_index.md",
+        ])
+        assert rc == 0
+        assert (synthetic_reading_vault / "learning" / "10_Foundations" / "_index.md").is_file()
+
+    def test_unallowed_basename_still_aborts(
+        self, synthetic_reading_vault, synthetic_learning_vault, caplog
+    ):
+        """`--allow-collisions` is a strict whitelist — other collisions still abort."""
+        (synthetic_reading_vault / "30_Insights" / "topic-x" / "_index.md").write_text(
+            "---\ntitle: reading-side index\n---\n", encoding="utf-8"
+        )
+        (synthetic_learning_vault / "10_Foundations" / "_index.md").write_text(
+            "---\ntitle: learning-side index\n---\n", encoding="utf-8"
+        )
+        (synthetic_reading_vault / "30_Insights" / "topic-x" / "other.md").write_text(
+            "---\ntitle: reading other\n---\n", encoding="utf-8"
+        )
+        (synthetic_learning_vault / "10_Foundations" / "other.md").write_text(
+            "---\ntitle: learning other\n---\n", encoding="utf-8"
+        )
+
+        with caplog.at_level("ERROR", logger="migrate_vault"):
+            rc = main([
+                "--apply",
+                "--reading-vault", str(synthetic_reading_vault),
+                "--learning-vault", str(synthetic_learning_vault),
+                "--allow-collisions", "_index.md",
+            ])
+        assert rc != 0
+        all_errors = "\n".join(rec.message for rec in caplog.records)
+        assert "other.md" in all_errors
+        assert "_index.md" not in all_errors

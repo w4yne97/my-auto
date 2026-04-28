@@ -12,6 +12,10 @@ Usage:
 
     # Audit a previously-migrated vault
     python tools/migrate_vault.py --verify
+
+    # Allow specific basenames to collide (folder-index conventions like _index.md
+    # where files are addressed by path, never by bare wiki-link basename):
+    python tools/migrate_vault.py --apply --allow-collisions _index.md
 """
 import argparse
 import logging
@@ -173,6 +177,18 @@ def _build_arg_parser() -> argparse.ArgumentParser:
                         help=f"Path to reading vault (default: {DEFAULT_READING_VAULT}).")
     parser.add_argument("--learning-vault", type=Path, default=DEFAULT_LEARNING_VAULT,
                         help=f"Path to learning vault (default: {DEFAULT_LEARNING_VAULT}).")
+    parser.add_argument(
+        "--allow-collisions",
+        action="append",
+        default=[],
+        metavar="BASENAME",
+        help=(
+            "Whitelist a basename that may collide across vaults (e.g. `_index.md`). "
+            "Use for folder-index conventions where files are addressed by path, "
+            "never by bare wiki-link basename. Repeatable: --allow-collisions A.md "
+            "--allow-collisions B.md."
+        ),
+    )
     parser.add_argument("--verbose", action="store_true", help="Debug-level logging.")
     return parser
 
@@ -185,11 +201,12 @@ def main(argv: list[str] | None = None) -> int:
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         stream=sys.stderr,
     )
+    allowed_basenames = frozenset(args.allow_collisions)
     if args.apply:
-        return cmd_apply(args.reading_vault, args.learning_vault)
+        return cmd_apply(args.reading_vault, args.learning_vault, allowed_basenames)
     if args.verify:
         return cmd_verify(args.reading_vault, args.learning_vault)
-    return cmd_dry_run(args.reading_vault, args.learning_vault)
+    return cmd_dry_run(args.reading_vault, args.learning_vault, allowed_basenames)
 
 
 def find_md_files(vault: Path) -> list[Path]:
@@ -206,15 +223,23 @@ def find_md_files(vault: Path) -> list[Path]:
     return out
 
 
-def check_basename_collisions(reading_vault: Path, learning_vault: Path) -> list[tuple[Path, Path]]:
+def check_basename_collisions(
+    reading_vault: Path,
+    learning_vault: Path,
+    allowed_basenames: frozenset[str] = frozenset(),
+) -> list[tuple[Path, Path]]:
     """Return list of (reading_path, learning_path) pairs sharing a basename.
 
-    Empty list means no collisions.
+    Empty list means no collisions. Basenames in `allowed_basenames` are whitelisted
+    (typical use: folder-index conventions like `_index.md` that the user addresses
+    by path rather than by bare wiki-link).
     """
     reading_files = {p.name: p for p in find_md_files(reading_vault)}
     learning_files = find_md_files(learning_vault)
     collisions: list[tuple[Path, Path]] = []
     for lp in learning_files:
+        if lp.name in allowed_basenames:
+            continue
         if lp.name in reading_files:
             collisions.append((reading_files[lp.name], lp))
     return collisions
@@ -235,14 +260,18 @@ def _print_plan(reading_vault: Path, learning_vault: Path, manifest: Manifest) -
         print(f"  {entry.src.name}/  ->  {entry.dst}  ({entry.md_count} file(s))")
 
 
-def cmd_dry_run(reading_vault: Path, learning_vault: Path) -> int:
+def cmd_dry_run(
+    reading_vault: Path,
+    learning_vault: Path,
+    allowed_basenames: frozenset[str] = frozenset(),
+) -> int:
     """Print planned migration without writing anything."""
     try:
         check_preflight(reading_vault, learning_vault)
     except PreflightError as exc:
         logger.error("%s", exc)
         return 1
-    collisions = check_basename_collisions(reading_vault, learning_vault)
+    collisions = check_basename_collisions(reading_vault, learning_vault, allowed_basenames)
     if collisions:
         logger.error("Basename collisions detected — aborting:")
         for rp, lp in collisions:
@@ -255,7 +284,11 @@ def cmd_dry_run(reading_vault: Path, learning_vault: Path) -> int:
     return 0
 
 
-def cmd_apply(reading_vault: Path, learning_vault: Path) -> int:
+def cmd_apply(
+    reading_vault: Path,
+    learning_vault: Path,
+    allowed_basenames: frozenset[str] = frozenset(),
+) -> int:
     """Execute the migration.
 
     Failure modes & recovery:
@@ -273,7 +306,7 @@ def cmd_apply(reading_vault: Path, learning_vault: Path) -> int:
         return 1
     logger.info("Pre-flight: OK")
 
-    collisions = check_basename_collisions(reading_vault, learning_vault)
+    collisions = check_basename_collisions(reading_vault, learning_vault, allowed_basenames)
     if collisions:
         logger.error("Basename collisions detected — aborting:")
         for rp, lp in collisions:
