@@ -24,6 +24,37 @@ DEFAULT_READING_VAULT = Path("~/Documents/auto-reading-vault").expanduser()
 DEFAULT_LEARNING_VAULT = Path("~/Documents/knowledge-vault").expanduser()
 
 
+class MigrationError(Exception):
+    """Base class for migration failures."""
+
+
+class PreflightError(MigrationError):
+    """Raised when pre-conditions for --apply are not met."""
+
+
+def check_preflight(reading_vault: Path, learning_vault: Path) -> None:
+    """Validate paths and idempotency guard. Raises PreflightError on failure.
+
+    - Reading vault must exist and be a directory.
+    - Learning vault must exist and be a directory.
+    - <reading-vault>/learning/ may exist if and only if it contains zero .md files
+      (recursively). Existing .md files mean a previous --apply already ran;
+      direct user to --verify instead.
+    """
+    if not reading_vault.is_dir():
+        raise PreflightError(f"Reading vault not found: {reading_vault}")
+    if not learning_vault.is_dir():
+        raise PreflightError(f"Learning vault not found: {learning_vault}")
+    target = reading_vault / "learning"
+    if target.exists():
+        existing_md = list(target.rglob("*.md"))
+        if existing_md:
+            raise PreflightError(
+                f"{target} already contains {len(existing_md)} .md file(s). "
+                "Run with --verify to audit, or remove the directory and re-run --apply."
+            )
+
+
 def _build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="migrate_vault",
@@ -66,7 +97,14 @@ def cmd_dry_run(reading_vault: Path, learning_vault: Path) -> int:
 
 def cmd_apply(reading_vault: Path, learning_vault: Path) -> int:
     """Execute the migration."""
-    raise NotImplementedError("Implemented in Task 5")
+    try:
+        check_preflight(reading_vault, learning_vault)
+    except PreflightError as exc:
+        logger.error("%s", exc)
+        return 1
+    logger.info("Pre-flight: OK")
+    # Subsequent phases added in Tasks 3–8.
+    return 0
 
 
 def cmd_verify(reading_vault: Path, learning_vault: Path) -> int:
