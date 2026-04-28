@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "paper-deep-read" / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "modules" / "auto-reading" / "scripts"))
 
 import assemble_html  # type: ignore[import-not-found]
 

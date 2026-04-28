@@ -4,9 +4,11 @@ import json
 import sys
 from datetime import date, timedelta
 from importlib import import_module
+from pathlib import Path
 from unittest.mock import patch
 
-_MOD_PATH = "weekly-digest.scripts.generate_digest"
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "modules" / "auto-reading" / "scripts"))
+_MOD_PATH = "generate_digest"
 _mod = import_module(_MOD_PATH)
 
 

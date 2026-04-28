@@ -2,11 +2,14 @@
 
 import json
 import sys
+from pathlib import Path
 from unittest.mock import patch
 
 import responses
 
 from tests.lib.conftest import SAMPLE_ARXIV_XML
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "modules" / "auto-reading" / "scripts"))
 
 
 class TestGenerateNote:
@@ -29,7 +32,7 @@ class TestGenerateNote:
 
         with patch.object(sys, "argv", argv):
             from importlib import import_module
-            mod = import_module("paper-analyze.scripts.generate_note")
+            mod = import_module("generate_note")
             mod.main()
 
         result = json.loads(output_path.read_text())
@@ -61,7 +64,7 @@ class TestGenerateNote:
 
         with patch.object(sys, "argv", argv):
             from importlib import import_module
-            mod = import_module("paper-analyze.scripts.generate_note")
+            mod = import_module("generate_note")
             mod.main()
 
         result = json.loads(output_path.read_text())
@@ -89,7 +92,7 @@ class TestGenerateNote:
         import pytest
         with patch.object(sys, "argv", argv):
             from importlib import import_module
-            mod = import_module("paper-analyze.scripts.generate_note")
+            mod = import_module("generate_note")
             with pytest.raises(SystemExit) as exc_info:
                 mod.main()
             assert exc_info.value.code == 1

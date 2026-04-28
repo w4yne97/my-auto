@@ -3,6 +3,7 @@
 import json
 import sys
 from importlib import import_module
+from pathlib import Path
 from unittest.mock import patch
 
 import responses
@@ -11,7 +12,8 @@ from tests.lib.conftest import SAMPLE_ARXIV_XML
 
 
 _EMPTY_XML = '<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"></feed>'
-_MOD_PATH = "paper-import.scripts.resolve_and_fetch"
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "modules" / "auto-reading" / "scripts"))
+_MOD_PATH = "resolve_and_fetch"
 _mod = import_module(_MOD_PATH)
 
 

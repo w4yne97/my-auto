@@ -22,7 +22,7 @@ from lib.obsidian_cli import ObsidianCLI, CLINotFoundError, ObsidianNotRunningEr
 
 logger = logging.getLogger("assemble_html")
 
-_TEMPLATE_PATH = Path(__file__).resolve().parents[2] / "lib" / "html" / "template.html"
+_TEMPLATE_PATH = Path(__file__).resolve().parents[3] / "lib" / "html" / "template.html"
 
 
 def _build_toc_html(toc: list[dict]) -> str:

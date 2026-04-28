@@ -3,13 +3,15 @@
 import json
 import sys
 from importlib import import_module
+from pathlib import Path
 from unittest.mock import patch
 
 import responses
 
 from tests.lib.conftest import SAMPLE_ARXIV_XML
 
-_MOD_PATH = "paper-search.scripts.search_papers"
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "modules" / "auto-reading" / "scripts"))
+_MOD_PATH = "search_papers"
 _mod = import_module(_MOD_PATH)
 
 

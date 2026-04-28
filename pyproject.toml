@@ -30,16 +30,9 @@ markers = [
     "integration: tests requiring real Obsidian CLI (deselect with '-m not integration')",
 ]
 addopts = [
-    # Phase 1 deferral: these tests target entry scripts that migrate in Task 13 (Phase E)
-    # and Task 17 (Phase G). Re-enable by removing each --ignore line as the corresponding
-    # script lands at modules/auto-reading/scripts/<name>.py.
-    "--ignore=tests/lib/test_assemble_html_script.py",
-    "--ignore=tests/lib/test_extract_figures_script.py",
-    "--ignore=tests/lib/test_fetch_pdf_script.py",
-    "--ignore=tests/lib/test_generate_digest.py",
-    "--ignore=tests/lib/test_scan_recent_papers.py",
+    # Phase 1.5 leftover: test_search_and_filter.py needs schema adaptation
+    # (tests still reference the pre-envelope output shape). Will be moved
+    # to tests/modules/auto-reading/test_today_full_pipeline.py with adapted
+    # assertions in P1.5 Task 3.
     "--ignore=tests/lib/test_search_and_filter.py",
-    "--ignore=tests/lib/test_search_papers.py",
-    "--ignore=tests/lib/test_resolve_and_fetch.py",
-    "--ignore=tests/lib/test_generate_note.py",
 ]
