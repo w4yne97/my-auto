@@ -1,7 +1,4 @@
 """Tests for tools/migrate_vault.py — vault merge migration tool."""
-import sys
-from pathlib import Path
-
 import pytest
 
 from tools.migrate_vault import main
