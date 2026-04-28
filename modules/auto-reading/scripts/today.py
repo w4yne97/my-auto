@@ -78,19 +78,28 @@ def main() -> None:
             logger.warning("alphaXiv failed, falling back to arXiv API: %s", e)
 
         if len(papers) < 20:
-            all_keywords = []
-            all_categories = []
-            for cfg in domains.values():
-                all_keywords.extend(cfg.get("keywords", []))
-                all_categories.extend(cfg.get("arxiv_categories", []))
-            arxiv_papers = search_arxiv(
-                keywords=all_keywords,
-                categories=list(set(all_categories)),
-                max_results=100,
-                days=7,
-            )
-            papers.extend(arxiv_papers)
-            logger.info("arXiv API: %d papers fetched", len(arxiv_papers))
+            # Fan out per domain: arXiv's backend 500s on >~30-keyword OR queries,
+            # so we issue one request per research_domain and let the global dedup
+            # below collapse cross-domain overlaps.
+            arxiv_total = 0
+            for domain_name, cfg in domains.items():
+                kws = cfg.get("keywords", [])
+                if not kws:
+                    continue
+                try:
+                    domain_papers = search_arxiv(
+                        keywords=kws,
+                        categories=cfg.get("arxiv_categories", []),
+                        max_results=50,
+                        days=7,
+                    )
+                except Exception as e:
+                    logger.warning("arXiv [%s] failed: %s", domain_name, e)
+                    continue
+                papers.extend(domain_papers)
+                arxiv_total += len(domain_papers)
+                logger.info("arXiv [%s]: %d papers", domain_name, len(domain_papers))
+            logger.info("arXiv API: %d papers fetched (total)", arxiv_total)
 
         unique = []
         seen_ids: set[str] = set()
