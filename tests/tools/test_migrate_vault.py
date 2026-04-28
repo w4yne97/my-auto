@@ -285,3 +285,37 @@ class TestPreservation:
         assert rc == 0
         after = _hash_tree(synthetic_learning_vault)
         assert before == after
+
+
+class TestVerify:
+    def test_verify_passes_on_freshly_merged_vault(
+        self, synthetic_reading_vault, synthetic_learning_vault
+    ):
+        """T8: --verify on a vault just merged returns 0."""
+        rc1 = main([
+            "--apply",
+            "--reading-vault", str(synthetic_reading_vault),
+            "--learning-vault", str(synthetic_learning_vault),
+        ])
+        assert rc1 == 0
+
+        rc2 = main([
+            "--verify",
+            "--reading-vault", str(synthetic_reading_vault),
+            "--learning-vault", str(synthetic_learning_vault),
+        ])
+        assert rc2 == 0
+
+    def test_verify_fails_on_unmerged_vault(
+        self, synthetic_reading_vault, synthetic_learning_vault, caplog
+    ):
+        """T9: --verify on a vault that was never merged returns non-zero."""
+        with caplog.at_level("ERROR", logger="migrate_vault"):
+            rc = main([
+                "--verify",
+                "--reading-vault", str(synthetic_reading_vault),
+                "--learning-vault", str(synthetic_learning_vault),
+            ])
+        assert rc != 0
+        all_errors = "\n".join(rec.message.lower() for rec in caplog.records)
+        assert "learning" in all_errors

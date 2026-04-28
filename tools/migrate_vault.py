@@ -288,9 +288,86 @@ def cmd_apply(reading_vault: Path, learning_vault: Path) -> int:
     return 0
 
 
+def _find_latest_backup(vault: Path) -> Path | None:
+    """Find the most recent .premerge-* backup sibling of vault, if any."""
+    candidates = sorted(
+        vault.parent.glob(f"{vault.name}.premerge-*"),
+        key=lambda p: p.name,
+        reverse=True,
+    )
+    return candidates[0] if candidates else None
+
+
+def verify_migration(
+    reading_vault: Path, learning_vault: Path
+) -> tuple[bool, list[str]]:
+    """Audit a previously-migrated vault. Returns (ok, messages).
+
+    Mode priority for source-of-truth manifest:
+      1. Backup of learning-vault (most authoritative — frozen pre-merge state)
+      2. Live learning-vault (still exists if user hasn't manually deleted)
+      3. Target-only (degraded — only checks shape, not completeness)
+    """
+    messages: list[str] = []
+    target = reading_vault / "learning"
+    if not target.is_dir():
+        messages.append(f"Target {target} does not exist — vault is not merged.")
+        return False, messages
+
+    target_md = list(target.rglob("*.md"))
+    if not target_md:
+        messages.append(f"Target {target} exists but contains no .md files.")
+        return False, messages
+
+    # Determine source-of-truth for manifest
+    learning_backup = _find_latest_backup(learning_vault)
+    if learning_backup is not None and learning_backup.is_dir():
+        source = learning_backup
+        mode = 1
+    elif learning_vault.is_dir():
+        source = learning_vault
+        mode = 2
+    else:
+        messages.append(
+            f"Mode 3 (degraded): no backup, no source vault. "
+            f"Found {len(target_md)} .md file(s) under {target}, but completeness cannot be verified."
+        )
+        return True, messages
+
+    # Mode 1 or 2: rebuild manifest from source and check each file is present in target
+    expected_manifest = build_manifest(source, reading_vault)
+    missing: list[Path] = []
+    for entry in expected_manifest.folders:
+        for src_md in entry.src.rglob("*.md"):
+            rel = src_md.relative_to(entry.src)
+            expected_dst = entry.dst / rel
+            if not expected_dst.is_file():
+                missing.append(expected_dst)
+
+    if missing:
+        messages.append(f"Mode {mode}: {len(missing)} expected file(s) missing in target.")
+        for m in missing[:5]:
+            messages.append(f"  missing: {m}")
+        return False, messages
+    messages.append(
+        f"Mode {mode}: verified {expected_manifest.total_md_files} file(s) "
+        f"across {len(expected_manifest.folders)} folder(s)."
+    )
+    return True, messages
+
+
 def cmd_verify(reading_vault: Path, learning_vault: Path) -> int:
     """Audit a previously-migrated vault."""
-    raise NotImplementedError("Implemented in Task 10")
+    if not reading_vault.is_dir():
+        logger.error("Reading vault not found: %s", reading_vault)
+        return 1
+    ok, messages = verify_migration(reading_vault, learning_vault)
+    for m in messages:
+        if ok:
+            logger.info("%s", m)
+        else:
+            logger.error("%s", m)
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":
