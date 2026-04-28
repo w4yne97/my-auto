@@ -100,6 +100,23 @@ def perform_copy(manifest: Manifest, reading_vault: Path) -> None:
         logger.info("Copied %s -> %s (%d files)", entry.src.name, entry.dst, entry.md_count)
 
 
+def find_zero_byte_untitled(reading_vault: Path) -> list[Path]:
+    """Return zero-byte files matching Untitled*.md in reading-vault root (non-recursive)."""
+    return [
+        p for p in reading_vault.glob("Untitled*.md")
+        if p.is_file() and p.stat().st_size == 0
+    ]
+
+
+def cleanup_untitled_stubs(reading_vault: Path) -> list[Path]:
+    """Delete zero-byte Untitled*.md stubs. Returns list of deleted paths."""
+    stubs = find_zero_byte_untitled(reading_vault)
+    for p in stubs:
+        p.unlink()
+        logger.info("Removed zero-byte stub: %s", p.name)
+    return stubs
+
+
 def check_preflight(reading_vault: Path, learning_vault: Path) -> None:
     """Validate paths and idempotency guard. Raises PreflightError on failure.
 
@@ -244,8 +261,9 @@ def cmd_apply(reading_vault: Path, learning_vault: Path) -> int:
 
     # Backups are added in Task 8.
     perform_copy(manifest, reading_vault)
+    deleted = cleanup_untitled_stubs(reading_vault)
+    logger.info("Cleanup: removed %d zero-byte Untitled*.md stub(s)", len(deleted))
     logger.info("Apply complete.")
-    # Cleanup is added in Task 7.
     return 0
 
 

@@ -176,3 +176,31 @@ class TestIdempotency:
             for p in synthetic_reading_vault.rglob("*") if p.is_file()
         )
         assert snapshot == post
+
+
+class TestCleanup:
+    def test_zero_byte_untitled_stubs_deleted(
+        self, synthetic_reading_vault, synthetic_learning_vault
+    ):
+        """T6: zero-byte Untitled*.md stubs in reading-vault root are deleted by --apply.
+        Non-zero-byte Untitled*.md files are preserved."""
+        # Pre-condition: synthetic vault has 5 stubs + 1 keeper (from conftest)
+        stubs = ["Untitled.md", "Untitled 1.md", "Untitled 2.md", "Untitled 3.md", "Untitled 4.md"]
+        for stub in stubs:
+            assert (synthetic_reading_vault / stub).exists()
+        keeper = synthetic_reading_vault / "Untitled-keep.md"
+        assert keeper.exists()
+
+        rc = main([
+            "--apply",
+            "--reading-vault", str(synthetic_reading_vault),
+            "--learning-vault", str(synthetic_learning_vault),
+        ])
+        assert rc == 0
+
+        # Stubs gone
+        for stub in stubs:
+            assert not (synthetic_reading_vault / stub).exists()
+        # Keeper preserved (had content)
+        assert keeper.exists()
+        assert keeper.read_text(encoding="utf-8") == "kept content\n"
