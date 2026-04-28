@@ -64,3 +64,23 @@ class TestCollisionCheck:
         # Error messages must name the colliding basename
         all_errors = "\n".join(rec.message for rec in caplog.records)
         assert "paper-a.md" in all_errors
+
+
+class TestManifest:
+    def test_empty_folders_excluded_from_manifest(self, synthetic_learning_vault, synthetic_reading_vault):
+        """T5: folders with zero .md files (40_Classics, 60_Study-Sessions, 90_Templates,
+        assets) are NOT in the manifest. Only populated number-prefixed folders are."""
+        from tools.migrate_vault import build_manifest
+
+        manifest = build_manifest(synthetic_learning_vault, synthetic_reading_vault)
+        folder_names = {entry.name for entry in manifest.folders}
+        # Populated and number-prefixed → present
+        assert folder_names == {"00_Map", "10_Foundations", "50_Learning-Log"}
+        # Empty + non-prefixed must be absent
+        assert "40_Classics" not in folder_names
+        assert "60_Study-Sessions" not in folder_names
+        assert "90_Templates" not in folder_names
+        assert "assets" not in folder_names
+        assert ".obsidian" not in folder_names
+        # Total file count
+        assert manifest.total_md_files == 4  # 1 + 2 + 1

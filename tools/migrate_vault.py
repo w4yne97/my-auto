@@ -15,7 +15,9 @@ Usage:
 """
 import argparse
 import logging
+import re
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 logger = logging.getLogger("migrate_vault")
@@ -34,6 +36,54 @@ class PreflightError(MigrationError):
 
 class CollisionError(MigrationError):
     """Raised when basename collisions would shadow notes after migration."""
+
+
+FOLDER_PATTERN = re.compile(r"^[0-9]{2}_[A-Za-z][A-Za-z0-9-]*$")
+
+
+@dataclass(frozen=True)
+class FolderEntry:
+    """One folder slated for migration."""
+    name: str        # e.g. "10_Foundations"
+    src: Path        # e.g. /Users/.../knowledge-vault/10_Foundations
+    dst: Path        # e.g. /Users/.../auto-reading-vault/learning/10_Foundations
+    md_count: int    # number of .md files (recursive) inside src
+
+
+@dataclass(frozen=True)
+class Manifest:
+    """The full set of folders to migrate, in deterministic order."""
+    folders: tuple[FolderEntry, ...]
+
+    @property
+    def total_md_files(self) -> int:
+        return sum(f.md_count for f in self.folders)
+
+
+def build_manifest(learning_vault: Path, reading_vault: Path) -> Manifest:
+    """Walk learning_vault's top-level entries; return manifest of folders to migrate.
+
+    Inclusion rule (both must hold):
+      1. Folder name matches FOLDER_PATTERN (Johnny.Decimal: "NN_Name").
+      2. Folder contains ≥1 .md file recursively.
+    """
+    target_root = reading_vault / "learning"
+    entries: list[FolderEntry] = []
+    for child in sorted(learning_vault.iterdir()):
+        if not child.is_dir():
+            continue
+        if not FOLDER_PATTERN.match(child.name):
+            continue
+        md_count = sum(1 for _ in child.rglob("*.md"))
+        if md_count == 0:
+            continue
+        entries.append(FolderEntry(
+            name=child.name,
+            src=child,
+            dst=target_root / child.name,
+            md_count=md_count,
+        ))
+    return Manifest(folders=tuple(entries))
 
 
 def check_preflight(reading_vault: Path, learning_vault: Path) -> None:
