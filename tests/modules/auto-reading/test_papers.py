@@ -3,7 +3,7 @@
 import sys
 from datetime import date
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -21,13 +21,6 @@ from papers import (
     get_paper_backlinks,
     get_paper_links,
 )
-
-
-@pytest.fixture()
-def mock_cli():
-    cli = MagicMock()
-    cli.vault_path = "/tmp/test-vault"
-    return cli
 
 
 class TestLoadConfig:

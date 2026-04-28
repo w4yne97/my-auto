@@ -8,8 +8,8 @@ from unittest.mock import patch
 
 import responses
 
-from tests.lib.conftest import SAMPLE_ARXIV_XML
-
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _sample_data import SAMPLE_ARXIV_XML  # noqa: E402
 
 _EMPTY_XML = '<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"></feed>'
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "modules" / "auto-reading" / "scripts"))
