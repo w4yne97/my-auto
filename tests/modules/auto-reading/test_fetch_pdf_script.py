@@ -10,6 +10,7 @@ from unittest.mock import patch
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "modules" / "auto-reading" / "scripts"))
+# dash-in-package-name workaround: import reading lib via sys.path bare-name
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "modules" / "auto-reading" / "lib"))
 
 import fetch_pdf  # type: ignore[import-not-found]

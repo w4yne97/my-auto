@@ -2,9 +2,9 @@
 """Search alphaXiv + arXiv, score, and output Top N papers as JSON.
 
 Usage:
-    python start-my-day/scripts/search_and_filter.py \
-        --config /path/to/research_interests.yaml \
-        --output /tmp/auto-reading/result.json \
+    python modules/auto-reading/scripts/today.py \\
+        --config /path/to/research_interests.yaml \\
+        --output /tmp/start-my-day/auto-reading.json \\
         [--vault-name NAME] [--top-n 20] [--verbose]
 """
 
@@ -28,7 +28,7 @@ from sources.arxiv_api import search_arxiv
 from scoring import score_papers
 from papers import load_config, build_dedup_set
 
-logger = logging.getLogger("search_and_filter")
+logger = logging.getLogger("today")
 
 
 def _cleanup_tmp(output_path: Path) -> None:

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A multi-module daily-routine hub. Each `modules/auto-*/` is an independent vertical (paper tracking, learning planning, social-feed digestion, etc.). The top-level `start-my-day` SKILL orchestrates today's runs across all enabled modules.
 
-**Phase 1 status:** only `modules/auto-reading/` is in place. `lib/` mixes platform-kernel utilities (obsidian_cli, vault, storage, logging) with reading-specific code that has not yet been partitioned. Phase 2 (auto-learning + vault merge + multi-module orchestration) is planned.
+**P2 sub-A status:** `lib/` is now a pure platform kernel (4 files: obsidian_cli, storage, logging, vault). Reading-specific code lives at `modules/auto-reading/lib/`. Phase 2 (auto-learning + vault merge + multi-module orchestration) continues.
 
 ## Architecture
 

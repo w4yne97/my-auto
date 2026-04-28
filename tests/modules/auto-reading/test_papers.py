@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
+# dash-in-package-name workaround: import reading lib via sys.path bare-name
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "modules" / "auto-reading" / "lib"))
 from papers import (
     load_config,

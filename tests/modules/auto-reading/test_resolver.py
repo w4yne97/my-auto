@@ -8,6 +8,7 @@ import responses
 import sys
 from pathlib import Path
 
+# dash-in-package-name workaround: import reading lib via sys.path bare-name
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "modules" / "auto-reading" / "lib"))
 from resolver import (
     ResolvedInput,

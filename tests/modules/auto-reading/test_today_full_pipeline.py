@@ -47,7 +47,7 @@ class TestTodayFullPipeline:
         _mock_arxiv_empty()
 
         argv = [
-            "search_and_filter.py",
+            "today.py",
             "--config", str(config_path),
             "--output", str(output_path),
             "--top-n", "10",
@@ -89,7 +89,7 @@ class TestTodayFullPipeline:
             )
 
         argv = [
-            "search_and_filter.py",
+            "today.py",
             "--config", str(config_path),
             "--output", str(output_path),
         ]
@@ -123,7 +123,7 @@ class TestTodayFullPipeline:
         _mock_arxiv_empty()
 
         argv = [
-            "search_and_filter.py",
+            "today.py",
             "--config", str(config_path),
             "--output", str(output_path),
         ]
@@ -162,7 +162,7 @@ class TestTodayFullPipeline:
         _mock_arxiv_empty()
 
         argv = [
-            "search_and_filter.py",
+            "today.py",
             "--config", str(config_path),
             "--output", str(output_path),
         ]
@@ -190,7 +190,7 @@ class TestTodayFullPipeline:
         _mock_arxiv_empty()
 
         argv = [
-            "search_and_filter.py",
+            "today.py",
             "--config", str(config_path),
             "--output", str(output_path),
         ]
