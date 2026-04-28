@@ -12,9 +12,11 @@ import argparse
 import json
 import logging
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+from lib.logging import log_event
 from lib.models import scored_paper_to_dict
 from lib.sources.alphaxiv import fetch_trending, AlphaXivError
 from lib.sources.arxiv_api import search_arxiv
@@ -49,12 +51,17 @@ def main() -> None:
     parser.add_argument("--top-n", type=int, default=20, help="Number of top papers")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
+    start_t = time.monotonic()
 
     logging.basicConfig(
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         stream=sys.stderr,
     )
+
+    log_event("auto-reading", "today_script_start",
+              date=datetime.now().date().isoformat(),
+              top_n=args.top_n)
 
     try:
         from lib.storage import module_config_file
@@ -146,10 +153,19 @@ def main() -> None:
         }
 
         output_path.write_text(json.dumps(result, ensure_ascii=False, indent=2))
+        log_event("auto-reading", "today_script_done",
+                  status=status,
+                  stats=result["stats"],
+                  duration_s=round(time.monotonic() - start_t, 2))
         logger.info("Wrote envelope (status=%s, candidates=%d) to %s",
                     status, len(candidates), output_path)
 
     except Exception as e:
+        log_event("auto-reading", "today_script_crashed",
+                  level="error",
+                  error_type=type(e).__name__,
+                  message=str(e),
+                  duration_s=round(time.monotonic() - start_t, 2))
         logger.exception("Fatal error in today.py")
         try:
             output_path = Path(args.output)

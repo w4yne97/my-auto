@@ -98,3 +98,20 @@ def test_errors_field_is_list(tmp_path):
     rc, data = _run_today(tmp_path, top_n=5)
     assert data is not None
     assert isinstance(data["errors"], list)
+
+
+def test_today_emits_log_event(tmp_path, monkeypatch):
+    """today.py must write at least one log_event to ~/.local/share/start-my-day/logs/<date>.jsonl"""
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    rc, data = _run_today(tmp_path / "out", top_n=2)
+    log_dir = tmp_path / "start-my-day" / "logs"
+    assert log_dir.exists(), "log dir was not created"
+    log_files = list(log_dir.glob("*.jsonl"))
+    assert len(log_files) >= 1, f"no log file written; log dir contents: {list(log_dir.iterdir())}"
+    lines = log_files[0].read_text(encoding="utf-8").splitlines()
+    assert len(lines) >= 1, "log file is empty"
+    events = [json.loads(line) for line in lines]
+    auto_reading_events = [e for e in events if e.get("module") == "auto-reading"]
+    assert len(auto_reading_events) >= 1, f"no auto-reading events in {events}"
+    event_names = {e.get("event") for e in auto_reading_events}
+    assert "today_script_start" in event_names, f"missing today_script_start; got {event_names}"
