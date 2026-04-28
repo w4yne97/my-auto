@@ -10,7 +10,7 @@ import responses
 
 from tests.lib.conftest import SAMPLE_ARXIV_XML
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "modules" / "auto-reading" / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "modules" / "auto-reading" / "scripts"))
 _MOD_PATH = "search_papers"
 _mod = import_module(_MOD_PATH)
 

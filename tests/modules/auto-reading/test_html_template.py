@@ -8,7 +8,7 @@ import pytest
 
 # Load html.template by file path to avoid shadowing the stdlib `html` package
 # in long-running processes where sys.modules["html"] may already be set.
-_tpl_path = Path(__file__).resolve().parents[2] / "modules" / "auto-reading" / "lib" / "html" / "template.py"
+_tpl_path = Path(__file__).resolve().parents[3] / "modules" / "auto-reading" / "lib" / "html" / "template.py"
 _spec = _ilu.spec_from_file_location("_reading_html_template", _tpl_path)
 _mod = _ilu.module_from_spec(_spec)
 _spec.loader.exec_module(_mod)
@@ -43,7 +43,7 @@ def test_unused_key_is_ignored():
 
 
 def test_real_template_smoke(tmp_path):
-    tpl_path = Path(__file__).resolve().parents[2] / "modules" / "auto-reading" / "lib" / "html" / "template.html"
+    tpl_path = Path(__file__).resolve().parents[3] / "modules" / "auto-reading" / "lib" / "html" / "template.html"
     tpl = tpl_path.read_text()
     out = render(tpl, {
         "TITLE": "Test",
