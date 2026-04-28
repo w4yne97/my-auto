@@ -7,7 +7,6 @@ from unittest.mock import MagicMock
 import pytest
 
 from lib.vault import (
-    create_cli,
     get_vault_path,
     parse_date_field,
     list_daily_notes,
