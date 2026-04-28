@@ -6,7 +6,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A multi-module daily-routine hub. Each `modules/auto-*/` is an independent vertical (paper tracking, learning planning, social-feed digestion, etc.). The top-level `start-my-day` SKILL orchestrates today's runs across all enabled modules.
 
-**P2 sub-A status:** `lib/` is now a pure platform kernel (4 files: obsidian_cli, storage, logging, vault). Reading-specific code lives at `modules/auto-reading/lib/`. Phase 2 (auto-learning + vault merge + multi-module orchestration) continues.
+**P2 status:** sub-A complete (`lib/` is a pure platform kernel; reading code at `modules/auto-reading/lib/`). sub-B complete (vault merge: `~/Documents/auto-reading-vault/learning/` now hosts content from former `~/Documents/knowledge-vault/`; `tools/migrate_vault.py` performed the one-shot copy). Phase 2 continues with sub-C (auto-learning module) → sub-D (multi-module orchestration) → sub-E (cross-module daily aggregation).
+
+**Vault topology after sub-B:**
+
+- `$VAULT_PATH/{10_Daily,20_Papers,30_Insights,40_Digests,40_Ideas}/` — auto-reading's flat top-level (unchanged from P1).
+- `$VAULT_PATH/learning/{00_Map,10_Foundations,20_Core,30_Data,50_Learning-Log}/` — auto-learning's namespace (subtree introduced by sub-B).
+- `~/Documents/knowledge-vault/` is preserved byte-identical as the primary rollback path. After confidence builds (typically a week or two), the user manually deletes it along with `~/Documents/auto-reading-vault.premerge-<stamp>/` and `~/Documents/knowledge-vault.premerge-<stamp>/`.
+
+**Vault merge rollback recipe:**
+
+```bash
+# If the merge needs to be undone:
+rm -rf ~/Documents/auto-reading-vault
+mv ~/Documents/auto-reading-vault.premerge-<stamp> ~/Documents/auto-reading-vault
+# knowledge-vault was never modified — no restore needed.
+```
 
 ## Architecture
 
