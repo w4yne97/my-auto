@@ -1,1 +1,1 @@
-"""Paper source adapters — alphaxiv, arxiv_api, arxiv_pdf."""
+"""Data source modules for paper fetching."""

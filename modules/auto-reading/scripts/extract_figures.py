@@ -11,7 +11,9 @@ import logging
 import sys
 from pathlib import Path
 
-from lib.figures.extractor import extract_candidates
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
+
+from figures.extractor import extract_candidates
 
 logger = logging.getLogger("extract_figures")
 

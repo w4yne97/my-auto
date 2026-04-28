@@ -8,7 +8,10 @@ import sys
 from datetime import date
 from pathlib import Path
 
-from lib.vault import create_cli, scan_papers_since
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
+
+from lib.vault import create_cli  # platform
+from papers import scan_papers_since
 
 logger = logging.getLogger("scan_recent_papers")
 

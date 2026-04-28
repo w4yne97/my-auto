@@ -1,10 +1,13 @@
 """Tests for data models."""
 
+import sys
 from datetime import date
+from pathlib import Path
 
 import pytest
 
-from lib.models import Paper, ScoredPaper, scored_paper_to_dict
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "modules" / "auto-reading" / "lib"))
+from models import Paper, ScoredPaper, scored_paper_to_dict
 
 
 class TestPaper:

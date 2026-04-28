@@ -7,7 +7,7 @@ from datetime import date, datetime
 
 import requests
 
-from lib.models import Paper
+from models import Paper
 
 logger = logging.getLogger(__name__)
 

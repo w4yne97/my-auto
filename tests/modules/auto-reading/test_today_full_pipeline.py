@@ -97,7 +97,7 @@ class TestTodayFullPipeline:
         with patch.object(sys, "argv", argv), \
              patch.object(_mod, "create_cli", return_value=mock_cli), \
              patch.object(_mod, "build_dedup_set", return_value=set()), \
-             patch("lib.sources.arxiv_api.date") as mock_date:
+             patch("sources.arxiv_api.date") as mock_date:
             mock_date.today.return_value = date(2026, 3, 15)
             _mod.main()
 

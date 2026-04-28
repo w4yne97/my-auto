@@ -5,7 +5,11 @@ from datetime import date
 import pytest
 import responses
 
-from lib.resolver import (
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "modules" / "auto-reading" / "lib"))
+from resolver import (
     ResolvedInput,
     classify_input,
     extract_arxiv_id_from_url,

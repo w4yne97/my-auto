@@ -5,7 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from lib.figures.extractor import (
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "modules" / "auto-reading" / "lib"))
+from figures.extractor import (
     FigureCandidate,
     extract_candidates,
 )

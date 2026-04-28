@@ -17,12 +17,23 @@ import shutil
 import sys
 from pathlib import Path
 
-from lib.html.template import render
-from lib.obsidian_cli import ObsidianCLI, CLINotFoundError, ObsidianNotRunningError
+import importlib.util as _ilu
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
+
+from lib.obsidian_cli import ObsidianCLI, CLINotFoundError, ObsidianNotRunningError  # platform
+
+# Load html.template by file path to avoid shadowing the stdlib `html` package
+# in long-running processes where sys.modules["html"] may already be set.
+_tpl_mod_path = Path(__file__).resolve().parent.parent / "lib" / "html" / "template.py"
+_tpl_spec = _ilu.spec_from_file_location("_reading_html_template", _tpl_mod_path)
+_tpl_mod = _ilu.module_from_spec(_tpl_spec)
+_tpl_spec.loader.exec_module(_tpl_mod)
+render = _tpl_mod.render
 
 logger = logging.getLogger("assemble_html")
 
-_TEMPLATE_PATH = Path(__file__).resolve().parents[3] / "lib" / "html" / "template.html"
+_TEMPLATE_PATH = Path(__file__).resolve().parent.parent / "lib" / "html" / "template.html"
 
 
 def _build_toc_html(toc: list[dict]) -> str:

@@ -15,9 +15,11 @@ import logging
 import sys
 from pathlib import Path
 
-from lib.sources.arxiv_api import fetch_paper
-from lib.scoring import best_domain
-from lib.vault import load_config
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
+
+from sources.arxiv_api import fetch_paper
+from scoring import best_domain
+from papers import load_config
 
 logger = logging.getLogger("generate_note")
 

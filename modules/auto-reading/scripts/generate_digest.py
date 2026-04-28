@@ -8,12 +8,10 @@ import sys
 from datetime import date, timedelta
 from pathlib import Path
 
-from lib.vault import (
-    create_cli,
-    list_daily_notes,
-    scan_insights_since,
-    scan_papers_since,
-)
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
+
+from lib.vault import create_cli, list_daily_notes  # platform
+from papers import scan_insights_since, scan_papers_since
 
 logger = logging.getLogger("generate_digest")
 

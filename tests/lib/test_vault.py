@@ -6,23 +6,30 @@ from unittest.mock import MagicMock
 
 import pytest
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "modules" / "auto-reading" / "lib"))
+
 from lib.vault import (
     create_cli,
     get_vault_path,
-    load_config,
     parse_date_field,
+    list_daily_notes,
+    search_vault,
+    get_unresolved_links,
+)
+from papers import (
+    load_config,
+    _parse_frontmatter,
     scan_papers,
     scan_papers_since,
     scan_insights_since,
-    list_daily_notes,
     build_dedup_set,
     write_paper_note,
     get_paper_status,
     set_paper_status,
     get_paper_backlinks,
     get_paper_links,
-    search_vault,
-    get_unresolved_links,
 )
 
 
@@ -89,7 +96,7 @@ class TestParseFrontmatter:
     """Tests for _parse_frontmatter internal helper."""
 
     def test_valid_frontmatter(self):
-        from lib.vault import _parse_frontmatter
+        from papers import _parse_frontmatter
         content = "---\ntitle: Test\narxiv_id: '123'\ntags: [RL]\n---\n# Body"
         fm = _parse_frontmatter(content)
         assert fm["title"] == "Test"
@@ -97,15 +104,15 @@ class TestParseFrontmatter:
         assert fm["tags"] == ["RL"]
 
     def test_missing_frontmatter(self):
-        from lib.vault import _parse_frontmatter
+        from papers import _parse_frontmatter
         assert _parse_frontmatter("# Just a heading\nText.") == {}
 
     def test_malformed_yaml(self):
-        from lib.vault import _parse_frontmatter
+        from papers import _parse_frontmatter
         assert _parse_frontmatter("---\ntitle: [unclosed\n---\nBody.") == {}
 
     def test_empty_frontmatter(self):
-        from lib.vault import _parse_frontmatter
+        from papers import _parse_frontmatter
         assert _parse_frontmatter("---\n---\nBody.") == {}
 
 

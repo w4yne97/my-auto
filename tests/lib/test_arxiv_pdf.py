@@ -6,7 +6,11 @@ from pathlib import Path
 import pytest
 import responses
 
-from lib.sources.arxiv_pdf import (
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "modules" / "auto-reading" / "lib"))
+from sources.arxiv_pdf import (
     download_pdf,
     InvalidArxivIdError,
 )
@@ -120,7 +124,7 @@ def test_download_raises_runtime_error_after_all_retries(tmp_path):
 
 def test_atomic_write_via_tmp_and_replace(tmp_path, monkeypatch):
     """The download writes to a .tmp sibling then os.replace to final target."""
-    from lib.sources import arxiv_pdf
+    from sources import arxiv_pdf
     import os
 
     seen_tmp_paths: list[Path] = []

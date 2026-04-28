@@ -10,10 +10,11 @@ from unittest.mock import patch
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "modules" / "auto-reading" / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "modules" / "auto-reading" / "lib"))
 
 import fetch_pdf  # type: ignore[import-not-found]
 
-from lib.models import Paper
+from models import Paper
 
 
 FAKE_PAPER = Paper(

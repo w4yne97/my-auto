@@ -2,8 +2,12 @@
 
 from datetime import date, timedelta
 
-from lib.models import Paper
-from lib.scoring import (
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "modules" / "auto-reading" / "lib"))
+from models import Paper
+from scoring import (
     score_keyword_match,
     score_recency,
     score_popularity,
