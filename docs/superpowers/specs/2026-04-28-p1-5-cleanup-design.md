@@ -92,6 +92,8 @@ def _resolve_vault_path(self) -> str:
 
 修完后 `build_dedup_set` 的 `if not papers_dir.exists(): return set()` 分支变成"fresh vault 无论文" 的合法情况(而不是同时混着"vault 路径错"的隐藏 bug)。
 
+**Implementation note (post-impl, commit `8c9e122`)**:实际改动用 `Path.exists()` 而非上文 spec 的 `Path.is_dir()`。原因:23+ 个老 ObsidianCLI 测试都 `patch("pathlib.Path.exists", return_value=True)` 来"假装路径存在",`is_dir()` 走不到这个 mock 会触发批量 collection error。`exists()` 保留了"绝对路径不存在 → 抛错"的核心覆盖(覆盖生产观察到的 `"Vault not found"` 字面串,被 `is_absolute()` 拦截);放弃了"vault path 是普通文件"的极端 case —— 实战未观测,且下游 `vault.py:build_dedup_set` 的 `papers_dir.exists()` 也会在该 case 下退化为合法路径。
+
 ### 2.2 Item #1 — 9 个 deferred 测试
 
 **8 个 mechanical 修复**:每个文件改 1 行 sys.path:
