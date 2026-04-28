@@ -10,7 +10,7 @@ A multi-module daily-routine hub. Each `modules/auto-*/` is an independent verti
 
 **Vault topology after sub-B:**
 
-- `$VAULT_PATH/{10_Daily,20_Papers,30_Insights,40_Digests,40_Ideas}/` — auto-reading's flat top-level (unchanged from P1).
+- `$VAULT_PATH/{00_Config,10_Daily,20_Papers,30_Insights,40_Digests,40_Ideas,90_System}/` — auto-reading's flat top-level (unchanged from P1).
 - `$VAULT_PATH/learning/{00_Map,10_Foundations,20_Core,30_Data,50_Learning-Log}/` — auto-learning's namespace (subtree introduced by sub-B).
 - `~/Documents/knowledge-vault/` is preserved byte-identical as the primary rollback path. After confidence builds (typically a week or two), the user manually deletes it along with `~/Documents/auto-reading-vault.premerge-<stamp>/` and `~/Documents/knowledge-vault.premerge-<stamp>/`.
 

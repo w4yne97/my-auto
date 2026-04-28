@@ -36,10 +36,6 @@ class PreflightError(MigrationError):
     """Raised when pre-conditions for --apply are not met."""
 
 
-class CollisionError(MigrationError):
-    """Raised when basename collisions would shadow notes after migration."""
-
-
 FOLDER_PATTERN = re.compile(r"^[0-9]{2}_[A-Za-z][A-Za-z0-9-]*$")
 
 
@@ -260,7 +256,16 @@ def cmd_dry_run(reading_vault: Path, learning_vault: Path) -> int:
 
 
 def cmd_apply(reading_vault: Path, learning_vault: Path) -> int:
-    """Execute the migration."""
+    """Execute the migration.
+
+    Failure modes & recovery:
+    - If `create_backups` raises mid-way, one vault may be backed up but not the other.
+      The user should remove any orphaned `*.premerge-<stamp>/` directory before re-running.
+    - If `perform_copy` raises mid-way (disk full, permissions), the reading vault will
+      be left half-merged with some folders under `learning/` populated and others absent.
+      The next `--apply` will be blocked by the preflight idempotency guard. To recover,
+      `rm -rf <reading-vault>/learning/` and re-run `--apply`.
+    """
     try:
         check_preflight(reading_vault, learning_vault)
     except PreflightError as exc:

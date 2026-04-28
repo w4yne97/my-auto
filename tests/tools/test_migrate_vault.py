@@ -319,3 +319,72 @@ class TestVerify:
         assert rc != 0
         all_errors = "\n".join(rec.message.lower() for rec in caplog.records)
         assert "learning" in all_errors
+
+
+class TestDryRunErrors:
+    def test_dry_run_fails_when_learning_vault_missing(
+        self, synthetic_reading_vault, tmp_path, caplog
+    ):
+        """Dry-run aborts when the learning-vault path doesn't exist."""
+        nonexistent = tmp_path / "does-not-exist"
+        with caplog.at_level("ERROR", logger="migrate_vault"):
+            rc = main([
+                "--dry-run",
+                "--reading-vault", str(synthetic_reading_vault),
+                "--learning-vault", str(nonexistent),
+            ])
+        assert rc != 0
+        all_errors = "\n".join(rec.message.lower() for rec in caplog.records)
+        assert "learning vault not found" in all_errors
+
+
+class TestVerifyDegradedModes:
+    def test_verify_mode_2_uses_live_source_when_backup_gone(
+        self, synthetic_reading_vault, synthetic_learning_vault
+    ):
+        """Mode 2: backup deleted but learning-vault still exists — verify still passes."""
+        rc1 = main([
+            "--apply",
+            "--reading-vault", str(synthetic_reading_vault),
+            "--learning-vault", str(synthetic_learning_vault),
+        ])
+        assert rc1 == 0
+
+        # Delete the backup of learning-vault to force Mode 2
+        import shutil as _shutil
+        for backup in synthetic_learning_vault.parent.glob("knowledge-vault.premerge-*"):
+            _shutil.rmtree(backup)
+
+        rc2 = main([
+            "--verify",
+            "--reading-vault", str(synthetic_reading_vault),
+            "--learning-vault", str(synthetic_learning_vault),
+        ])
+        assert rc2 == 0
+
+    def test_verify_mode_3_degraded_when_backup_and_source_gone(
+        self, synthetic_reading_vault, synthetic_learning_vault, caplog
+    ):
+        """Mode 3 (degraded): no backup, no live source — verify returns 0 with warning."""
+        rc1 = main([
+            "--apply",
+            "--reading-vault", str(synthetic_reading_vault),
+            "--learning-vault", str(synthetic_learning_vault),
+        ])
+        assert rc1 == 0
+
+        # Delete BOTH the backup and the live learning-vault to force Mode 3
+        import shutil as _shutil
+        for backup in synthetic_learning_vault.parent.glob("knowledge-vault.premerge-*"):
+            _shutil.rmtree(backup)
+        _shutil.rmtree(synthetic_learning_vault)
+
+        with caplog.at_level("INFO", logger="migrate_vault"):
+            rc2 = main([
+                "--verify",
+                "--reading-vault", str(synthetic_reading_vault),
+                "--learning-vault", str(synthetic_learning_vault),
+            ])
+        assert rc2 == 0  # Mode 3 is degraded but not failed
+        all_messages = "\n".join(rec.message.lower() for rec in caplog.records)
+        assert "mode 3" in all_messages or "degraded" in all_messages
