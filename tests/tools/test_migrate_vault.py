@@ -139,3 +139,40 @@ class TestApply:
         assert not (target / "90_Templates").exists()
         assert not (target / "assets").exists()
         assert not (target / ".obsidian").exists()
+
+
+class TestIdempotency:
+    def test_double_apply_aborts_second_run(
+        self, synthetic_reading_vault, synthetic_learning_vault, caplog
+    ):
+        """T3: running --apply twice — second run aborts, no double-copy."""
+        # First run: succeeds
+        rc1 = main([
+            "--apply",
+            "--reading-vault", str(synthetic_reading_vault),
+            "--learning-vault", str(synthetic_learning_vault),
+        ])
+        assert rc1 == 0
+        # Snapshot post-first-run state
+        snapshot = sorted(
+            (p.relative_to(synthetic_reading_vault), p.read_bytes() if p.is_file() else None)
+            for p in synthetic_reading_vault.rglob("*") if p.is_file()
+        )
+
+        # Second run: must abort
+        with caplog.at_level("ERROR", logger="migrate_vault"):
+            rc2 = main([
+                "--apply",
+                "--reading-vault", str(synthetic_reading_vault),
+                "--learning-vault", str(synthetic_learning_vault),
+            ])
+        assert rc2 != 0
+        all_errors = "\n".join(rec.message.lower() for rec in caplog.records)
+        assert "already" in all_errors or "verify" in all_errors
+
+        # State unchanged after the aborted second run
+        post = sorted(
+            (p.relative_to(synthetic_reading_vault), p.read_bytes() if p.is_file() else None)
+            for p in synthetic_reading_vault.rglob("*") if p.is_file()
+        )
+        assert snapshot == post
