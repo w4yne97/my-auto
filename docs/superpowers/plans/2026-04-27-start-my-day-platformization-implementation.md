@@ -2584,3 +2584,40 @@ echo "When confident, archive old repo at /Users/w4ynewang/Documents/code/auto-r
 ---
 
 **End of plan.**
+
+---
+
+## Implementation Notes (Post-impl, 2026-04-28)
+
+Three classes of plan defects surfaced during execution and required mid-flight
+fixes; documenting here for future reference.
+
+### Plan defect 1 — Task 2 test code (`test_storage.py`)
+
+Plan provided test code patches `Path.home` via `monkeypatch.setattr`, but
+`Path.expanduser()` reads `$HOME` from `os.environ` directly via
+`os.path.expanduser`, not via `Path.home()`. The patch had no effect. Fixed at
+execution by switching to `monkeypatch.setenv("HOME", str(tmp_path))`
+(commit `60bf632`).
+
+### Plan defect 2 — Task 17 verbatim cp missed two path-rewrite steps
+
+Phase G's verbatim copy of 14 reading SKILLs preserved hardcoded references to:
+- 8 entry script paths (`<old-skill>/scripts/<file>.py` →
+  `modules/auto-reading/scripts/<file>.py`)
+- 19 config path references (`$VAULT_PATH/00_Config/research_interests.yaml` →
+  `modules/auto-reading/config/research_interests.yaml`)
+
+Fixed in 2 hotfix commits (`5bc9c1f` script paths, `833d73d` config paths).
+Future similar Phase G-style migrations should explicitly include a
+path-rewrite step, not assume verbatim cp preserves correctness.
+
+### Plan defect 3 — Task 6/7 ordering mismatch with test/script coupling
+
+Task 6 migrated 19 tests; some referenced entry scripts that didn't migrate
+until Task 13/17. Symptom: 7 tests collected with ImportError. Fix at
+execution: added `addopts --ignore` for those 7 files (later expanded to 9 by
+the implementer), with TODO to re-enable when scripts arrived. P1.5 Item #1
+performs the eventual cleanup (commits in P1.5 plan Tasks 2 + 3). Future plans
+should ensure tests and their target scripts migrate together (or sequence
+Task 7+ correctly).

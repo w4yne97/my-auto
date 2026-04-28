@@ -24,10 +24,12 @@ def module_dir(module: str) -> Path:
 # --- config: in-repo, version-controlled ---
 
 def module_config_dir(module: str) -> Path:
+    """In-repo, version-controlled per-module config directory."""
     return module_dir(module) / "config"
 
 
 def module_config_file(module: str, filename: str) -> Path:
+    """Path to a specific config file under modules/<module>/config/."""
     return module_config_dir(module) / filename
 
 
