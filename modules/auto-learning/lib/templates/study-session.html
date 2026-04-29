@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{TITLE}} — 学习会话</title>
+
+  <!-- MathJax for formula rendering -->
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']],
+        processEscapes: true
+      },
+      options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+
+  <!-- Mermaid for diagrams -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script>mermaid.initialize({ startOnLoad: true, theme: 'neutral', securityLevel: 'loose' });</script>
+
+  <!-- highlight.js for code blocks -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/github.min.css">
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/highlight.min.js"></script>
+  <script>hljs.highlightAll();</script>
+
+  <style>
+    :root {
+      --bg: #fafaf9;
+      --fg: #1c1917;
+      --muted: #78716c;
+      --accent: #6d28d9;
+      --accent-light: #ede9fe;
+      --border: #e7e5e4;
+      --surface: #ffffff;
+      --code-bg: #f5f5f4;
+      --success: #16a34a;
+      --warning: #d97706;
+      --info: #2563eb;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.8;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+    }
+
+    /* Header */
+    .study-header {
+      border-bottom: 2px solid var(--accent);
+      padding-bottom: 1.5rem;
+      margin-bottom: 2.5rem;
+    }
+    .study-header h1 {
+      font-size: 1.8rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+    }
+    .meta-row {
+      display: flex;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    .meta-tag {
+      background: var(--accent-light);
+      color: var(--accent);
+      padding: 0.15rem 0.6rem;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+
+    /* Prerequisite chain */
+    .prereq-chain {
+      background: linear-gradient(135deg, var(--accent-light), #f3e8ff);
+      border-left: 4px solid var(--accent);
+      padding: 1rem 1.25rem;
+      border-radius: 0 8px 8px 0;
+      margin-bottom: 2rem;
+    }
+    .prereq-chain h3 { font-size: 0.9rem; color: var(--accent); margin-bottom: 0.5rem; }
+    .prereq-chain .chain {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      font-size: 0.9rem;
+    }
+    .prereq-chain .chain .node {
+      padding: 0.25rem 0.75rem;
+      border-radius: 6px;
+      font-weight: 500;
+    }
+    .prereq-chain .chain .node.done { background: #dcfce7; color: #166534; }
+    .prereq-chain .chain .node.current { background: var(--accent); color: white; }
+    .prereq-chain .chain .node.pending { background: #fef3c7; color: #92400e; }
+    .prereq-chain .chain .arrow { color: var(--muted); font-weight: bold; }
+
+    /* Content sections */
+    h2 {
+      font-size: 1.35rem;
+      font-weight: 700;
+      margin-top: 2.5rem;
+      margin-bottom: 1rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid var(--border);
+    }
+    h3 { font-size: 1.1rem; font-weight: 600; margin-top: 1.5rem; margin-bottom: 0.5rem; }
+    h4 { font-size: 0.95rem; font-weight: 600; margin-top: 1rem; margin-bottom: 0.3rem; }
+
+    p { margin-bottom: 0.8rem; }
+
+    /* Blockquotes */
+    blockquote {
+      border-left: 3px solid var(--accent);
+      padding: 0.5rem 1rem;
+      margin: 1rem 0;
+      background: var(--accent-light);
+      border-radius: 0 6px 6px 0;
+      font-style: italic;
+    }
+
+    /* Code blocks */
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      overflow-x: auto;
+      margin: 1rem 0;
+      font-size: 0.85rem;
+      line-height: 1.6;
+    }
+    code {
+      font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+      font-size: 0.85em;
+    }
+    :not(pre) > code {
+      background: var(--code-bg);
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+    }
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+      font-size: 0.9rem;
+    }
+    th {
+      background: var(--accent-light);
+      color: var(--accent);
+      font-weight: 600;
+      text-align: left;
+      padding: 0.6rem 0.8rem;
+      border-bottom: 2px solid var(--accent);
+    }
+    td {
+      padding: 0.5rem 0.8rem;
+      border-bottom: 1px solid var(--border);
+    }
+    tr:hover td { background: #fafaf9; }
+
+    /* Mermaid diagrams */
+    .mermaid {
+      text-align: center;
+      margin: 1.5rem 0;
+      padding: 1rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+
+    /* Math display */
+    .math-block {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.5rem;
+      margin: 1rem 0;
+      overflow-x: auto;
+    }
+
+    /* Insight boxes */
+    .insight-box {
+      background: linear-gradient(135deg, #fffbeb, #fef3c7);
+      border: 1px solid #fbbf24;
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      margin: 1.5rem 0;
+    }
+    .insight-box .label {
+      font-weight: 700;
+      color: #b45309;
+      font-size: 0.85rem;
+      margin-bottom: 0.5rem;
+    }
+
+    /* Source citations */
+    .source {
+      font-size: 0.8rem;
+      color: var(--muted);
+      font-style: italic;
+    }
+    .source a { color: var(--info); text-decoration: none; }
+    .source a:hover { text-decoration: underline; }
+
+    /* Review questions section */
+    .review-section {
+      margin-top: 3rem;
+      border-top: 2px solid var(--accent);
+      padding-top: 1.5rem;
+    }
+    .review-section h2 {
+      border-bottom: none;
+      margin-top: 0;
+    }
+    .question-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+      cursor: pointer;
+      transition: box-shadow 0.2s;
+    }
+    .question-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .question-card .q-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--accent);
+      text-transform: uppercase;
+      margin-bottom: 0.3rem;
+    }
+    .question-card .q-level {
+      font-size: 0.7rem;
+      color: var(--muted);
+      float: right;
+    }
+    .question-card .q-text {
+      font-size: 0.95rem;
+      font-weight: 500;
+      margin-bottom: 0.5rem;
+    }
+    .question-card .q-hint {
+      display: none;
+      font-size: 0.85rem;
+      color: var(--muted);
+      border-top: 1px dashed var(--border);
+      padding-top: 0.5rem;
+      margin-top: 0.5rem;
+    }
+    .question-card.open .q-hint { display: block; }
+    .question-card .q-toggle {
+      font-size: 0.75rem;
+      color: var(--info);
+      cursor: pointer;
+    }
+
+    /* Depth progress */
+    .depth-indicator {
+      display: inline-flex;
+      gap: 0.3rem;
+      align-items: center;
+    }
+    .depth-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+      border: 1px solid var(--border);
+    }
+    .depth-dot.filled-0 { background: #e5e7eb; }
+    .depth-dot.filled-1 { background: #fde047; }
+    .depth-dot.filled-2 { background: #4ade80; }
+    .depth-dot.filled-3 { background: #60a5fa; }
+
+    /* Navigation footer */
+    .nav-footer {
+      margin-top: 2rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    /* Lists */
+    ul, ol { padding-left: 1.5rem; margin-bottom: 0.8rem; }
+    li { margin-bottom: 0.3rem; }
+
+    /* Responsive */
+    @media (max-width: 640px) {
+      body { padding: 1rem; }
+      .study-header h1 { font-size: 1.4rem; }
+      .meta-row { gap: 0.75rem; }
+      table { font-size: 0.8rem; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ======================== HEADER ======================== -->
+<div class="study-header">
+  <h1>{{TITLE}}</h1>
+  <div class="meta-row">
+    <span>{{DATE}}</span>
+    <span class="meta-tag">{{DOMAIN}}</span>
+    <span>{{DEPTH_FROM}} → {{DEPTH_TO}}</span>
+    <span>
+      <span class="depth-indicator">
+        <span class="depth-dot {{DEPTH_DOT_0}}"></span>
+        <span class="depth-dot {{DEPTH_DOT_1}}"></span>
+        <span class="depth-dot {{DEPTH_DOT_2}}"></span>
+        <span class="depth-dot {{DEPTH_DOT_3}}"></span>
+      </span>
+    </span>
+  </div>
+</div>
+
+<!-- ======================== PREREQ CHAIN ======================== -->
+<div class="prereq-chain">
+  <h3>知识溯源链</h3>
+  <div class="chain">
+    {{PREREQ_CHAIN}}
+    <!-- Example:
+    <span class="node done">策略梯度定理</span>
+    <span class="arrow">→</span>
+    <span class="node done">REINFORCE</span>
+    <span class="arrow">→</span>
+    <span class="node current">PPO for LLM</span>
+    <span class="arrow">→</span>
+    <span class="node pending">GRPO</span>
+    -->
+  </div>
+</div>
+
+<!-- ======================== MAIN CONTENT ======================== -->
+{{CONTENT}}
+<!--
+  Content is injected here as raw HTML.
+  Use the following patterns:
+
+  ## Section heading → <h2>...</h2>
+
+  Mermaid diagram:
+  <div class="mermaid">
+    graph LR
+      A --> B
+  </div>
+
+  Math block:
+  <div class="math-block">
+    $$\nabla_\theta J(\theta) = \mathbb{E}[\nabla_\theta \log \pi_\theta(a|s) \cdot A(s,a)]$$
+  </div>
+
+  Inline math: $r_t(\theta) = \frac{\pi_\theta}{\pi_{\theta_{old}}}$
+
+  Insight box:
+  <div class="insight-box">
+    <div class="label">★ Insight</div>
+    <p>Key educational point here.</p>
+  </div>
+
+  Source citation:
+  <p class="source">来源: <a href="URL">Title</a> (arXiv:XXXX.XXXXX)</p>
+
+  Comparison table:
+  <table>
+    <tr><th>Method</th><th>Advantage</th><th>Critic</th></tr>
+    <tr><td>REINFORCE</td><td>R(y)</td><td>None</td></tr>
+  </table>
+-->
+
+<!-- ======================== REVIEW QUESTIONS ======================== -->
+<div class="review-section">
+  <h2>复习与思考</h2>
+  <p style="color: var(--muted); font-size: 0.9rem; margin-bottom: 1.5rem;">
+    点击问题卡片展开提示。尝试先自己思考，再查看提示。
+  </p>
+
+  {{QUESTIONS}}
+  <!--
+  <div class="question-card" onclick="this.classList.toggle('open')">
+    <span class="q-level">L0 → L1</span>
+    <div class="q-label">问题 1</div>
+    <div class="q-text">用一句话解释 Policy Gradient Theorem 的核心含义。</div>
+    <div class="q-toggle">点击展开提示 ▼</div>
+    <div class="q-hint">
+      提示：想想"好的 action 增大概率"这个直觉。定理给出了具体的梯度公式。
+    </div>
+  </div>
+  -->
+</div>
+
+<!-- ======================== NAVIGATION ======================== -->
+<div class="nav-footer">
+  <div>
+    {{NAV_PREV}}
+    <!-- <span>← 上一步: <a href="prev.html">REINFORCE 算法</a></span> -->
+  </div>
+  <div>
+    {{NAV_NEXT}}
+    <!-- <span>下一步: <a href="next.html">GRPO</a> →</span> -->
+  </div>
+</div>
+
+</body>
+</html>

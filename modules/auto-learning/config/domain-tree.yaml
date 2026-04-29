@@ -1,0 +1,722 @@
+# Learning Pipeline — 领域知识树
+# 6 大领域，~127 个概念节点
+# 静态结构定义，由 /learn-init 初始化到 knowledge-map.yaml
+
+meta:
+  version: "1.0"
+  created: "2026-03-25"
+  root_topic: "SWE Post-Training"
+  description: "以 SWE 后训练为核心的 LLM 知识体系"
+
+domains:
+
+  # ═══════════════════════════════════════════════════════════════
+  # Domain 1: LLM 基础
+  # ═══════════════════════════════════════════════════════════════
+  llm-foundations:
+    title: "LLM Foundations"
+    title_zh: "LLM 基础"
+    description: "大语言模型的核心技术基础，为理解后续 post-training 提供必要背景"
+    vault_section: "10_Foundations/llm-foundations"
+
+    subtopics:
+      architecture:
+        title: "Model Architecture"
+        title_zh: "模型架构"
+        concepts:
+          - id: transformer-attention
+            title_zh: "Transformer 与注意力机制"
+            target_depth: L1
+            priority: 3
+          - id: positional-encoding
+            title_zh: "位置编码（RoPE, ALiBi 等）"
+            target_depth: L1
+            priority: 2
+          - id: mixture-of-experts
+            title_zh: "混合专家模型 (MoE)"
+            target_depth: L1
+            priority: 3
+          - id: long-context-architecture
+            title_zh: "长上下文架构"
+            target_depth: L1
+            priority: 3
+          - id: kv-cache-optimization
+            title_zh: "KV Cache 优化"
+            target_depth: L1
+            priority: 2
+
+      pretraining:
+        title: "Pretraining"
+        title_zh: "预训练"
+        concepts:
+          - id: pretraining-data-pipeline
+            title_zh: "预训练数据 Pipeline"
+            target_depth: L1
+            priority: 2
+          - id: scaling-laws
+            title_zh: "Scaling Laws"
+            target_depth: L2
+            priority: 4
+          - id: tokenization-for-code
+            title_zh: "代码 Tokenization"
+            target_depth: L1
+            priority: 3
+          - id: code-pretraining-mix
+            title_zh: "代码预训练数据配比"
+            target_depth: L2
+            priority: 4
+          - id: continual-pretraining
+            title_zh: "持续预训练"
+            target_depth: L2
+            priority: 4
+
+      inference:
+        title: "Inference & Serving"
+        title_zh: "推理与服务"
+        concepts:
+          - id: speculative-decoding
+            title_zh: "投机解码"
+            target_depth: L1
+            priority: 2
+          - id: quantization
+            title_zh: "量化"
+            target_depth: L1
+            priority: 2
+          - id: batching-strategies
+            title_zh: "批处理策略"
+            target_depth: L1
+            priority: 2
+          - id: model-parallelism
+            title_zh: "模型并行"
+            target_depth: L1
+            priority: 2
+
+  # ═══════════════════════════════════════════════════════════════
+  # Domain 2: 后训练方法
+  # ═══════════════════════════════════════════════════════════════
+  post-training:
+    title: "Post-Training Methods"
+    title_zh: "后训练方法"
+    description: "通用的后训练方法论，不限于代码领域"
+    vault_section: "10_Foundations/post-training"
+
+    subtopics:
+      sft-fundamentals:
+        title: "SFT Fundamentals"
+        title_zh: "SFT 基础"
+        concepts:
+          - id: instruction-tuning
+            title_zh: "指令微调"
+            target_depth: L2
+            priority: 4
+          - id: lora-peft
+            title_zh: "LoRA / PEFT 参数高效微调"
+            target_depth: L2
+            priority: 4
+          - id: data-quality-vs-quantity
+            title_zh: "数据质量 vs 数量权衡"
+            target_depth: L2
+            priority: 4
+          - id: catastrophic-forgetting
+            title_zh: "灾难性遗忘"
+            target_depth: L1
+            priority: 3
+          - id: curriculum-learning
+            title_zh: "课程学习"
+            target_depth: L2
+            priority: 4
+
+      rl-basics:
+        title: "RL Alignment Basics"
+        title_zh: "RL 对齐基础"
+        concepts:
+          - id: policy-gradient-theorem
+            title_zh: "策略梯度定理"
+            target_depth: L2
+            priority: 4
+            description: "所有 policy-based RL 方法的数学根基"
+          - id: reinforce-algorithm
+            title_zh: "REINFORCE 算法"
+            target_depth: L2
+            priority: 4
+            prerequisites: ["policy-gradient-theorem"]
+            description: "最基础的 policy gradient 方法，含 baseline 和 RLOO 变体"
+          - id: rlhf-pipeline
+            title_zh: "RLHF Pipeline"
+            target_depth: L2
+            priority: 5
+            prerequisites: ["reinforce-algorithm", "reward-modeling"]
+          - id: reward-modeling
+            title_zh: "奖励建模"
+            target_depth: L2
+            priority: 5
+          - id: reward-shaping
+            title_zh: "Reward Shaping"
+            target_depth: L2
+            priority: 4
+            prerequisites: ["reward-modeling"]
+          - id: ppo-for-llm
+            title_zh: "PPO 在 LLM 中的应用"
+            target_depth: L2
+            priority: 4
+            prerequisites: ["reinforce-algorithm", "rlhf-pipeline"]
+          - id: dpo-and-variants
+            title_zh: "DPO 及变体"
+            target_depth: L2
+            priority: 4
+            prerequisites: ["rlhf-pipeline"]
+
+      advanced-rl:
+        title: "Advanced RL Methods"
+        title_zh: "高级 RL 方法"
+        concepts:
+          - id: grpo
+            title_zh: "GRPO (Group Relative Policy Optimization)"
+            target_depth: L3
+            priority: 5
+            prerequisites: ["ppo-for-llm", "reinforce-algorithm"]
+          - id: online-vs-offline-rl
+            title_zh: "Online vs Offline RL"
+            target_depth: L2
+            priority: 4
+            prerequisites: ["ppo-for-llm"]
+          - id: process-reward-models
+            title_zh: "过程奖励模型 (PRM)"
+            target_depth: L3
+            priority: 5
+            prerequisites: ["reward-modeling"]
+          - id: constitutional-ai
+            title_zh: "Constitutional AI / RLAIF"
+            target_depth: L1
+            priority: 3
+            prerequisites: ["rlhf-pipeline"]
+          - id: reward-hacking-mitigations
+            title_zh: "Reward Hacking 缓解"
+            target_depth: L2
+            priority: 4
+            prerequisites: ["reward-modeling", "rlhf-pipeline"]
+
+      preference-optimization:
+        title: "Preference Optimization"
+        title_zh: "偏好优化"
+        concepts:
+          - id: dpo-theory
+            title_zh: "DPO 理论基础"
+            target_depth: L2
+            priority: 4
+            prerequisites: ["dpo-and-variants"]
+          - id: kto
+            title_zh: "KTO (Kahneman-Tversky Optimization)"
+            target_depth: L1
+            priority: 3
+            prerequisites: ["dpo-and-variants"]
+          - id: orpo
+            title_zh: "ORPO"
+            target_depth: L1
+            priority: 3
+            prerequisites: ["dpo-and-variants"]
+          - id: simpo
+            title_zh: "SimPO"
+            target_depth: L1
+            priority: 3
+            prerequisites: ["dpo-and-variants"]
+          - id: preference-data-construction
+            title_zh: "偏好数据构建方法"
+            target_depth: L2
+            priority: 4
+            prerequisites: ["reward-modeling"]
+
+  # ═══════════════════════════════════════════════════════════════
+  # Domain 3: 代码专项后训练
+  # ═══════════════════════════════════════════════════════════════
+  code-post-training:
+    title: "Code-Specific Post-Training"
+    title_zh: "代码专项后训练"
+    description: "针对代码生成和软件工程任务的后训练方法"
+    vault_section: "20_Core/code-post-training"
+
+    subtopics:
+      sft-for-code:
+        title: "SFT for Code"
+        title_zh: "代码 SFT"
+        concepts:
+          - id: trajectory-synthesis
+            title_zh: "轨迹合成"
+            target_depth: L3
+            priority: 5
+          - id: trajectory-distillation
+            title_zh: "轨迹蒸馏"
+            target_depth: L2
+            priority: 4
+          - id: agentic-mid-training
+            title_zh: "Agentic Mid-Training"
+            target_depth: L3
+            priority: 5
+          - id: sft-data-curation
+            title_zh: "SFT 数据策展与难度控制"
+            target_depth: L3
+            priority: 5
+          - id: sft-data-scaling-law
+            title_zh: "SFT 数据 Scaling Law"
+            target_depth: L2
+            priority: 4
+          - id: sft-capability-ceiling
+            title_zh: "SFT 能力天花板"
+            target_depth: L2
+            priority: 5
+            prerequisites: ["trajectory-synthesis"]
+          - id: multi-stage-curriculum
+            title_zh: "多阶段课程设计"
+            target_depth: L2
+            priority: 4
+          - id: sft-vs-rl-boundary
+            title_zh: "SFT 与 RL 的边界与衔接"
+            target_depth: L3
+            priority: 5
+            prerequisites: ["sft-capability-ceiling", "grpo"]
+
+      rl-for-code:
+        title: "RL for Code"
+        title_zh: "代码 RL"
+        concepts:
+          - id: execution-feedback-reward
+            title_zh: "执行反馈作为 Reward"
+            target_depth: L3
+            priority: 5
+          - id: llm-as-judge-reward
+            title_zh: "LLM-as-Judge Reward"
+            target_depth: L2
+            priority: 4
+          - id: dual-reward-fusion
+            title_zh: "双 Reward 融合"
+            target_depth: L2
+            priority: 4
+          - id: execution-free-reward-model
+            title_zh: "Execution-Free Reward Model"
+            target_depth: L2
+            priority: 4
+          - id: subtask-oriented-reward
+            title_zh: "子任务导向 Reward (SoRFT)"
+            target_depth: L2
+            priority: 4
+          - id: adversarial-reward-coevolution
+            title_zh: "对抗式 Reward 共演化"
+            target_depth: L2
+            priority: 4
+          - id: grpo-for-code
+            title_zh: "GRPO 在代码任务的应用"
+            target_depth: L3
+            priority: 5
+            prerequisites: ["grpo", "execution-feedback-reward"]
+          - id: dapo-long-context
+            title_zh: "DAPO 长上下文稳定性"
+            target_depth: L2
+            priority: 4
+          - id: entropo-diversity
+            title_zh: "EntroPO 熵增强多样性"
+            target_depth: L1
+            priority: 3
+          - id: foldgrpo-context-compression
+            title_zh: "FoldGRPO 上下文压缩"
+            target_depth: L1
+            priority: 3
+          - id: cross-domain-transfer
+            title_zh: "跨域迁移效应"
+            target_depth: L3
+            priority: 5
+          - id: swe-rl-training-pipeline
+            title_zh: "SWE RL 训练 Pipeline"
+            target_depth: L3
+            priority: 5
+          - id: online-async-training
+            title_zh: "Online 异步训练 Pipeline"
+            target_depth: L2
+            priority: 4
+
+      code-verifiers:
+        title: "Code Verifiers & Reward Models"
+        title_zh: "代码验证器与奖励模型"
+        concepts:
+          - id: hybrid-verifier-design
+            title_zh: "混合验证器设计"
+            target_depth: L2
+            priority: 4
+          - id: execution-based-verifier
+            title_zh: "基于执行的验证器"
+            target_depth: L2
+            priority: 4
+          - id: execution-free-verifier
+            title_zh: "免执行验证器"
+            target_depth: L2
+            priority: 4
+          - id: swe-rm-architecture
+            title_zh: "SWE-RM 架构"
+            target_depth: L2
+            priority: 4
+          - id: verifier-scaling-behavior
+            title_zh: "验证器 Scaling 行为"
+            target_depth: L2
+            priority: 4
+          - id: test-toxicity-noise
+            title_zh: "测试毒性与噪声"
+            target_depth: L2
+            priority: 4
+
+  # ═══════════════════════════════════════════════════════════════
+  # Domain 4: 代码智能体系统
+  # ═══════════════════════════════════════════════════════════════
+  coding-agent:
+    title: "Coding Agent Systems"
+    title_zh: "代码智能体系统"
+    description: "自主完成软件工程任务的 AI agent 系统"
+    vault_section: "20_Core/coding-agent"
+
+    subtopics:
+      architecture:
+        title: "Agent Architecture"
+        title_zh: "Agent 架构"
+        concepts:
+          - id: react-tool-use
+            title_zh: "ReAct 与工具调用范式"
+            target_depth: L2
+            priority: 4
+          - id: agent-computer-interface
+            title_zh: "Agent-Computer Interface (ACI)"
+            target_depth: L2
+            priority: 4
+          - id: agentless-pipeline
+            title_zh: "Agentless Pipeline"
+            target_depth: L2
+            priority: 4
+          - id: multi-agent-collaboration
+            title_zh: "多 Agent 协作"
+            target_depth: L2
+            priority: 4
+          - id: hierarchical-management
+            title_zh: "层级化管理架构"
+            target_depth: L1
+            priority: 3
+          - id: meta-agent-self-optimization
+            title_zh: "Meta-Agent 自我优化"
+            target_depth: L2
+            priority: 4
+          - id: theory-of-mind-agent
+            title_zh: "心智理论 Agent (ToM)"
+            target_depth: L1
+            priority: 3
+          - id: fast-slow-thinking
+            title_zh: "快慢思维自适应"
+            target_depth: L1
+            priority: 3
+          - id: agent-complexity-law
+            title_zh: "Agent 复杂度定律"
+            target_depth: L1
+            priority: 3
+
+      localization:
+        title: "Code Localization & Retrieval"
+        title_zh: "代码定位与检索"
+        concepts:
+          - id: ast-based-localization
+            title_zh: "基于 AST 的代码定位"
+            target_depth: L2
+            priority: 4
+          - id: spectrum-fault-localization
+            title_zh: "频谱故障定位"
+            target_depth: L1
+            priority: 3
+          - id: code-dependency-graph
+            title_zh: "代码依赖图"
+            target_depth: L2
+            priority: 4
+          - id: context-management
+            title_zh: "上下文管理 (CAT)"
+            target_depth: L2
+            priority: 4
+          - id: contextbench-bitter-lesson
+            title_zh: "ContextBench 与 Bitter Lesson"
+            target_depth: L2
+            priority: 4
+
+      training-env:
+        title: "Training Data & Environment"
+        title_zh: "训练数据与环境"
+        concepts:
+          - id: swe-smith-synthesis
+            title_zh: "SWE-smith 合成方法"
+            target_depth: L2
+            priority: 4
+          - id: swe-mirror-cross-repo
+            title_zh: "SWE-Mirror 跨仓库方法"
+            target_depth: L2
+            priority: 4
+          - id: swe-universe-million-scale
+            title_zh: "SWE-Universe 百万级规模"
+            target_depth: L2
+            priority: 4
+          - id: docker-env-building
+            title_zh: "Docker 环境构建"
+            target_depth: L2
+            priority: 4
+          - id: docker-free-approach
+            title_zh: "Docker-Free 方案 (SWE-World)"
+            target_depth: L2
+            priority: 4
+          - id: agentic-docker-builder
+            title_zh: "Agentic Docker 构建器"
+            target_depth: L1
+            priority: 3
+          - id: multi-language-env
+            title_zh: "多语言环境"
+            target_depth: L2
+            priority: 4
+
+      evaluation:
+        title: "Evaluation"
+        title_zh: "评测体系"
+        concepts:
+          - id: swe-bench-verified
+            title_zh: "SWE-bench Verified"
+            target_depth: L2
+            priority: 5
+          - id: benchmark-contamination
+            title_zh: "Benchmark 污染问题"
+            target_depth: L2
+            priority: 4
+          - id: multi-language-benchmarks
+            title_zh: "多语言 Benchmark"
+            target_depth: L2
+            priority: 4
+          - id: long-horizon-benchmarks
+            title_zh: "长周期 Benchmark (SWE-EVO)"
+            target_depth: L2
+            priority: 4
+          - id: patch-quality-evaluation
+            title_zh: "Patch 质量评估"
+            target_depth: L2
+            priority: 4
+          - id: benchmark-trust-crisis
+            title_zh: "Benchmark 信任危机"
+            target_depth: L2
+            priority: 4
+
+      safety:
+        title: "Agent Safety & Alignment"
+        title_zh: "Agent 安全与对齐"
+        concepts:
+          - id: reward-hacking-in-agents
+            title_zh: "Agent 中的 Reward Hacking"
+            target_depth: L2
+            priority: 4
+          - id: sandboxing-strategies
+            title_zh: "沙盒化策略"
+            target_depth: L1
+            priority: 3
+          - id: overthinking-phenomenon
+            title_zh: "过度思考现象"
+            target_depth: L1
+            priority: 3
+          - id: agent-refusal-capability
+            title_zh: "Agent 拒绝能力"
+            target_depth: L1
+            priority: 3
+
+  # ═══════════════════════════════════════════════════════════════
+  # Domain 5: 代码推理时缩放
+  # ═══════════════════════════════════════════════════════════════
+  code-test-time-scaling:
+    title: "Test-Time Scaling for Code"
+    title_zh: "代码推理时缩放"
+    description: "推理阶段通过增加计算量提升 coding agent 性能"
+    vault_section: "20_Core/code-test-time-scaling"
+
+    subtopics:
+      search-sampling:
+        title: "Search & Sampling"
+        title_zh: "搜索与采样"
+        concepts:
+          - id: mcts-for-swe
+            title_zh: "MCTS 在 SWE 中的应用"
+            target_depth: L2
+            priority: 4
+          - id: best-of-n-sampling
+            title_zh: "Best-of-N 采样"
+            target_depth: L2
+            priority: 4
+          - id: adaptive-branching
+            title_zh: "自适应分支 (DARS)"
+            target_depth: L1
+            priority: 3
+          - id: serial-vs-parallel-scaling
+            title_zh: "串行 vs 并行缩放"
+            target_depth: L2
+            priority: 4
+          - id: evolutionary-strategy
+            title_zh: "进化策略"
+            target_depth: L1
+            priority: 3
+
+      verification:
+        title: "Verification & Selection"
+        title_zh: "验证与选择"
+        concepts:
+          - id: prm-for-swe
+            title_zh: "SWE 过程奖励模型"
+            target_depth: L2
+            priority: 5
+          - id: execution-free-verification
+            title_zh: "免执行验证"
+            target_depth: L2
+            priority: 4
+          - id: agentic-rubric-scoring
+            title_zh: "Agentic Rubric 评分"
+            target_depth: L1
+            priority: 3
+          - id: voting-strategies
+            title_zh: "投票策略"
+            target_depth: L1
+            priority: 3
+          - id: test-based-selection
+            title_zh: "基于测试的选择"
+            target_depth: L2
+            priority: 4
+
+      efficiency:
+        title: "Efficiency & Cost"
+        title_zh: "效率与成本"
+        concepts:
+          - id: compute-budget-allocation
+            title_zh: "计算预算分配"
+            target_depth: L2
+            priority: 4
+          - id: trajectory-recycling
+            title_zh: "轨迹回收与重放"
+            target_depth: L1
+            priority: 3
+          - id: context-compression-tts
+            title_zh: "TTS 上下文压缩"
+            target_depth: L1
+            priority: 3
+          - id: early-stopping-strategies
+            title_zh: "早停策略"
+            target_depth: L1
+            priority: 3
+
+      tts-training-synergy:
+        title: "TTS-Training Synergy"
+        title_zh: "TTS 与训练协同"
+        concepts:
+          - id: tts-aware-training
+            title_zh: "TTS 感知训练"
+            target_depth: L2
+            priority: 4
+          - id: self-evolve-strategies
+            title_zh: "自我演化策略"
+            target_depth: L2
+            priority: 4
+          - id: verifier-joint-training
+            title_zh: "验证器联合训练"
+            target_depth: L2
+            priority: 4
+          - id: rl-to-tts-transfer
+            title_zh: "RL 到 TTS 能力迁移"
+            target_depth: L2
+            priority: 4
+
+  # ═══════════════════════════════════════════════════════════════
+  # Domain 6: SWE 数据与基准
+  # ═══════════════════════════════════════════════════════════════
+  swe-data-benchmarks:
+    title: "SWE Data & Benchmarks"
+    title_zh: "SWE 数据与基准"
+    description: "开源数据集、基准测评与数据工程方法"
+    vault_section: "30_Data/swe-data-benchmarks"
+
+    subtopics:
+      benchmarks:
+        title: "Benchmarks"
+        title_zh: "基准测评"
+        concepts:
+          - id: swe-bench-family
+            title_zh: "SWE-bench 家族"
+            target_depth: L3
+            priority: 5
+          - id: multi-swe-bench
+            title_zh: "多语言 SWE-bench"
+            target_depth: L2
+            priority: 4
+          - id: swe-rebench-pipeline
+            title_zh: "SWE-rebench Pipeline"
+            target_depth: L2
+            priority: 4
+          - id: beetlebox-decontaminated
+            title_zh: "BeetleBox 去污染 Benchmark"
+            target_depth: L1
+            priority: 3
+          - id: long-horizon-swe-evo
+            title_zh: "长周期 SWE-EVO"
+            target_depth: L2
+            priority: 4
+
+      sft-data:
+        title: "SFT Training Data"
+        title_zh: "SFT 训练数据"
+        concepts:
+          - id: trajectory-datasets-overview
+            title_zh: "轨迹数据集全景"
+            target_depth: L2
+            priority: 4
+          - id: swe-flow-tdd
+            title_zh: "SWE-Flow TDD 驱动数据"
+            target_depth: L2
+            priority: 4
+          - id: bugpilot-natural-bugs
+            title_zh: "BugPilot 自然 Bug 数据"
+            target_depth: L1
+            priority: 3
+          - id: synthetic-vs-real-quality
+            title_zh: "合成 vs 真实数据质量"
+            target_depth: L2
+            priority: 4
+
+      rl-data:
+        title: "RL Training Data"
+        title_zh: "RL 训练数据"
+        concepts:
+          - id: r2e-gym-environments
+            title_zh: "R2E-Gym 训练环境"
+            target_depth: L2
+            priority: 4
+          - id: swe-gym-training-env
+            title_zh: "SWE-Gym 训练环境"
+            target_depth: L2
+            priority: 4
+          - id: swe-minisandbox
+            title_zh: "SWE-MiniSandbox 轻量环境"
+            target_depth: L1
+            priority: 3
+          - id: opendata-landscape
+            title_zh: "开放数据全景图"
+            target_depth: L2
+            priority: 4
+
+      data-engineering:
+        title: "Data Engineering Methods"
+        title_zh: "数据工程方法"
+        concepts:
+          - id: automated-data-pipeline
+            title_zh: "自动化数据 Pipeline"
+            target_depth: L2
+            priority: 4
+          - id: difficulty-aware-filtering
+            title_zh: "难度感知过滤"
+            target_depth: L2
+            priority: 4
+          - id: data-decontamination
+            title_zh: "数据去污染"
+            target_depth: L2
+            priority: 4
+          - id: self-play-data-generation
+            title_zh: "Self-Play 数据生成"
+            target_depth: L2
+            priority: 4
