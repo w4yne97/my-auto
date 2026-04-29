@@ -88,3 +88,11 @@ def test_vault_path_raises_when_unset(monkeypatch):
     monkeypatch.delenv("VAULT_PATH", raising=False)
     with pytest.raises(RuntimeError, match="VAULT_PATH"):
         vault_path()
+
+
+def test_platform_runs_dir_under_state_root(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    from lib.storage import platform_runs_dir
+    p = platform_runs_dir()
+    assert p == tmp_path / "start-my-day" / "runs"
+    assert p.exists() and p.is_dir()
