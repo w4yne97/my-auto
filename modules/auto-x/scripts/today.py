@@ -27,6 +27,7 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 
 from lib.storage import module_config_file, module_state_dir  # platform lib (top-level)
+from lib.logging import log_event  # platform lib (top-level)
 
 import archive as archive_mod
 import dedup as dedup_mod
@@ -53,10 +54,7 @@ def _now() -> datetime:
 
 
 def _make_error(code: str, detail: str, hint: str | None = None) -> dict:
-    err: dict = {"level": "error", "code": code, "detail": detail}
-    if hint:
-        err["hint"] = hint
-    return err
+    return {"level": "error", "code": code, "detail": detail, "hint": hint}
 
 
 def _make_warning(code: str, detail: str) -> dict:
@@ -186,6 +184,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
 
+    log_event("auto-x", "today_script_start",
+              date=datetime.now(timezone.utc).date().isoformat(),
+              max_tweets=args.max_tweets,
+              window_hours=args.window_hours)
+
     output_path = Path(args.output)
     state_root = module_state_dir(MODULE_NAME)
     raw_dir = state_root / "raw"
@@ -208,6 +211,7 @@ def main(argv: list[str] | None = None) -> int:
             _make_error("config", str(e), hint=f"check {config_path}"),
         )
         _atomic_write(output_path, _serialize_envelope(envelope))
+        log_event("auto-x", "today_script_crashed", reason="config")
         return 1
 
     # Step 2: fetch
@@ -222,6 +226,7 @@ def main(argv: list[str] | None = None) -> int:
             window_start, window_end, _err_for_code(e),
         )
         _atomic_write(output_path, _serialize_envelope(envelope))
+        log_event("auto-x", "today_script_crashed", reason=e.code)
         return 1
 
     # Step 3: archive (skipped on --dry-run)
@@ -248,6 +253,7 @@ def main(argv: list[str] | None = None) -> int:
             _make_error("state", str(e), hint=f"rm {seen_path} (loses dedup history)"),
         )
         _atomic_write(output_path, _serialize_envelope(envelope))
+        log_event("auto-x", "today_script_crashed", reason="state")
         return 1
     kept = dedup_mod.filter_unseen(conn, scored, now=window_end)
     dedup_mod.cleanup_old_seen(conn, retain_days=7, now=window_end)
@@ -300,6 +306,7 @@ def main(argv: list[str] | None = None) -> int:
         if tmp.exists():
             tmp.unlink()
         sys.stderr.write(f"envelope write failed: {e}\n")
+        log_event("auto-x", "today_script_crashed", reason="envelope_write")
         conn.close()
         return 2
 
@@ -311,6 +318,10 @@ def main(argv: list[str] | None = None) -> int:
         dedup_mod.mark_in_summary(conn, included_ids, window_end.date())
 
     conn.close()
+    log_event("auto-x", "today_script_done",
+              status=status,
+              total_fetched=len(fetched),
+              total_in_digest=sum(len(cl.scored_tweets) for cl in clusters))
     return 0 if status in {"ok", "empty"} else 1
 
 
