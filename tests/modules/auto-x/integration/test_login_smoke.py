@@ -55,7 +55,7 @@ SESSION_DIR = Path.home() / ".local/share/start-my-day/auto-x/session"
 def test_persisted_session_does_not_trigger_auth_error():
     if not SESSION_DIR.exists() or not any(SESSION_DIR.iterdir()):
         pytest.skip(
-            "No persisted session — run `python -m modules.auto_x.scripts.login` first"
+            "No persisted session — run `python modules/auto-x/scripts/login.py` first"
         )
 
     try:

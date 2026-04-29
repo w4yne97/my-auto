@@ -1,11 +1,14 @@
 """One-time headed-browser login flow.
 
 Usage:
-    python -m modules.auto_x.scripts.login
+    python modules/auto-x/scripts/login.py
 
 Opens a headed Chromium at https://x.com/login. After the user completes
 login (incl. 2FA), the page redirects to /home; the script saves the
-user-data-dir and exits."""
+user-data-dir and exits.
+
+(The `-m modules.auto_x.scripts.login` form does NOT work because Python's
+import system can't resolve the hyphen in `auto-x/`. Use the direct path.)"""
 
 from __future__ import annotations
 

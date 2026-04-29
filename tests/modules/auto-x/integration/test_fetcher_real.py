@@ -61,7 +61,7 @@ def window_start():
 def _require_session():
     if not SESSION_DIR.exists() or not any(SESSION_DIR.iterdir()):
         pytest.skip(
-            "No persisted session — run `python -m modules.auto_x.scripts.login` first"
+            "No persisted session — run `python modules/auto-x/scripts/login.py` first"
         )
 
 

@@ -34,7 +34,7 @@ mv ~/Documents/auto-reading-vault.premerge-<stamp> ~/Documents/auto-reading-vaul
 **auto-x workflow (sub-D):**
 
 - 每日: `start-my-day` 跑 `python modules/auto-x/scripts/today.py --output ...` → `SKILL_TODAY.md` → `$VAULT_PATH/x/10_Daily/<date>.md`
-- 一次性登录: `python -m modules.auto_x.scripts.login` (headed Chromium → 完成 2FA → session 落到 `~/.local/share/start-my-day/auto-x/session/`)
+- 一次性登录: `python modules/auto-x/scripts/login.py` (headed Chromium → 完成 2FA → session 落到 `~/.local/share/start-my-day/auto-x/session/`)
 - 静态: `modules/auto-x/config/keywords.yaml` (关键字、weight、muted/boosted authors)
 - 状态: `~/.local/share/start-my-day/auto-x/{session/, seen.sqlite, raw/}`
 - Cookie 过期 → orchestrator 报 `auth` 错误，提示重跑 login 工具

@@ -13,8 +13,11 @@ playwright install chromium
 Log in to X (one-time per session lifetime, ~2-4 weeks):
 
 ```bash
-python -m modules.auto_x.scripts.login
+python modules/auto-x/scripts/login.py
 ```
+
+(Use the direct script path, not `-m modules.auto_x.scripts.login` — Python's
+import system can't resolve the hyphen in the `auto-x/` directory name.)
 
 A headed Chromium opens at `https://x.com/login`. Complete login (incl. 2FA) in the browser. The script auto-detects redirect to `/home` and saves the session.
 
