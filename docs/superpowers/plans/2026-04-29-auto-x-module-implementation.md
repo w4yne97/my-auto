@@ -53,7 +53,153 @@
 | `config/modules.yaml` | EDIT — append `auto-x` entry (LAST commit). |
 | `CLAUDE.md` | EDIT — P2 status section + auto-x workflow paragraph (LAST commit). |
 
-**Naming convention deviation:** module dir uses `auto-x` (with hyphen) for filesystem; Python imports use `modules.auto_x` (underscore) per PEP 8. Mirror `auto-reading`/`auto_reading` precedent.
+**Naming convention deviation:** module dir uses `auto-x` (with hyphen) for filesystem. Python's import system can't resolve hyphenated package paths, so the project uses bare-name imports inside `modules/<name>/lib/` and a sys.path / importlib dance in scripts and tests. See "Import Convention" below — it overrides any naive `from modules.auto_x.lib.X import Y` pattern that may appear in subsequent code blocks.
+
+---
+
+## Import Convention (load-bearing — overrides specific code blocks below)
+
+Auto-reading and auto-learning (sub-C) established this pattern. **Every task that writes Python code MUST follow it.** Any `from modules.auto_x.lib.X import Y` form in the verbatim plan blocks below is a typo — substitute the patterns here.
+
+### Inside `modules/auto-x/lib/*.py`
+
+Use **bare-name imports** for sibling lib files; use **dotted imports** for top-level platform `lib/` (which is on the standard Python path):
+
+```python
+# modules/auto-x/lib/scoring.py
+from models import Tweet, KeywordConfig         # sibling lib file — bare name
+from lib.storage import module_state_dir        # platform lib — dotted (root /lib/ is on sys.path)
+```
+
+Each sibling lib file (`models.py`, `scoring.py`, `dedup.py`, `archive.py`, `digest.py`, `fetcher.py`) imports its peers as bare names. This works because `scripts/today.py` and the test loaders both put `modules/auto-x/lib/` on sys.path before exercising them.
+
+### Inside `modules/auto-x/scripts/today.py` (and `login.py`)
+
+Start the file with:
+
+```python
+import sys
+from pathlib import Path
+
+# Module-local lib must be on sys.path BEFORE the bare-name imports
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
+
+from lib.logging import log_event       # platform lib (top-level)
+from lib.storage import module_state_dir, module_config_file
+# Now bare-name imports of module-local lib resolve:
+from fetcher import fetch_following_timeline, FetcherError
+from models import Tweet, ScoredTweet, Cluster
+import scoring, dedup, archive
+import digest as digest_mod              # rename to avoid clashing with the `digest` stdlib
+```
+
+Bare names are required because the file lives in `modules/auto-x/scripts/`, while sibling code lives in `modules/auto-x/lib/`. The sys.path injection at the top makes `from fetcher import ...` resolve to `modules/auto-x/lib/fetcher.py`.
+
+### Inside `tests/modules/auto-x/conftest.py` and `_sample_data.py`
+
+`_sample_data` is a common file name across modules. To avoid sys.modules cache collision (auto-reading, auto-learning, and auto-x all have a `_sample_data.py`), load it via importlib with a **unique module name**:
+
+```python
+# tests/modules/auto-x/conftest.py — top of file
+import importlib.util
+import sys
+from pathlib import Path
+
+_SAMPLE_PATH = Path(__file__).resolve().parent / "_sample_data.py"
+_spec = importlib.util.spec_from_file_location("auto_x_sample_data", _SAMPLE_PATH)
+_sample_data = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_sample_data)
+
+make_tweet = _sample_data.make_tweet
+make_keyword_config = _sample_data.make_keyword_config
+make_scored = _sample_data.make_scored
+make_cluster = _sample_data.make_cluster
+```
+
+`_sample_data.py` itself can use the same trick to load the module's `models.py`:
+
+```python
+# tests/modules/auto-x/_sample_data.py — top of file
+import importlib.util
+from pathlib import Path
+
+_MODULE_LIB = Path(__file__).resolve().parents[3] / "modules" / "auto-x" / "lib"
+_models_spec = importlib.util.spec_from_file_location("auto_x_models", _MODULE_LIB / "models.py")
+_models = importlib.util.module_from_spec(_models_spec)
+_models_spec.loader.exec_module(_models)
+
+Tweet = _models.Tweet
+KeywordRule = _models.KeywordRule
+KeywordConfig = _models.KeywordConfig
+ScoredTweet = _models.ScoredTweet
+Cluster = _models.Cluster
+DigestPayload = _models.DigestPayload
+```
+
+### Inside test files (`test_models.py`, `test_scoring.py`, …)
+
+Two strategies; use whichever is cleaner per file.
+
+**A. Re-export from conftest / _sample_data** (simplest when the test only needs factories):
+
+```python
+# tests/modules/auto-x/test_models.py
+from tests.modules.auto_x._sample_data import make_tweet  # ← won't work due to hyphen
+# INSTEAD: import the conftest fixtures, which have already loaded everything:
+import pytest
+# Tests just request fixtures by name (they're injected by conftest.py).
+```
+
+Hyphenated `tests.modules.auto-x` import will fail. Use the importlib-load pattern:
+
+```python
+# tests/modules/auto-x/test_scoring.py
+import importlib.util
+import sys
+from pathlib import Path
+
+_MODULE_LIB = Path(__file__).resolve().parents[3] / "modules" / "auto-x" / "lib"
+_HERE = Path(__file__).resolve().parent
+
+# Load _sample_data factories
+_sd_spec = importlib.util.spec_from_file_location("auto_x_sample_data", _HERE / "_sample_data.py")
+_sd = importlib.util.module_from_spec(_sd_spec)
+_sd_spec.loader.exec_module(_sd)
+make_tweet = _sd.make_tweet
+make_keyword_config = _sd.make_keyword_config
+
+# Load scoring with its sibling models on sys.path
+def _load_scoring():
+    models_spec = importlib.util.spec_from_file_location("auto_x_models_for_scoring", _MODULE_LIB / "models.py")
+    models_mod = importlib.util.module_from_spec(models_spec)
+    models_spec.loader.exec_module(models_mod)
+
+    saved = sys.modules.get("models")
+    sys.modules["models"] = models_mod
+    try:
+        scoring_spec = importlib.util.spec_from_file_location("auto_x_scoring", _MODULE_LIB / "scoring.py")
+        scoring_mod = importlib.util.module_from_spec(scoring_spec)
+        scoring_spec.loader.exec_module(scoring_mod)
+        return scoring_mod
+    finally:
+        if saved is None:
+            sys.modules.pop("models", None)
+        else:
+            sys.modules["models"] = saved
+
+scoring = _load_scoring()
+load_keyword_config = scoring.load_keyword_config
+score_tweet = scoring.score_tweet
+```
+
+This pattern is verbose but isolates each module's `models.py` — see `tests/modules/auto-learning/test_state.py` for the precedent. **Implementers: copy the auto-learning pattern verbatim, swap the module path.**
+
+### Cross-cutting reminders
+
+- `from modules.auto_x.X import Y` — **never write this**. It can't work because `modules/auto-x/` has a hyphen.
+- `tests.modules.auto_x` — same problem; same workaround (importlib).
+- Top-level platform `lib/` (e.g. `lib.storage`, `lib.logging`) **does** import normally — it's not under `modules/`.
+- When in doubt, look at how `modules/auto-learning/` (sub-C, just merged) does it — it's the most recent precedent and was approved.
 
 ---
 
