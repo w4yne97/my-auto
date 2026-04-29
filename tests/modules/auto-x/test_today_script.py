@@ -188,7 +188,8 @@ def test_auth_error(env, monkeypatch):
     assert env_obj["status"] == "error"
     err = env_obj["errors"][0]
     assert err["code"] == "auth"
-    assert "login" in err["hint"].lower()
+    # Hint must point users at the cookie-import flow.
+    assert "import_cookies" in err["hint"]
 
 
 # 6. Network error → no archive written

@@ -34,7 +34,7 @@ mv ~/Documents/auto-reading-vault.premerge-<stamp> ~/Documents/auto-reading-vaul
 **auto-x workflow (sub-D):**
 
 - 每日: `start-my-day` 跑 `python modules/auto-x/scripts/today.py --output ...` → `SKILL_TODAY.md` → `$VAULT_PATH/x/10_Daily/<date>.md`
-- 一次性登录: `python modules/auto-x/scripts/login.py` (headed Chromium → 完成 2FA → session 落到 `~/.local/share/start-my-day/auto-x/session/`)
+- 一次性认证: 从已登录的正常 Chrome 用 Cookie-Editor 导出 x.com cookies → `python modules/auto-x/scripts/import_cookies.py /path/to/cookies.json` → cookies 写入 `~/.local/share/start-my-day/auto-x/session/storage_state.json`. (放弃 headless 登录——X 的 bot 检测会让 `/i/flow/login` 直接挂掉)
 - 静态: `modules/auto-x/config/keywords.yaml` (关键字、weight、muted/boosted authors)
 - 状态: `~/.local/share/start-my-day/auto-x/{session/, seen.sqlite, raw/}`
 - Cookie 过期 → orchestrator 报 `auth` 错误，提示重跑 login 工具

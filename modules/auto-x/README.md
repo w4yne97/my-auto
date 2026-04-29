@@ -10,14 +10,27 @@ Install Chromium for Playwright (one-time, after `pip install -e .[dev]`):
 playwright install chromium
 ```
 
-Log in to X (one-time per session lifetime, ~2-4 weeks):
+Authorize X access by importing cookies from your normal logged-in Chrome
+(one-time per cookie lifetime, ~2-4 weeks). We do NOT attempt headless login —
+X's bot detection breaks the login SPA at `x.com/i/flow/login`. Instead, we
+borrow cookies from a real, fully-trusted browser session:
 
-```bash
-python modules/auto-x/scripts/login.py
-```
+1. In your regular Chrome (already logged in to x.com), install
+   [Cookie-Editor](https://chromewebstore.google.com/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm).
+2. Visit `https://x.com` and confirm you're logged in.
+3. Click the Cookie-Editor toolbar icon → **Export** → **Export as JSON**.
+   Save the file to e.g. `/tmp/x-cookies.json`.
+4. Run:
 
-(Use the direct script path, not `-m modules.auto_x.scripts.login` — Python's
-import system can't resolve the hyphen in the `auto-x/` directory name.)
+   ```bash
+   python modules/auto-x/scripts/import_cookies.py /tmp/x-cookies.json
+   ```
+
+   This validates the cookies (must include `auth_token` and `ct0`), converts
+   the format, and writes `~/.local/share/start-my-day/auto-x/session/storage_state.json`.
+
+When the cookies expire, you'll see `status: error / code: auth` in an
+envelope; just repeat steps 2-4 to refresh.
 
 A headed Chromium opens at `https://x.com/login`. Complete login (incl. 2FA) in the browser. The script auto-detects redirect to `/home` and saves the session.
 

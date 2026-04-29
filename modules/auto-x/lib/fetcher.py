@@ -40,13 +40,27 @@ def fetch_following_timeline(
     max_tweets: int = 200,
     timeout_seconds: int = 60,
 ) -> list[Tweet]:
-    """Open Chromium with persistent user-data-dir at session_dir, navigate to
-    https://x.com/home, switch to the Following tab, scroll until either
-    `max_tweets` collected or the first tweet older than `window_start` is seen.
+    """Launch a headless Chromium with cookies loaded from
+    `session_dir/storage_state.json`, navigate to https://x.com/home, switch to
+    the Following tab, scroll until either `max_tweets` collected or the first
+    tweet older than `window_start` is seen.
 
     Includes 1× retry on rate-limit soft-block (60 s sleep). Returns a list of
     Tweet ordered newest-first (the order produced by sequentially observed
-    GraphQL payloads as the user scrolls)."""
+    GraphQL payloads as the user scrolls).
+
+    The storage_state.json file is produced by `scripts/import_cookies.py` after
+    the user exports cookies from their normal logged-in Chrome session via a
+    Cookie-Editor extension. We do NOT attempt headless login — X's bot
+    detection breaks the login SPA at /i/flow/login."""
+    storage_state = session_dir / "storage_state.json"
+    if not storage_state.exists():
+        raise FetcherError(
+            "auth",
+            f"no storage_state at {storage_state}; "
+            "run: python modules/auto-x/scripts/import_cookies.py /path/to/cookies.json",
+        )
+
     from playwright.sync_api import (  # type: ignore[import-not-found]
         Error as PlaywrightError,
         TimeoutError as PlaywrightTimeoutError,
@@ -85,54 +99,55 @@ def fetch_following_timeline(
     for attempt in (1, 2):  # 1× retry on rate_limited
         try:
             with sync_playwright() as pw:
-                ctx = pw.chromium.launch_persistent_context(
-                    user_data_dir=str(session_dir),
-                    headless=True,
-                )
-                page = ctx.new_page()
-
-                payloads: list[Any] = []
-
-                def on_response(resp):
-                    if "HomeTimeline" in resp.url or "HomeLatestTimeline" in resp.url:
-                        try:
-                            payloads.append(resp.json())
-                        except Exception:
-                            pass  # binary or non-JSON body; ignore
-
-                page.on("response", on_response)
-
-                page.goto("https://x.com/home", timeout=timeout_seconds * 1000)
-
-                if not _is_logged_in(page.url):
-                    ctx.close()
-                    raise FetcherError("auth", f"redirected to {page.url}")
-
-                # Try to switch to "Following" tab. CSS / role labels can drift;
-                # if absent (already on Following or DOM changed), continue —
-                # parse-side errors will surface separately.
+                browser = pw.chromium.launch(headless=True)
                 try:
-                    page.get_by_role("tab", name="Following").click(timeout=5000)
-                except PlaywrightTimeoutError:
-                    pass
+                    ctx = browser.new_context(storage_state=str(storage_state))
+                    page = ctx.new_page()
 
-                done = False
-                for _ in range(50):
-                    if done or len(collected) >= max_tweets:
-                        break
-                    page.mouse.wheel(0, 5000)
-                    page.wait_for_timeout(800)
-                    while payloads:
-                        done = collect_from_response(payloads.pop(0)) or done
+                    payloads: list[Any] = []
 
-                # Soft-block detection (X surfaces a "Try again later" toast).
-                body_text = (page.inner_text("body") or "").lower()
-                if "try again later" in body_text or "rate limit" in body_text:
-                    ctx.close()
-                    raise FetcherError("rate_limited", "X soft-blocked the session")
+                    def on_response(resp):
+                        if "HomeTimeline" in resp.url or "HomeLatestTimeline" in resp.url:
+                            try:
+                                payloads.append(resp.json())
+                            except Exception:
+                                pass  # binary or non-JSON body; ignore
 
-                ctx.close()
-                return collected
+                    page.on("response", on_response)
+
+                    page.goto("https://x.com/home", timeout=timeout_seconds * 1000)
+
+                    if not _is_logged_in(page.url):
+                        raise FetcherError(
+                            "auth",
+                            f"redirected to {page.url} (cookies likely expired; re-export)",
+                        )
+
+                    # Try to switch to "Following" tab. CSS / role labels can drift;
+                    # if absent (already on Following or DOM changed), continue —
+                    # parse-side errors will surface separately.
+                    try:
+                        page.get_by_role("tab", name="Following").click(timeout=5000)
+                    except PlaywrightTimeoutError:
+                        pass
+
+                    done = False
+                    for _ in range(50):
+                        if done or len(collected) >= max_tweets:
+                            break
+                        page.mouse.wheel(0, 5000)
+                        page.wait_for_timeout(800)
+                        while payloads:
+                            done = collect_from_response(payloads.pop(0)) or done
+
+                    # Soft-block detection (X surfaces a "Try again later" toast).
+                    body_text = (page.inner_text("body") or "").lower()
+                    if "try again later" in body_text or "rate limit" in body_text:
+                        raise FetcherError("rate_limited", "X soft-blocked the session")
+
+                    return collected
+                finally:
+                    browser.close()
 
         except FetcherError as e:
             if e.code == "rate_limited" and attempt == 1:

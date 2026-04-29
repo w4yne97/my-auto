@@ -50,12 +50,14 @@ FetcherError = _fetcher.FetcherError
 
 
 SESSION_DIR = Path.home() / ".local/share/start-my-day/auto-x/session"
+STORAGE_STATE = SESSION_DIR / "storage_state.json"
 
 
 def test_persisted_session_does_not_trigger_auth_error():
-    if not SESSION_DIR.exists() or not any(SESSION_DIR.iterdir()):
+    if not STORAGE_STATE.exists():
         pytest.skip(
-            "No persisted session — run `python modules/auto-x/scripts/login.py` first"
+            f"No storage_state at {STORAGE_STATE} — run "
+            "`python modules/auto-x/scripts/import_cookies.py /path/to/cookies.json` first"
         )
 
     try:

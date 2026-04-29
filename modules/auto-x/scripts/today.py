@@ -133,7 +133,11 @@ def _derive_status_and_extras(
 
 def _err_for_code(e: FetcherError) -> dict:
     hints = {
-        "auth": "run: python modules/auto-x/scripts/login.py",
+        "auth": (
+            "cookies missing or expired; re-export from your logged-in Chrome via "
+            "Cookie-Editor and run: python modules/auto-x/scripts/import_cookies.py "
+            "/path/to/cookies.json"
+        ),
         "rate_limited": "wait ~30 min and rerun",
         "browser_crash": "ensure: playwright install chromium",
         "parse": "X may have updated their API; check logs and bump fetcher.py",
