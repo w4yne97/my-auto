@@ -70,7 +70,7 @@ class TestStatusOk:
         result = json.loads(out.read_text())
         assert result["status"] == "ok"
         assert "recommended_concept" in result["payload"]
-        assert result["payload"]["recommended_concept"]["id"] == "concept-b"
+        assert result["payload"]["recommended_concept"]["id"] == "test-domain/x/concept-b"
 
     def test_ok_payload_has_related_materials(self, populated_state, tmp_path, monkeypatch):
         monkeypatch.setenv("VAULT_PATH", str(tmp_path / "vault"))
@@ -95,11 +95,11 @@ class TestStatusOk:
 
 class TestStatusEmpty:
     def test_all_route_completed_returns_empty(self, populated_state, tmp_path, monkeypatch):
-        # Mark all route entries as completed
+        # Mark all route entries as completed (real schema uses `status` string).
         route_file = populated_state / "learning-route.yaml"
         route_data = yaml.safe_load(route_file.read_text())
         for entry in route_data["route"]:
-            entry["completed"] = True
+            entry["status"] = "completed"
         route_file.write_text(yaml.dump(route_data, allow_unicode=True))
 
         monkeypatch.setenv("VAULT_PATH", str(tmp_path / "vault"))
