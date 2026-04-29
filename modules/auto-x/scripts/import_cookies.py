@@ -27,7 +27,14 @@ from pathlib import Path
 
 
 REQUIRED_COOKIES = frozenset({"auth_token", "ct0"})
-DEFAULT_STATE_DIR = Path.home() / ".local/share/start-my-day/auto-x/session"
+
+
+def _default_session_dir() -> Path:
+    """Resolve the session directory at run time so XDG_DATA_HOME is honored.
+    Mirrors what `today.py` does via `lib.storage.module_state_dir`, so the
+    importer and the fetcher always agree on where storage_state.json lives."""
+    from lib.storage import module_state_dir  # type: ignore[import-not-found]
+    return module_state_dir("auto-x") / "session"
 
 
 def _convert_same_site(value: str | None) -> str:
@@ -89,10 +96,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--state-dir",
         type=Path,
-        default=DEFAULT_STATE_DIR,
-        help="Where to write storage_state.json (default: %(default)s).",
+        default=None,
+        help=(
+            "Where to write storage_state.json. Default: "
+            "lib.storage.module_state_dir('auto-x')/session, "
+            "which honors $XDG_DATA_HOME if set."
+        ),
     )
     args = parser.parse_args(argv)
+    if args.state_dir is None:
+        args.state_dir = _default_session_dir()
 
     if not args.input.exists():
         print(f"input file not found: {args.input}", file=sys.stderr)

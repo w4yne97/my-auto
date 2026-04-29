@@ -32,8 +32,6 @@ borrow cookies from a real, fully-trusted browser session:
 When the cookies expire, you'll see `status: error / code: auth` in an
 envelope; just repeat steps 2-4 to refresh.
 
-A headed Chromium opens at `https://x.com/login`. Complete login (incl. 2FA) in the browser. The script auto-detects redirect to `/home` and saves the session.
-
 ## Configure keywords
 
 Edit `modules/auto-x/config/keywords.yaml`. Each rule has a `canonical` (cluster name), a list of `aliases` (substrings searched in tweet text, case-insensitive), and a `weight` (multiplier). The canonical word is auto-included as an alias — no need to repeat it.

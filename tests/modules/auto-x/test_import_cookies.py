@@ -108,3 +108,29 @@ def test_same_site_mapping():
     assert _convert_same_site("no_restriction") == "None"
     assert _convert_same_site("unspecified") == "None"
     assert _convert_same_site(None) == "None"
+
+
+def test_default_state_dir_honors_xdg_data_home(tmp_path, monkeypatch):
+    """Without --state-dir, importer must resolve via lib.storage.module_state_dir
+    so XDG_DATA_HOME is honored. Otherwise a user with XDG_DATA_HOME set would
+    write cookies to one path while today.py reads from another → silent auth
+    failure."""
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
+    cookies = [
+        {"name": "auth_token", "value": "AT", "domain": ".x.com", "path": "/",
+         "secure": True, "session": False, "expirationDate": 1771388544.5,
+         "sameSite": "no_restriction"},
+        {"name": "ct0", "value": "CT", "domain": ".x.com", "path": "/",
+         "secure": True, "session": False, "expirationDate": 1771388544.5,
+         "sameSite": "lax"},
+    ]
+    src = tmp_path / "cookies.json"
+    src.write_text(json.dumps(cookies))
+
+    rc = main([str(src)])  # NO --state-dir → must use module_state_dir
+    assert rc == 0
+    expected = tmp_path / "xdg" / "start-my-day" / "auto-x" / "session" / "storage_state.json"
+    assert expected.exists(), (
+        f"importer didn't honor XDG_DATA_HOME; expected {expected}, "
+        f"contents of tmp_path: {list(tmp_path.rglob('*storage_state*'))}"
+    )
