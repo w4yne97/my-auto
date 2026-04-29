@@ -1,0 +1,30 @@
+{
+  "data": {
+    "home": {
+      "home_timeline_urt": {
+        "instructions": [
+          {
+            "type": "TimelineAddEntries",
+            "entries": [
+              {
+                "entryId": "tweet-9999",
+                "content": {
+                  "itemContent": {
+                    "tweet_results": {
+                      "result": {
+                        "rest_id": "9999",
+                        "legacy": {
+                          "favorite_count": 1
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}
