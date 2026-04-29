@@ -1,5 +1,6 @@
 """Tests for modules/auto-reading/scripts/today.py JSON envelope schema."""
 import json
+import os
 import re
 import subprocess
 import sys
@@ -125,7 +126,6 @@ def test_error_envelope_uses_unified_shape(tmp_path):
     nonexistent binary, which raises CLINotFoundError (an Exception subclass)
     inside create_cli() — after load_config() has already succeeded.
     """
-    import os
     # Write a minimal valid config so load_config() does not raise SystemExit
     config_file = tmp_path / "research_interests.yaml"
     config_file.write_text("research_domains: {}\nscoring_weights: {}\nexcluded_keywords: []\n",
@@ -144,7 +144,7 @@ def test_error_envelope_uses_unified_shape(tmp_path):
     assert output.exists(), f"Error envelope not written; stderr:\n{proc.stderr}"
     data = json.loads(output.read_text(encoding="utf-8"))
     assert data["status"] == "error"
-    assert len(data["errors"]) >= 1
+    assert len(data["errors"]) == 1
     err = data["errors"][0]
     assert set(err.keys()) == {"level", "code", "detail", "hint"}, f"got keys: {err.keys()}"
     assert err["level"] == "error"

@@ -1,6 +1,7 @@
 """Shape-only tests for auto-learning's today.py — does the envelope parse?"""
 import importlib.util
 import json
+import pytest
 import sys
 from pathlib import Path
 from unittest.mock import patch
@@ -112,7 +113,6 @@ class TestTodayShape:
 
     def test_error_envelope_uses_unified_shape(self, populated_state, tmp_path, monkeypatch):
         """Per spec §3.1: catch-all errors[] uses {level, code, detail, hint} shape."""
-        import pytest
         monkeypatch.setenv("VAULT_PATH", str(tmp_path / "vault"))
 
         def boom(*a, **kw):
