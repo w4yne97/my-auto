@@ -94,6 +94,25 @@ class TestRecommendNext:
         assert rec is not None
         assert rec.concept.id == "a"
 
+    def test_blocking_prerequisites_populated_when_prereq_unsatisfied(self):
+        """When the recommended concept has unsatisfied prereqs, the recommendation
+        still names that concept but reports blocking_prerequisites + flags
+        prerequisites_satisfied=False."""
+        tree = {"a": _concept("a"), "b": _concept("b", prereqs=("a",))}
+        # User marked "a" completed in the route, but knowledge_map shows it's
+        # actually still at L0 (didn't really finish). When recommending the next
+        # un-completed entry "b", we surface "a" as blocking.
+        km = {"a": _state("a", depth="L0", confidence=0.0)}
+        route = (
+            RouteEntry(concept_id="a", phase="p1", completed=True),
+            RouteEntry(concept_id="b", phase="p1", completed=False),
+        )
+        rec = recommend_next_concept(tree, km, route)
+        assert rec is not None
+        assert rec.concept.id == "b"
+        assert rec.prerequisites_satisfied is False
+        assert rec.blocking_prerequisites == ("a",)
+
     def test_route_fully_complete_returns_none(self):
         tree = {"a": _concept("a")}
         km = {"a": _state("a", depth="L1", confidence=0.8)}
