@@ -96,18 +96,47 @@ def fetch_following_timeline(
 
     last_err_detail: str = ""
 
+    # Real Chrome UA — Playwright's default contains "HeadlessChrome/" which
+    # X's Cloudflare layer fingerprints as automation. This must match a recent
+    # stable Chrome on macOS or it's its own giveaway.
+    REAL_CHROME_UA = (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/131.0.0.0 Safari/537.36"
+    )
+
+    # Patch script run in every new document before any site JS runs. Removes
+    # the `navigator.webdriver === true` automation tell that X's preflight
+    # checks read.
+    STEALTH_INIT = """
+    Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+    """
+
     for attempt in (1, 2):  # 1× retry on rate_limited
         try:
             with sync_playwright() as pw:
                 browser = pw.chromium.launch(headless=True)
                 try:
-                    ctx = browser.new_context(storage_state=str(storage_state))
+                    ctx = browser.new_context(
+                        storage_state=str(storage_state),
+                        user_agent=REAL_CHROME_UA,
+                        viewport={"width": 1280, "height": 900},
+                        locale="en-US",
+                    )
+                    ctx.add_init_script(STEALTH_INIT)
                     page = ctx.new_page()
 
                     payloads: list[Any] = []
 
                     def on_response(resp):
-                        if "HomeTimeline" in resp.url or "HomeLatestTimeline" in resp.url:
+                        # Only capture the chronological Following feed
+                        # (HomeLatestTimeline). The algorithmic For You feed
+                        # (HomeTimeline) returns relevance-sorted tweets that
+                        # may be days old — they would prematurely trigger our
+                        # "oldest tweet seen" stop heuristic. The /i/api/graphql/
+                        # prefix filters out JS bundle files
+                        # (bundle.HomeTimeline.<hash>.js) that share the name.
+                        if "/i/api/graphql/" in resp.url and "HomeLatestTimeline" in resp.url:
                             try:
                                 payloads.append(resp.json())
                             except Exception:
@@ -115,7 +144,16 @@ def fetch_following_timeline(
 
                     page.on("response", on_response)
 
-                    page.goto("https://x.com/home", timeout=timeout_seconds * 1000)
+                    # Use `domcontentloaded` (not the default `load`) — X is a
+                    # streaming SPA whose `load` event never fires (long-poll XHRs
+                    # keep the resource queue open indefinitely). DOMContentLoaded
+                    # is enough: the JS has parsed and will start firing the
+                    # HomeTimeline GraphQL request we intercept via on_response.
+                    page.goto(
+                        "https://x.com/home",
+                        timeout=timeout_seconds * 1000,
+                        wait_until="domcontentloaded",
+                    )
 
                     if not _is_logged_in(page.url):
                         raise FetcherError(
@@ -123,11 +161,19 @@ def fetch_following_timeline(
                             f"redirected to {page.url} (cookies likely expired; re-export)",
                         )
 
+                    # Wait for the SPA to bootstrap and render the tab bar.
+                    # `domcontentloaded` only signals HTML parsed — the React
+                    # tree still needs ~3s to mount.
+                    page.wait_for_timeout(3000)
+
                     # Try to switch to "Following" tab. CSS / role labels can drift;
                     # if absent (already on Following or DOM changed), continue —
                     # parse-side errors will surface separately.
                     try:
                         page.get_by_role("tab", name="Following").click(timeout=5000)
+                        # After the click, give the SPA time to fire the
+                        # HomeLatestTimeline GraphQL request.
+                        page.wait_for_timeout(3000)
                     except PlaywrightTimeoutError:
                         pass
 
@@ -214,9 +260,17 @@ def _parse_tweet_node(node: dict) -> Tweet:
         reply_count = legacy.get("reply_count", 0)
         lang = legacy.get("lang")
         in_reply_to = legacy.get("in_reply_to_status_id_str")
-        user_legacy = node["core"]["user_results"]["result"]["legacy"]
-        screen_name = user_legacy["screen_name"]
-        display_name = user_legacy["name"]
+
+        # Author identity lives in user_results.result.core (new) or
+        # user_results.result.legacy (old). X migrated this in 2025-2026.
+        # Read from `core` first; fall back to `legacy` for older fixtures.
+        user_result = node["core"]["user_results"]["result"]
+        user_core = user_result.get("core") or {}
+        user_legacy = user_result.get("legacy") or {}
+        screen_name = user_core.get("screen_name") or user_legacy.get("screen_name")
+        display_name = user_core.get("name") or user_legacy.get("name")
+        if not screen_name or not display_name:
+            raise KeyError("screen_name/name not in user.core or user.legacy")
     except (KeyError, TypeError) as e:
         raise FetcherError("parse", f"missing required field in tweet node: {e}")
 
