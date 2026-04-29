@@ -20,7 +20,12 @@ def _state_file(filename: str) -> Path:
 
 
 def load_domain_tree() -> dict[str, Concept]:
-    """Load the static knowledge graph as {concept_id: Concept}."""
+    """Load the static knowledge graph as {concept_id: Concept}.
+
+    Raises FileNotFoundError if domain-tree.yaml is absent — it is a required
+    repo invariant shipped at modules/auto-learning/config/domain-tree.yaml,
+    not a runtime state file. (Other loaders return defaults on missing files.)
+    """
     path = module_config_file(_MODULE_NAME, "domain-tree.yaml")
     data = yaml.safe_load(path.read_text())
     out: dict[str, Concept] = {}
@@ -83,7 +88,12 @@ def load_progress() -> Progress:
         )
     data = yaml.safe_load(path.read_text()) or {}
     last_updated_raw = data.get("last_updated")
-    last_updated = last_updated_raw.isoformat() if isinstance(last_updated_raw, datetime.date) else last_updated_raw
+    if isinstance(last_updated_raw, datetime.date):
+        last_updated = last_updated_raw.isoformat()
+    elif isinstance(last_updated_raw, str):
+        last_updated = last_updated_raw
+    else:
+        last_updated = None
     days_since = None
     if last_updated:
         try:
