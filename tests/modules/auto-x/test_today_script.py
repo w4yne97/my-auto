@@ -20,8 +20,19 @@ import pytest
 import yaml
 
 
-_MODULE_LIB = Path(__file__).resolve().parents[3] / "modules" / "auto-x" / "lib"
-_SCRIPTS = Path(__file__).resolve().parents[3] / "modules" / "auto-x" / "scripts"
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_MODULE_LIB = _REPO_ROOT / "modules" / "auto-x" / "lib"
+_SCRIPTS = _REPO_ROOT / "modules" / "auto-x" / "scripts"
+
+# today.py does `from lib.storage import ...` (top-level platform lib at
+# <repo_root>/lib/). When pytest is invoked as `python -m pytest`, Python
+# prepends CWD to sys.path; when invoked as the bare `pytest` console
+# script, it does not. With pyproject.toml's --import-mode=importlib,
+# pytest also doesn't add directories based on test layout. Inject the
+# repo root here so the test loader doesn't depend on whether the project
+# was installed via `pip install -e .` (which would otherwise inject
+# the path through an editable .pth file).
+sys.path.insert(0, str(_REPO_ROOT))
 
 
 def _load_module_under_bare_name(bare_name: str, file_path: Path):

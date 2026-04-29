@@ -10,7 +10,15 @@ from pathlib import Path
 import pytest
 
 
-_SCRIPTS = Path(__file__).resolve().parents[3] / "modules" / "auto-x" / "scripts"
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_SCRIPTS = _REPO_ROOT / "modules" / "auto-x" / "scripts"
+
+# import_cookies' default session dir is resolved at runtime via
+# `from lib.storage import module_state_dir` (top-level platform lib at
+# <repo_root>/lib/). Inject repo root so the deferred import works
+# regardless of how pytest is invoked. See test_today_script.py for the
+# same rationale — both files share this fragility around install state.
+sys.path.insert(0, str(_REPO_ROOT))
 
 
 def _load_import_cookies():
