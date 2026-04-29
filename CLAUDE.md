@@ -6,12 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A multi-module daily-routine hub. Each `modules/auto-*/` is an independent vertical (paper tracking, learning planning, social-feed digestion, etc.). The top-level `start-my-day` SKILL orchestrates today's runs across all enabled modules.
 
-**P2 status:** sub-A 完成 / sub-B 完成 / sub-C 完成 (auto-learning 模块迁入,15 个 learn-* skills + today.py + SKILL_TODAY.md;状态文件位于 `~/.local/share/start-my-day/auto-learning/`,静态结构 `modules/auto-learning/config/domain-tree.yaml`)。Phase 2 继续 sub-D(多模块编排) → sub-E(跨模块日报)。
+**P2 status:** sub-A 完成 / sub-B 完成 / sub-C 完成 (auto-learning 模块迁入,15 个 learn-* skills + today.py + SKILL_TODAY.md;状态文件位于 `~/.local/share/start-my-day/auto-learning/`,静态结构 `modules/auto-learning/config/domain-tree.yaml`)。**sub-D 完成** (auto-x 模块——每日 X Following timeline → keyword 过滤 → daily digest)。Phase 2 继续 sub-E (多模块编排，原 sub-D) → sub-F (跨模块日报，原 sub-E)。
 
 **Vault topology after sub-B:**
 
 - `$VAULT_PATH/{00_Config,10_Daily,20_Papers,30_Insights,40_Digests,40_Ideas,90_System}/` — auto-reading's flat top-level (unchanged from P1).
 - `$VAULT_PATH/learning/{00_Map,10_Foundations,20_Core,30_Data,50_Learning-Log}/` — auto-learning's namespace (subtree introduced by sub-B; populated by sub-C).
+- `$VAULT_PATH/x/10_Daily/<YYYY-MM-DD>.md` — auto-x's daily digest namespace (subtree introduced by sub-D).
 - `~/Documents/knowledge-vault/` is preserved byte-identical as the primary rollback path.
 
 **Vault merge rollback recipe:**
@@ -29,6 +30,14 @@ mv ~/Documents/auto-reading-vault.premerge-<stamp> ~/Documents/auto-reading-vaul
 - 交互:`/learn-route next → /learn-study X → /learn-note → /learn-review → /learn-progress`
 - 状态:`~/.local/share/start-my-day/auto-learning/{knowledge-map,learning-route,progress,study-log}.yaml`
 - 静态:`modules/auto-learning/config/domain-tree.yaml`(知识图谱拓扑,~129 概念)
+
+**auto-x workflow (sub-D):**
+
+- 每日: `start-my-day` 跑 `python modules/auto-x/scripts/today.py --output ...` → `SKILL_TODAY.md` → `$VAULT_PATH/x/10_Daily/<date>.md`
+- 一次性认证: 从已登录的正常 Chrome 用 Cookie-Editor 导出 x.com cookies → `python modules/auto-x/scripts/import_cookies.py /path/to/cookies.json` → cookies 写入 `~/.local/share/start-my-day/auto-x/session/storage_state.json`. (放弃 headless 登录——X 的 bot 检测会让 `/i/flow/login` 直接挂掉)
+- 静态: `modules/auto-x/config/keywords.yaml` (关键字、weight、muted/boosted authors)
+- 状态: `~/.local/share/start-my-day/auto-x/{session/, seen.sqlite, raw/}`
+- Cookie 过期 → orchestrator 报 `auth` 错误，提示重跑 login 工具
 
 ## Architecture
 

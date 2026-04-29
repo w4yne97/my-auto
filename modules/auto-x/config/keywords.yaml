@@ -1,0 +1,23 @@
+schema_version: 1
+keywords:
+  - canonical: long-context
+    aliases:
+      - "long context"
+      - "1M context"
+      - "context window"
+      - "long ctx"
+    weight: 3.0
+  - canonical: agent
+    aliases:
+      - "agentic"
+      - "AI agent"
+      - "tool use"
+    weight: 2.0
+  - canonical: evals
+    aliases:
+      - "evaluation"
+      - "benchmark"
+      - "eval"
+    weight: 1.5
+muted_authors: []
+boosted_authors: {}

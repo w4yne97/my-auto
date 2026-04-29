@@ -1,0 +1,170 @@
+"""Tests for auto-x lib/digest.py — top-K cutoff + cluster bucketing + payload."""
+
+from __future__ import annotations
+
+import importlib.util
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+# ---------------------------------------------------------------------------
+# importlib loading with unique module names to avoid sys.modules collisions
+# ---------------------------------------------------------------------------
+_MODULE_LIB = Path(__file__).resolve().parents[3] / "modules" / "auto-x" / "lib"
+_SAMPLE_PATH = Path(__file__).resolve().parent / "_sample_data.py"
+
+
+def _load_models_unique(unique_name: str):
+    spec = importlib.util.spec_from_file_location(unique_name, _MODULE_LIB / "models.py")
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[unique_name] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _load_sample_data():
+    spec = importlib.util.spec_from_file_location(
+        "auto_x_sample_data_for_digest", _SAMPLE_PATH
+    )
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["auto_x_sample_data_for_digest"] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _load_digest_module():
+    """Load digest.py with its `from models import ...` satisfied.
+
+    Pattern mirrors auto-x's test_scoring.py: temporarily register
+    auto-x's models under the bare name "models" while digest.py executes,
+    then restore the previous entry.
+    """
+    models_mod = _load_models_unique("auto_x_models_for_digest")
+
+    digest_spec = importlib.util.spec_from_file_location(
+        "auto_x_digest", _MODULE_LIB / "digest.py"
+    )
+    digest_mod = importlib.util.module_from_spec(digest_spec)
+
+    saved_models = sys.modules.get("models")
+    sys.modules["models"] = models_mod
+    sys.modules["auto_x_digest"] = digest_mod
+    try:
+        digest_spec.loader.exec_module(digest_mod)
+    finally:
+        if saved_models is None:
+            sys.modules.pop("models", None)
+        else:
+            sys.modules["models"] = saved_models
+
+    return digest_mod
+
+
+_sd = _load_sample_data()
+make_tweet = _sd.make_tweet
+make_scored = _sd.make_scored
+
+_digest = _load_digest_module()
+cluster_and_truncate = _digest.cluster_and_truncate
+build_payload = _digest.build_payload
+
+
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
+
+
+def test_empty_input_returns_empty():
+    assert cluster_and_truncate([], top_k=30) == ()
+
+
+def test_top_k_truncation():
+    scored = [
+        make_scored(make_tweet(tweet_id=str(i)), float(i), "k")
+        for i in range(10)
+    ]
+    clusters = cluster_and_truncate(scored, top_k=3)
+
+    all_scores = {s.score for c in clusters for s in c.scored_tweets}
+    assert all_scores == {9.0, 8.0, 7.0}
+    total = sum(len(c.scored_tweets) for c in clusters)
+    assert total == 3
+
+
+def test_bucket_by_primary_canonical():
+    tweet_a = make_tweet(tweet_id="a")
+    tweet_b = make_tweet(tweet_id="b")
+    tweet_c = make_tweet(tweet_id="c")
+
+    scored = [
+        make_scored(tweet_a, 5.0, "agent"),
+        make_scored(tweet_b, 4.0, "long-context"),
+        make_scored(tweet_c, 3.0, "agent"),
+    ]
+    clusters = cluster_and_truncate(scored, top_k=30)
+
+    canonicals = {c.canonical for c in clusters}
+    assert canonicals == {"agent", "long-context"}
+
+    agent_cluster = next(c for c in clusters if c.canonical == "agent")
+    agent_tweets = {s.tweet for s in agent_cluster.scored_tweets}
+    assert agent_tweets == {tweet_a, tweet_c}
+
+
+def test_clusters_ordered_by_top_score_desc():
+    tweet_x = make_tweet(tweet_id="x")
+    tweet_y = make_tweet(tweet_id="y")
+
+    scored = [
+        make_scored(tweet_x, 1.0, "low"),
+        make_scored(tweet_y, 9.0, "hi"),
+    ]
+    clusters = cluster_and_truncate(scored, top_k=30)
+
+    assert [c.canonical for c in clusters] == ["hi", "low"]
+
+
+def test_score_tie_prefers_newer():
+    old_tweet = make_tweet(
+        tweet_id="old",
+        created_at=datetime(2026, 4, 28, tzinfo=timezone.utc),
+    )
+    new_tweet = make_tweet(
+        tweet_id="new",
+        created_at=datetime(2026, 4, 29, tzinfo=timezone.utc),
+    )
+
+    scored = [
+        make_scored(old_tweet, 5.0, "k"),
+        make_scored(new_tweet, 5.0, "k"),
+    ]
+    clusters = cluster_and_truncate(scored, top_k=1)
+
+    remaining_tweets = {s.tweet for c in clusters for s in c.scored_tweets}
+    assert remaining_tweets == {new_tweet}
+
+
+def test_build_payload_partial_flag():
+    now = datetime(2026, 4, 29, 10, 30, tzinfo=timezone.utc)
+
+    fetched_199 = [make_tweet(tweet_id=str(i)) for i in range(199)]
+    payload_partial = build_payload(
+        window_start=now,
+        window_end=now,
+        fetched=fetched_199,
+        kept=[],
+        clusters=(),
+        fetched_target=200,
+    )
+    assert payload_partial.partial is True
+
+    fetched_200 = [make_tweet(tweet_id=str(i)) for i in range(200)]
+    payload_full = build_payload(
+        window_start=now,
+        window_end=now,
+        fetched=fetched_200,
+        kept=[],
+        clusters=(),
+        fetched_target=200,
+    )
+    assert payload_full.partial is False
