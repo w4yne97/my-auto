@@ -115,3 +115,38 @@ def test_today_emits_log_event(tmp_path, monkeypatch):
     assert len(auto_reading_events) >= 1, f"no auto-reading events in {events}"
     event_names = {e.get("event") for e in auto_reading_events}
     assert "today_script_start" in event_names, f"missing today_script_start; got {event_names}"
+
+
+def test_error_envelope_uses_unified_shape(tmp_path):
+    """When today.py crashes (e.g., bad Obsidian CLI path), errors[] must use
+    {level, code, detail, hint} shape per spec §3.1.
+
+    We trigger the catch-all except branch by pointing OBSIDIAN_CLI_PATH to a
+    nonexistent binary, which raises CLINotFoundError (an Exception subclass)
+    inside create_cli() — after load_config() has already succeeded.
+    """
+    import os
+    # Write a minimal valid config so load_config() does not raise SystemExit
+    config_file = tmp_path / "research_interests.yaml"
+    config_file.write_text("research_domains: {}\nscoring_weights: {}\nexcluded_keywords: []\n",
+                           encoding="utf-8")
+    output = tmp_path / "auto-reading.json"
+    cmd = [sys.executable, str(SCRIPT),
+           "--config", str(config_file),
+           "--output", str(output)]
+    env = {
+        **os.environ,
+        "PYTHONPATH": str(REPO_ROOT),
+        "OBSIDIAN_CLI_PATH": "/tmp/definitely-nonexistent-obsidian-cli-xyz",
+    }
+    proc = subprocess.run(cmd, cwd=str(REPO_ROOT), capture_output=True, text=True, env=env)
+    assert proc.returncode == 1, f"Expected non-zero exit, got {proc.returncode}; stderr:\n{proc.stderr}"
+    assert output.exists(), f"Error envelope not written; stderr:\n{proc.stderr}"
+    data = json.loads(output.read_text(encoding="utf-8"))
+    assert data["status"] == "error"
+    assert len(data["errors"]) >= 1
+    err = data["errors"][0]
+    assert set(err.keys()) == {"level", "code", "detail", "hint"}, f"got keys: {err.keys()}"
+    assert err["level"] == "error"
+    assert err["code"] == "unhandled_exception"
+    assert err["hint"] is None
