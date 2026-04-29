@@ -6,13 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A multi-module daily-routine hub. Each `modules/auto-*/` is an independent vertical (paper tracking, learning planning, social-feed digestion, etc.). The top-level `start-my-day` SKILL orchestrates today's runs across all enabled modules.
 
-**P2 status:** sub-A complete (`lib/` is a pure platform kernel; reading code at `modules/auto-reading/lib/`). sub-B complete (vault merge: `~/Documents/auto-reading-vault/learning/` now hosts content from former `~/Documents/knowledge-vault/`; `tools/migrate_vault.py` performed the one-shot copy). Phase 2 continues with sub-C (auto-learning module) → sub-D (multi-module orchestration) → sub-E (cross-module daily aggregation).
+**P2 status:** sub-A 完成 / sub-B 完成 / sub-C 完成 (auto-learning 模块迁入,15 个 learn-* skills + today.py + SKILL_TODAY.md;状态文件位于 `~/.local/share/start-my-day/auto-learning/`,静态结构 `modules/auto-learning/config/domain-tree.yaml`)。Phase 2 继续 sub-D(多模块编排) → sub-E(跨模块日报)。
 
 **Vault topology after sub-B:**
 
 - `$VAULT_PATH/{00_Config,10_Daily,20_Papers,30_Insights,40_Digests,40_Ideas,90_System}/` — auto-reading's flat top-level (unchanged from P1).
-- `$VAULT_PATH/learning/{00_Map,10_Foundations,20_Core,30_Data,50_Learning-Log}/` — auto-learning's namespace (subtree introduced by sub-B).
-- `~/Documents/knowledge-vault/` is preserved byte-identical as the primary rollback path. After confidence builds (typically a week or two), the user manually deletes it along with `~/Documents/auto-reading-vault.premerge-<stamp>/` and `~/Documents/knowledge-vault.premerge-<stamp>/`.
+- `$VAULT_PATH/learning/{00_Map,10_Foundations,20_Core,30_Data,50_Learning-Log}/` — auto-learning's namespace (subtree introduced by sub-B; populated by sub-C).
+- `~/Documents/knowledge-vault/` is preserved byte-identical as the primary rollback path.
 
 **Vault merge rollback recipe:**
 
@@ -22,6 +22,13 @@ rm -rf ~/Documents/auto-reading-vault
 mv ~/Documents/auto-reading-vault.premerge-<stamp> ~/Documents/auto-reading-vault
 # knowledge-vault was never modified — no restore needed.
 ```
+
+**auto-learning workflow (sub-C):**
+
+- 每日:`start-my-day` 跑 `python modules/auto-learning/scripts/today.py --output ...` → `SKILL_TODAY` → "🎓 今日学习" 段
+- 交互:`/learn-route next → /learn-study X → /learn-note → /learn-review → /learn-progress`
+- 状态:`~/.local/share/start-my-day/auto-learning/{knowledge-map,learning-route,progress,study-log}.yaml`
+- 静态:`modules/auto-learning/config/domain-tree.yaml`(知识图谱拓扑,~129 概念)
 
 ## Architecture
 

@@ -1,12 +1,10 @@
 # Platform module registry — controls which modules are enabled and their order.
-# Phase 1: only auto-reading. Phase 2 will add auto-learning.
+# Phase 2 sub-C (2026-04-29): auto-learning joined.
 
 modules:
   - name: auto-reading
     enabled: true
     order: 10
-
-# Phase 2 (planned, not yet active):
-# - name: auto-learning
-#   enabled: true
-#   order: 20
+  - name: auto-learning
+    enabled: true
+    order: 20    # learning runs AFTER reading (depends_on: [auto-reading])
