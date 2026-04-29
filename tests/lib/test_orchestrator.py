@@ -11,6 +11,14 @@ from lib.orchestrator import (
     ModuleMeta,
     ModuleResult,
     RouteDecision,
+    apply_filters,
+    load_module_meta,
+    load_registry,
+    log_run_event,
+    render_error,
+    route,
+    synthesize_crash_envelope,
+    write_run_summary,
 )
 
 
@@ -31,7 +39,6 @@ class TestLoadRegistry:
                 {"name": "b", "enabled": True, "order": 20},
             ]
         }))
-        from lib.orchestrator import load_registry
         result = load_registry(registry)
         assert [m.name for m in result] == ["a", "b", "c"]
         assert all(m.enabled for m in result)
@@ -39,26 +46,27 @@ class TestLoadRegistry:
     def test_empty_modules_returns_empty_list(self, tmp_path):
         registry = tmp_path / "modules.yaml"
         registry.write_text(yaml.safe_dump({"modules": []}))
-        from lib.orchestrator import load_registry
         assert load_registry(registry) == []
 
     def test_missing_modules_key_returns_empty_list(self, tmp_path):
         registry = tmp_path / "modules.yaml"
         registry.write_text(yaml.safe_dump({}))
-        from lib.orchestrator import load_registry
         assert load_registry(registry) == []
 
     def test_invalid_yaml_raises(self, tmp_path):
         registry = tmp_path / "modules.yaml"
         registry.write_text("modules: [{invalid")
-        from lib.orchestrator import load_registry
         with pytest.raises(yaml.YAMLError):
             load_registry(registry)
 
     def test_missing_file_raises(self, tmp_path):
-        from lib.orchestrator import load_registry
         with pytest.raises(FileNotFoundError):
             load_registry(tmp_path / "nope.yaml")
+
+    def test_non_dict_yaml_root_returns_empty_list(self, tmp_path):
+        registry = tmp_path / "modules.yaml"
+        registry.write_text("- a\n- b\n")  # valid YAML, but a list not a dict
+        assert load_registry(registry) == []
 
 
 class TestLoadModuleMeta:
@@ -70,7 +78,6 @@ class TestLoadModuleMeta:
             "daily": {"today_script": "scripts/today.py", "today_skill": "SKILL_TODAY.md"},
             "depends_on": ["auto-reading", "auto-learning"],
         }))
-        from lib.orchestrator import load_module_meta
         meta = load_module_meta(tmp_path, "auto-x")
         assert meta.name == "auto-x"
         assert meta.today_script == "scripts/today.py"
@@ -80,7 +87,6 @@ class TestLoadModuleMeta:
         mod_dir = tmp_path / "modules" / "m"
         mod_dir.mkdir(parents=True)
         (mod_dir / "module.yaml").write_text(yaml.safe_dump({"name": "m"}))
-        from lib.orchestrator import load_module_meta
         meta = load_module_meta(tmp_path, "m")
         assert meta.today_script == "scripts/today.py"
         assert meta.depends_on == []
@@ -95,31 +101,24 @@ class TestApplyFilters:
         ]
 
     def test_no_filters_returns_all(self):
-        from lib.orchestrator import apply_filters
         assert [m.name for m in apply_filters(self._entries())] == ["a", "b", "c"]
 
     def test_only_keeps_one(self):
-        from lib.orchestrator import apply_filters
         assert [m.name for m in apply_filters(self._entries(), only="b")] == ["b"]
 
     def test_only_unknown_returns_empty(self):
-        from lib.orchestrator import apply_filters
         assert apply_filters(self._entries(), only="nope") == []
 
     def test_skip_drops_listed(self):
-        from lib.orchestrator import apply_filters
         assert [m.name for m in apply_filters(self._entries(), skip=["b", "c"])] == ["a"]
 
     def test_skip_unknown_is_no_op(self):
-        from lib.orchestrator import apply_filters
         assert [m.name for m in apply_filters(self._entries(), skip=["nope"])] == ["a", "b", "c"]
 
     def test_only_takes_precedence_over_skip(self):
-        from lib.orchestrator import apply_filters
         assert [m.name for m in apply_filters(self._entries(), only="b", skip=["b"])] == ["b"]
 
     def test_preserves_input_order(self):
-        from lib.orchestrator import apply_filters
         entries = list(reversed(self._entries()))
         assert [m.name for m in apply_filters(entries, skip=["a"])] == ["c", "b"]
 
@@ -140,23 +139,19 @@ def _result(name: str, route: str, blocked_by: list[str] | None = None) -> Modul
 
 class TestRoute:
     def test_envelope_ok_no_deps_returns_ok(self):
-        from lib.orchestrator import route
         d = route({"status": "ok"}, upstream_results=[], depends_on=[])
         assert d.route == "ok"
         assert d.blocked_by == []
 
     def test_envelope_empty_no_deps_returns_empty(self):
-        from lib.orchestrator import route
         d = route({"status": "empty"}, upstream_results=[], depends_on=[])
         assert d.route == "empty"
 
     def test_envelope_error_no_deps_returns_error(self):
-        from lib.orchestrator import route
         d = route({"status": "error"}, upstream_results=[], depends_on=[])
         assert d.route == "error"
 
     def test_upstream_error_blocks_downstream(self):
-        from lib.orchestrator import route
         upstream = [_result("auto-reading", "error")]
         d = route(
             {"status": "ok"},
@@ -167,7 +162,6 @@ class TestRoute:
         assert d.blocked_by == ["auto-reading"]
 
     def test_upstream_empty_does_not_block(self):
-        from lib.orchestrator import route
         upstream = [_result("auto-reading", "empty")]
         d = route(
             {"status": "ok"},
@@ -178,7 +172,6 @@ class TestRoute:
 
     def test_upstream_dep_blocked_chains(self):
         """Chain: A error → B dep_blocked → C dep_blocked (because B is in chain)."""
-        from lib.orchestrator import route
         upstream = [
             _result("A", "error"),
             _result("B", "dep_blocked", blocked_by=["A"]),
@@ -193,7 +186,6 @@ class TestRoute:
 
     def test_unknown_dep_in_depends_on_is_ignored(self):
         """If a depends_on name isn't in upstream_results (e.g. --skip excluded it), skip silently."""
-        from lib.orchestrator import route
         d = route(
             {"status": "ok"},
             upstream_results=[],
@@ -202,12 +194,10 @@ class TestRoute:
         assert d.route == "ok"
 
     def test_unknown_envelope_status_raises(self):
-        from lib.orchestrator import route
         with pytest.raises(ValueError, match="Unknown envelope status"):
             route({"status": "weird"}, upstream_results=[], depends_on=[])
 
     def test_multiple_blocking_deps_all_listed(self):
-        from lib.orchestrator import route
         upstream = [_result("A", "error"), _result("B", "error")]
         d = route(
             {"status": "ok"},
@@ -220,7 +210,6 @@ class TestRoute:
 
 class TestSynthesizeCrashEnvelope:
     def test_returns_status_error_with_crash_code(self):
-        from lib.orchestrator import synthesize_crash_envelope
         env = synthesize_crash_envelope("Traceback...\nValueError: boom\n")
         assert env["status"] == "error"
         assert env["stats"] == {}
@@ -234,14 +223,12 @@ class TestSynthesizeCrashEnvelope:
         assert err["hint"] is None
 
     def test_truncates_huge_stderr(self):
-        from lib.orchestrator import synthesize_crash_envelope
         env = synthesize_crash_envelope("x" * 10_000)
         assert len(env["errors"][0]["detail"]) == 2000
 
 
 class TestRenderError:
     def test_renders_with_hint(self):
-        from lib.orchestrator import render_error
         s = render_error({
             "level": "error",
             "code": "auth",
@@ -252,7 +239,6 @@ class TestRenderError:
         assert "→ rerun import_cookies.py" in s
 
     def test_renders_without_hint(self):
-        from lib.orchestrator import render_error
         s = render_error({
             "level": "error",
             "code": "crash",
@@ -263,13 +249,11 @@ class TestRenderError:
         assert "→" not in s
 
     def test_handles_missing_hint_key(self):
-        from lib.orchestrator import render_error
         s = render_error({"level": "error", "code": "x", "detail": "y"})
         assert "❌ x: y" in s
         assert "→" not in s
 
     def test_handles_missing_code_key(self):
-        from lib.orchestrator import render_error
         s = render_error({"detail": "something"})
         assert "❌ unknown: something" in s
 
@@ -277,7 +261,6 @@ class TestRenderError:
 class TestLogRunEvent:
     def test_writes_jsonl_line_with_orchestrator_module_tag(self, tmp_path, monkeypatch):
         monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
-        from lib.orchestrator import log_run_event
         log_run_event("run_start", date="2026-04-29", modules_ordered=["a", "b"])
         log_dir = tmp_path / "start-my-day" / "logs"
         files = list(log_dir.glob("*.jsonl"))
@@ -314,7 +297,6 @@ class TestWriteRunSummary:
 
     def test_writes_atomic_at_runs_path(self, tmp_path, monkeypatch):
         monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
-        from lib.orchestrator import write_run_summary
         path = write_run_summary(
             "2026-04-29",
             started_at="2026-04-29T08:00:00+08:00",
@@ -334,7 +316,6 @@ class TestWriteRunSummary:
 
     def test_overwrites_same_date(self, tmp_path, monkeypatch):
         monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
-        from lib.orchestrator import write_run_summary
         write_run_summary(
             "2026-04-29",
             started_at="2026-04-29T08:00:00+08:00",
@@ -355,7 +336,6 @@ class TestWriteRunSummary:
 
     def test_no_tmp_file_left_behind(self, tmp_path, monkeypatch):
         monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
-        from lib.orchestrator import write_run_summary
         path = write_run_summary(
             "2026-04-29",
             started_at="2026-04-29T08:00:00+08:00",
@@ -365,3 +345,14 @@ class TestWriteRunSummary:
         )
         assert path.exists()
         assert not (path.parent / "2026-04-29.json.tmp").exists()
+
+    def test_rejects_malformed_date(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+        with pytest.raises(ValueError, match="date must be YYYY-MM-DD"):
+            write_run_summary(
+                "../../etc/passwd",
+                started_at="2026-04-29T08:00:00+08:00",
+                ended_at="2026-04-29T08:00:01+08:00",
+                args={},
+                results=[],
+            )
