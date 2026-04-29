@@ -29,7 +29,6 @@ testpaths = ["tests"]
 markers = [
     "integration: tests requiring real Obsidian CLI (deselect with '-m not integration')",
 ]
-# Use importlib import mode to avoid module name collisions (both auto-reading and
-# auto-learning have test_models.py files in different directories).
-pythonpath = [""]
+# Avoid module name collisions across modules (e.g. both auto-reading and
+# auto-learning define test_models.py); each test file gets its own namespace.
 addopts = "--import-mode=importlib"
