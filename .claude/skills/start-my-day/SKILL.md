@@ -94,7 +94,7 @@ print(json.dumps({'route': d.route, 'reason': d.reason, 'blocked_by': d.blocked_
 若 `route == 'dep_blocked'`：
 
 - 构造 `ModuleResult(name=<module>, route='dep_blocked', started_at=now, ended_at=now, duration_ms=0, envelope_path=None, stats=None, errors=[], blocked_by=<blocked_by>)` 追加到 `_run_state.json`。
-- 调 `log_run_event('module_routed', name=<module>, route='dep_blocked', duration_ms=0, errors=[], blocked_by=<blocked_by>)`。
+- 调 `log_run_event('module_routed', date=<DATE>, name=<module>, route='dep_blocked', duration_ms=0, errors=[], blocked_by=<blocked_by>)`。
 - 输出 `⏭️ <module>: 已跳过（依赖 <blocked_by[0]> 今日 status=error）`。
 - **continue 到下一个模块**（不再执行 Step 4.3+）。
 
@@ -149,11 +149,17 @@ depends_on = <meta.depends_on>  # injected as JSON list literal; dep_blocked alr
 try:
     d = route(envelope, upstream_results=upstream, depends_on=depends_on)
 except ValueError:
-    # Unknown envelope.status — treat as an error route, keep going.
+    # Unknown envelope.status — synthesize a crash-style envelope so
+    # Step 4.5 / 4.6 see a non-empty errors[] for render_error(...).
+    envelope = synthesize_crash_envelope(
+        f"unknown envelope.status={envelope.get('status')!r}; module={'<module>'!r}"
+    )
     d = RouteDecision(route='error', reason='unknown envelope status', blocked_by=[])
-print(json.dumps({'route': d.route, 'reason': d.reason, 'blocked_by': d.blocked_by}))
+print(json.dumps({'route': d.route, 'reason': d.reason, 'blocked_by': d.blocked_by, 'envelope': envelope}))
 "
 ```
+
+把 stdout 解析为 `{route, reason, blocked_by, envelope}`，写入环境变量 `ROUTE_DECISION` (前三个字段) 和 `ENVELOPE`（最后一个）供 Step 4.5 使用。未知 status 时，`envelope` 已被替换为 synthesized crash envelope，`errors[0]` 一定存在。
 
 记录 `route_decision`。
 

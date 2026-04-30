@@ -153,3 +153,98 @@ def test_full_run_with_dep_block(tmp_path, monkeypatch):
     # log-agnostic — the SKILL.md prose owns logging via log_run_event.
     log_files = list((tmp_path / "xdg" / "start-my-day" / "logs").glob("*.jsonl"))
     assert log_files == [], f"unexpected JSONL log written: {log_files}"
+
+
+def test_unknown_envelope_status_routes_to_error_with_synthesized_errors(tmp_path, monkeypatch):
+    """If today.py emits an envelope with an unknown status, lib.orchestrator
+    must synthesize a crash envelope so the error branch has errors[0] for
+    render_error(). Otherwise SKILL.md would IndexError."""
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "config").mkdir()
+    (repo / "modules").mkdir()
+
+    # One module that emits {"status": "weird"} on stdout-piped --output.
+    mod_dir = repo / "modules" / "module-weird"
+    (mod_dir / "scripts").mkdir(parents=True)
+    (mod_dir / "module.yaml").write_text(yaml.safe_dump({
+        "name": "module-weird",
+        "daily": {"today_script": "scripts/today.py", "today_skill": "SKILL_TODAY.md"},
+        "depends_on": [],
+    }))
+    (mod_dir / "scripts" / "today.py").write_text('''
+import argparse, json, sys
+parser = argparse.ArgumentParser()
+parser.add_argument("--output", required=True)
+args = parser.parse_args()
+envelope = {
+    "module": "module-weird",
+    "schema_version": 1,
+    "status": "weird",   # unknown — this is what the test exercises
+    "stats": {},
+    "payload": {},
+    "errors": [],
+}
+with open(args.output, "w", encoding="utf-8") as f:
+    json.dump(envelope, f)
+sys.exit(0)
+''')
+    (repo / "config" / "modules.yaml").write_text(yaml.safe_dump({
+        "modules": [{"name": "module-weird", "enabled": True, "order": 10}],
+    }))
+
+    from lib.orchestrator import (
+        load_registry, apply_filters, load_module_meta,
+        synthesize_crash_envelope, route, write_run_summary,
+        ModuleResult, RouteDecision,
+    )
+
+    L = apply_filters(load_registry(repo / "config" / "modules.yaml"))
+    started_at = datetime.now().astimezone().isoformat(timespec="seconds")
+    results: list[ModuleResult] = []
+
+    for entry in L:
+        meta = load_module_meta(repo, entry.name)
+        out = tmp_path / f"{entry.name}.json"
+        t0 = datetime.now().astimezone()
+        proc = subprocess.run(
+            [sys.executable, str(repo / "modules" / entry.name / meta.today_script),
+             "--output", str(out)],
+            capture_output=True, text=True,
+        )
+        t1 = datetime.now().astimezone()
+        if proc.returncode != 0 and not out.exists():
+            envelope = synthesize_crash_envelope(proc.stderr)
+        else:
+            envelope = json.loads(out.read_text())
+        # Mirror SKILL.md Step 4.4: try route(); on ValueError, synthesize.
+        try:
+            decision = route(envelope, upstream_results=results, depends_on=meta.depends_on)
+        except ValueError:
+            envelope = synthesize_crash_envelope(
+                f"unknown envelope.status={envelope.get('status')!r}; module={entry.name!r}"
+            )
+            decision = RouteDecision(route='error', reason='unknown envelope status', blocked_by=[])
+        results.append(ModuleResult(
+            name=entry.name,
+            route=decision.route,
+            started_at=t0.isoformat(timespec="seconds"),
+            ended_at=t1.isoformat(timespec="seconds"),
+            duration_ms=int((t1 - t0).total_seconds() * 1000),
+            envelope_path=str(out),
+            stats=envelope.get("stats"),
+            errors=envelope.get("errors", []),
+            blocked_by=decision.blocked_by,
+        ))
+
+    assert len(results) == 1
+    r = results[0]
+    assert r.route == "error"
+    assert len(r.errors) >= 1
+    assert r.errors[0]["code"] == "crash"
+    # render_error contract: must not IndexError on errors[0]
+    from lib.orchestrator import render_error
+    rendered = render_error(r.errors[0])
+    assert "❌ crash:" in rendered
