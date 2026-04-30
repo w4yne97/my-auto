@@ -1451,7 +1451,7 @@ L = apply_filters(L, only=ARGS['only'], skip=ARGS['skip'])
 log_run_event('run_start', date=ARGS['date'], args=ARGS,
               modules_ordered=[m.name for m in L])
 print(json.dumps([m.__dict__ for m in L]))
-" 
+"
 ```
 
 把 `args` 提前写入 `STARTMYDAY_ARGS` 环境变量后执行，把 stdout 的 JSON 解析为模块列表 `L'`。

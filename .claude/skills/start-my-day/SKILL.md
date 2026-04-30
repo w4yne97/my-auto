@@ -47,6 +47,7 @@ print(json.dumps([m.__dict__ for m in L]))
 
 ```bash
 mkdir -p /tmp/start-my-day && rm -f /tmp/start-my-day/*.json
+echo '[]' > /tmp/start-my-day/_run_state.json
 ```
 
 # Step 4: 对每个模块依次执行
@@ -69,7 +70,35 @@ print(json.dumps(meta.__dict__))
 
 得到 `meta.today_script` 与 `meta.depends_on`。
 
-## Step 4.2: 跑 today 脚本
+## Step 4.2: 依赖门控（先于跑 today.py）
+
+```bash
+python -c "
+import json, os
+from pathlib import Path
+from datetime import datetime
+from dataclasses import asdict
+from lib.orchestrator import route, ModuleResult, log_run_event
+state_file = Path('/tmp/start-my-day/_run_state.json')
+upstream_raw = json.loads(state_file.read_text() or '[]') if state_file.exists() else []
+upstream = [ModuleResult(**u) for u in upstream_raw]
+depends_on = <meta.depends_on>
+# Synthetic envelope: route() will short-circuit on dep before reading status.
+d = route({'status': 'ok'}, upstream_results=upstream, depends_on=depends_on)
+print(json.dumps({'route': d.route, 'reason': d.reason, 'blocked_by': d.blocked_by}))
+"
+```
+
+若 `route == 'dep_blocked'`：
+
+- 构造 `ModuleResult(name=<module>, route='dep_blocked', started_at=now, ended_at=now, duration_ms=0, envelope_path=None, stats=None, errors=[], blocked_by=<blocked_by>)` 追加到 `_run_state.json`。
+- 调 `log_run_event('module_routed', name=<module>, route='dep_blocked', duration_ms=0, errors=[], blocked_by=<blocked_by>)`。
+- 输出 `⏭️ <module>: 已跳过（依赖 <blocked_by[0]> 今日 status=error）`。
+- **continue 到下一个模块**（不再执行 Step 4.3+）。
+
+否则继续 Step 4.3。
+
+## Step 4.3: 跑 today 脚本（仅当未被 dep_blocked）
 
 记录 `t0 = now()`。
 
@@ -92,7 +121,7 @@ print(json.dumps(synthesize_crash_envelope(open('/tmp/start-my-day/<module>.stde
 
 并把结果作为 envelope。
 
-## Step 4.3: 路由判定
+## Step 4.4: 路由判定
 
 ```bash
 python -c "
@@ -106,9 +135,10 @@ elif os.path.exists('/tmp/start-my-day/<module>.stderr'):
     envelope = synthesize_crash_envelope(open('/tmp/start-my-day/<module>.stderr').read())
 else:
     envelope = synthesize_crash_envelope('(no stderr captured)')
-upstream = json.loads(Path('/tmp/start-my-day/_run_state.json').read_text() or '[]')
+state_file = Path('/tmp/start-my-day/_run_state.json')
+upstream = json.loads(state_file.read_text() or '[]') if state_file.exists() else []
 upstream = [ModuleResult(**u) for u in upstream]
-depends_on = <meta.depends_on>  # injected as JSON list literal
+depends_on = <meta.depends_on>  # injected as JSON list literal; dep_blocked already handled in 4.2, kept for safety
 d = route(envelope, upstream_results=upstream, depends_on=depends_on)
 print(json.dumps({'route': d.route, 'reason': d.reason, 'blocked_by': d.blocked_by}))
 "
@@ -116,7 +146,7 @@ print(json.dumps({'route': d.route, 'reason': d.reason, 'blocked_by': d.blocked_
 
 记录 `route_decision`。
 
-## Step 4.4: 记录 module_routed 事件 + 累积 results
+## Step 4.5: 记录 module_routed 事件 + 累积 results
 
 ```bash
 python -c "
@@ -151,7 +181,7 @@ print(json.dumps(asdict(result)))
 "
 ```
 
-## Step 4.5: 根据 route 分支
+## Step 4.6: 根据 route 分支（dep_blocked unreachable here — handled in 4.2）
 
 | `route` | 行为 |
 |---|---|

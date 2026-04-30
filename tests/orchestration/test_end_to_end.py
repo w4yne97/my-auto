@@ -83,6 +83,19 @@ def test_full_run_with_dep_block(tmp_path, monkeypatch):
 
     for entry in L:
         meta = load_module_meta(repo, entry.name)
+        # Dep gate FIRST — synthetic ok envelope so route() short-circuits on dep only.
+        pre = route({"status": "ok"}, upstream_results=results, depends_on=meta.depends_on)
+        if pre.route == "dep_blocked":
+            now = datetime.now().astimezone().isoformat(timespec="seconds")
+            results.append(ModuleResult(
+                name=entry.name,
+                route="dep_blocked",
+                started_at=now, ended_at=now, duration_ms=0,
+                envelope_path=None, stats=None, errors=[],
+                blocked_by=pre.blocked_by,
+            ))
+            continue  # do NOT run today.py for blocked modules
+
         out = tmp_path / f"{entry.name}.json"
         t0 = datetime.now().astimezone()
         proc = subprocess.run(
@@ -129,6 +142,10 @@ def test_full_run_with_dep_block(tmp_path, monkeypatch):
     assert by_name["module-c"]["blocked_by"] == ["module-b"]
     assert by_name["module-c"]["envelope_path"] is None
     assert by_name["module-c"]["stats"] is None
+
+    # Dep gate fired: module-c's today.py was not invoked, so its output file should not exist.
+    assert not (tmp_path / "module-c.json").exists(), \
+        "module-c was dep_blocked but its today.py output appeared — dep gate failed to skip subprocess"
 
     # The minimal driver above doesn't call log_run_event, so no JSONL should
     # be written. (write_run_summary itself does not log; it only writes the
