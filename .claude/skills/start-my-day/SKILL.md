@@ -93,8 +93,42 @@ print(json.dumps({'route': d.route, 'reason': d.reason, 'blocked_by': d.blocked_
 
 若 `route == 'dep_blocked'`：
 
-- 构造 `ModuleResult(name=<module>, route='dep_blocked', started_at=now, ended_at=now, duration_ms=0, envelope_path=None, stats=None, errors=[], blocked_by=<blocked_by>)` 追加到 `_run_state.json` **以及** `runs/<DATE>.json`（调 `write_run_summary` 与 4.5 同样语义；merge-by-name 保证不动其它 row）。
-- 调 `log_run_event('module_routed', date=<DATE>, name=<module>, route='dep_blocked', duration_ms=0, errors=[], blocked_by=<blocked_by>)`。
+- 构造 `ModuleResult(name=<module>, route='dep_blocked', started_at=now, ended_at=now, duration_ms=0, envelope_path=None, stats=None, errors=[], blocked_by=<blocked_by>)` 追加到 `_run_state.json` **以及** `runs/<DATE>.json`。具体形式（与 4.5 同款 python3 -c 调用，仅传当前 dep_blocked 的 result）：
+
+```bash
+PYTHONPATH="$PWD" python3 -c "
+import json, os
+from datetime import datetime
+from lib.orchestrator import log_run_event, ModuleResult, write_run_summary
+from dataclasses import asdict
+_now = datetime.now().astimezone().isoformat(timespec='seconds')
+result = ModuleResult(
+    name='<module>',
+    route='dep_blocked',
+    started_at=_now, ended_at=_now, duration_ms=0,
+    envelope_path=None, stats=None, errors=[],
+    blocked_by=<blocked_by>,
+)
+log_run_event('module_routed', date=os.environ['DATE'], name='<module>',
+              route='dep_blocked', duration_ms=0, errors=[],
+              blocked_by=<blocked_by>)
+state_path = '/tmp/start-my-day/_run_state.json'
+prior = json.loads(open(state_path).read()) if os.path.exists(state_path) else []
+prior.append(asdict(result))
+tmp_path = state_path + '.tmp'
+open(tmp_path, 'w').write(json.dumps(prior))
+os.replace(tmp_path, state_path)
+# sub-F: write to runs/<DATE>.json with merge-by-name (preserves other rows).
+write_run_summary(
+    date=os.environ['DATE'],
+    started_at=os.environ['STARTED_AT'],
+    ended_at=_now,
+    args=json.loads(os.environ['STARTMYDAY_ARGS']),
+    results=[result],
+)
+"
+```
+
 - 输出 `⏭️ <module>: 已跳过（依赖 <blocked_by[0]> 今日 status=error）`。
 - **continue 到下一个模块**（不再执行 Step 4.3+）。
 
@@ -184,11 +218,12 @@ from lib.orchestrator import log_run_event, ModuleResult, write_run_summary
 from dataclasses import asdict
 RD = json.loads(os.environ['ROUTE_DECISION'])
 ENV = json.loads(os.environ['ENVELOPE'])
+_ended_at = datetime.now().astimezone().isoformat(timespec='seconds')
 result = ModuleResult(
     name='<module>',
     route=RD['route'],
     started_at='<t0_iso>',
-    ended_at=datetime.now().astimezone().isoformat(timespec='seconds'),
+    ended_at=_ended_at,
     duration_ms=int((datetime.now().timestamp() - float(os.environ['T0_EPOCH'])) * 1000),
     envelope_path='/tmp/start-my-day/<module>.json' if RD['route'] != 'dep_blocked' else None,
     stats=ENV.get('stats') if RD['route'] != 'dep_blocked' else None,
@@ -211,7 +246,7 @@ os.replace(tmp_path, state_path)
 write_run_summary(
     date=os.environ['DATE'],
     started_at=os.environ['STARTED_AT'],
-    ended_at=datetime.now().astimezone().isoformat(timespec='seconds'),
+    ended_at=_ended_at,
     args=json.loads(os.environ['STARTMYDAY_ARGS']),
     results=[result],
 )
