@@ -66,7 +66,102 @@ def _run(output_path: str, date_arg: str | None) -> int:
 
 
 def _build_envelope(date: str) -> dict:
-    raise NotImplementedError("filled in Phase D-2 (Tasks 7-9)")
+    run_summary_path = platform_runs_dir() / f"{date}.json"
+    if not run_summary_path.exists():
+        return _envelope_no_run_summary(date, run_summary_path)
+
+    run_summary = json.loads(run_summary_path.read_text(encoding="utf-8"))
+    upstream = []
+    for module_row in run_summary.get("modules", []):
+        if module_row.get("name") == "auto-digest":
+            continue  # spec §4.1: defensive self-skip; we don't recurse
+        upstream.append(_make_upstream_entry(module_row, date))
+
+    stats = _route_counts(upstream)
+    stats["vault_files_found"] = sum(1 for u in upstream if u["vault_file"])
+
+    return {
+        "module": "auto-digest",
+        "schema_version": 1,
+        "generated_at": datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
+        "date": date,
+        "status": "ok",
+        "stats": stats,
+        "payload": {
+            "run_summary_path": str(run_summary_path),
+            "upstream_modules": upstream,
+        },
+        "errors": [],
+    }
+
+
+def _envelope_no_run_summary(date: str, run_summary_path: Path) -> dict:
+    return {
+        "module": "auto-digest",
+        "schema_version": 1,
+        "generated_at": datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
+        "date": date,
+        "status": "error",
+        "stats": {},
+        "payload": {"run_summary_path": str(run_summary_path), "upstream_modules": []},
+        "errors": [{
+            "level": "error",
+            "code": "no_run_summary",
+            "detail": f"No run summary found at {run_summary_path}",
+            "hint": f"Run /start-my-day {date} first to produce upstream modules' results.",
+        }],
+    }
+
+
+def _make_upstream_entry(module_row: dict, date: str) -> dict:
+    name = module_row["name"]
+    try:
+        meta_yaml = (repo_root() / "modules" / name / "module.yaml").read_text(encoding="utf-8")
+        import yaml as _yaml  # local import keeps top-level imports lean
+        meta = _yaml.safe_load(meta_yaml) or {}
+    except (FileNotFoundError, OSError):
+        meta = {}
+    daily = (meta.get("daily") or {}) if isinstance(meta, dict) else {}
+    glob_pattern = daily.get("daily_markdown_glob") if isinstance(daily, dict) else None
+
+    vault_file: str | None = None
+    if glob_pattern:
+        try:
+            resolved = vault_path() / glob_pattern.replace("{date}", date)
+            if resolved.exists():
+                vault_file = str(resolved.relative_to(vault_path()))
+        except RuntimeError:
+            # VAULT_PATH not set; leave vault_file as None.
+            pass
+
+    envelope_path = module_row.get("envelope_path")
+    if envelope_path and not Path(envelope_path).exists():
+        envelope_path = None
+
+    return {
+        "name": name,
+        "route": module_row.get("route"),
+        "stats": module_row.get("stats"),
+        "errors": module_row.get("errors", []) or [],
+        "blocked_by": module_row.get("blocked_by", []) or [],
+        "envelope_path": envelope_path,
+        "vault_file": vault_file,
+    }
+
+
+def _route_counts(upstream: list[dict]) -> dict:
+    counts = {
+        "modules_total": len(upstream),
+        "modules_ok": 0,
+        "modules_empty": 0,
+        "modules_error": 0,
+        "modules_dep_blocked": 0,
+    }
+    for u in upstream:
+        key = f"modules_{u.get('route')}"
+        if key in counts:
+            counts[key] += 1
+    return counts
 
 
 def _envelope_crashed(date: str, exc: Exception) -> dict:
