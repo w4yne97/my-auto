@@ -37,6 +37,7 @@ def _write_run_summary(xdg: Path, date: str, modules: list[dict]) -> Path:
     }))
     return path
 
+
 class TestNoRunSummary:
     """α1: runs/<date>.json missing → status=error, code=no_run_summary."""
 
@@ -223,3 +224,33 @@ class TestEdgeCases:
         env = json.loads(out.read_text())
         assert env["status"] == "error"
         assert env["errors"][0]["code"] == "unhandled_exception"
+
+    def test_corrupt_upstream_module_yaml_skips_glob_gracefully(self, tmp_path, monkeypatch):
+        """Spec robustness: a corrupt module.yaml for an upstream module
+        should not crash the whole digest. The affected module's vault_file
+        is set to None; the digest still emits status=ok."""
+        monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
+        monkeypatch.setenv("VAULT_PATH", str(tmp_path / "vault"))
+        (tmp_path / "vault").mkdir()
+        repo = tmp_path / "repo"
+        (repo / "modules" / "broken-mod").mkdir(parents=True)
+        # Write deliberately malformed YAML.
+        (repo / "modules" / "broken-mod" / "module.yaml").write_text(
+            "name: broken-mod\ndaily: [unclosed-list\n"
+        )
+        monkeypatch.setattr(auto_digest_today, "repo_root", lambda: repo)
+
+        _write_run_summary(tmp_path / "xdg", "2026-04-30", [
+            {"name": "broken-mod", "route": "ok", "stats": {},
+             "errors": [], "envelope_path": None, "blocked_by": [],
+             "started_at": "x", "ended_at": "x", "duration_ms": 0},
+        ])
+
+        out = tmp_path / "envelope.json"
+        rc = auto_digest_today.main_with_args(["--output", str(out), "--date", "2026-04-30"])
+        assert rc == 0  # graceful: no crash
+        env = json.loads(out.read_text())
+        assert env["status"] == "ok"  # whole digest still ok
+        assert len(env["payload"]["upstream_modules"]) == 1
+        assert env["payload"]["upstream_modules"][0]["name"] == "broken-mod"
+        assert env["payload"]["upstream_modules"][0]["vault_file"] is None

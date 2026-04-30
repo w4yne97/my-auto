@@ -21,8 +21,9 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+import yaml  # noqa: E402
+
 from lib.logging import log_event  # noqa: E402
-from lib.orchestrator import load_module_meta  # noqa: E402
 from lib.storage import platform_runs_dir, repo_root, vault_path  # noqa: E402
 
 
@@ -116,10 +117,10 @@ def _envelope_no_run_summary(date: str, run_summary_path: Path) -> dict:
 def _make_upstream_entry(module_row: dict, date: str) -> dict:
     name = module_row["name"]
     try:
-        meta_yaml = (repo_root() / "modules" / name / "module.yaml").read_text(encoding="utf-8")
-        import yaml as _yaml  # local import keeps top-level imports lean
-        meta = _yaml.safe_load(meta_yaml) or {}
-    except (FileNotFoundError, OSError):
+        meta = yaml.safe_load(
+            (repo_root() / "modules" / name / "module.yaml").read_text(encoding="utf-8")
+        ) or {}
+    except (FileNotFoundError, OSError, yaml.YAMLError):
         meta = {}
     daily = (meta.get("daily") or {}) if isinstance(meta, dict) else {}
     glob_pattern = daily.get("daily_markdown_glob") if isinstance(daily, dict) else None
