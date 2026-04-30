@@ -3,7 +3,7 @@ name: start-my-day
 description: 每日多模块编排器 —— 读取注册表、依次执行各 auto-* 模块的 today 流程
 ---
 
-你是个人每日事项中枢的编排器。本仓 `start-my-day` 通过模块化方式管理多个垂直方向(`modules/auto-*/`),你的工作是**按注册表顺序**调度它们。
+你是个人每日事项中枢的编排器。本仓 `start-my-day` 通过模块化方式管理多个垂直方向(`modules/auto-*/`),你的工作是**按注册表顺序**调度它们，并把今日运行结果落地为结构化 run summary（供综合日报模块消费）。
 
 # 入口与参数
 
@@ -11,7 +11,7 @@ description: 每日多模块编排器 —— 读取注册表、依次执行各 a
 - `/start-my-day` — 跑今天所有 enabled 模块
 - `/start-my-day 2026-04-26` — 指定日期重跑
 - `/start-my-day --only auto-reading` — 仅跑指定模块
-- `/start-my-day --skip auto-learning,auto-social-x` — 跳过指定模块
+- `/start-my-day --skip auto-learning,auto-x` — 跳过指定模块
 
 # Step 1: 解析参数
 
@@ -20,93 +20,190 @@ description: 每日多模块编排器 —— 读取注册表、依次执行各 a
 - `--only <name>`(可选;单模块)
 - `--skip <name1,name2>`(可选;逗号分隔多模块)
 
-# Step 2: 读取平台注册表
+记录到内存中的 `args = {"date": DATE, "only": ONLY, "skip": SKIP_LIST}`。
 
-读取 `config/modules.yaml`(仓根),解析:
-```yaml
-modules:
-  - name: <module-name>
-    enabled: true|false
-    order: <int>
+# Step 2: 加载注册表 + 应用过滤
+
+```bash
+python -c "
+import json, sys
+from pathlib import Path
+from lib.orchestrator import load_registry, apply_filters, log_run_event
+import os
+ARGS = json.loads(os.environ['STARTMYDAY_ARGS'])
+L = load_registry(Path('config/modules.yaml'))
+L = apply_filters(L, only=ARGS['only'], skip=ARGS['skip'])
+log_run_event('run_start', date=ARGS['date'], args=ARGS,
+              modules_ordered=[m.name for m in L])
+print(json.dumps([m.__dict__ for m in L]))
+"
 ```
 
-得到 enabled 模块列表,按 `order` 升序排序 → `L`。
+把 `args` 提前写入 `STARTMYDAY_ARGS` 环境变量后执行，把 stdout 的 JSON 解析为模块列表 `L'`。
 
-应用 `--only` / `--skip` 覆盖:
-- `--only X` → `L = [m for m in L if m.name == X]`
-- `--skip X,Y` → `L = [m for m in L if m.name not in {X, Y}]`
-
-得到最终运行列表 `L'`。如果 `L'` 为空,告知用户"今日无可运行模块"并退出。
+如果 `L'` 为空，输出 `今日无可运行模块（参数过滤后剩 0 个）` 并退出，**不写 run summary**。
 
 # Step 3: 准备临时目录
 
 ```bash
-mkdir -p /tmp/start-my-day
+mkdir -p /tmp/start-my-day && rm -f /tmp/start-my-day/*.json
 ```
-
-清理 `/tmp/start-my-day/` 下旧的 `*.json`(today.py 自己也会清理)。
 
 # Step 4: 对每个模块依次执行
 
-对 `L'` 中的每个 module:
+记录 `started_at = now()`（ISO8601 with timezone）。维护一个 `results: list[ModuleResult]` 累积结果，每跑完一个模块写到 `/tmp/start-my-day/_run_state.json`（供下个模块的 dep 检查读取）。
 
-## Step 4.1: 读取模块自描述
+对 `L'` 中的每个 module：
 
-读取 `modules/<module>/module.yaml`,确认 `daily.today_script` 与 `daily.today_skill` 路径。
-
-## Step 4.2: 运行 today 脚本
+## Step 4.1: 加载模块自描述
 
 ```bash
-python modules/<module>/scripts/today.py \
-    --output /tmp/start-my-day/<module>.json
+python -c "
+import json
+from pathlib import Path
+from lib.orchestrator import load_module_meta
+meta = load_module_meta(Path.cwd(), '<module>')
+print(json.dumps(meta.__dict__))
+"
 ```
 
-(如果模块有特定 flag,例如 reading 的 `--top-n`,在此添加。)
+得到 `meta.today_script` 与 `meta.depends_on`。
 
-检查退出码:
-- **非 0** → 输出 `❌ <module> 启动失败` + stderr 头几行;`continue` 下一模块。
-- **0** → 进入 Step 4.3。
+## Step 4.2: 跑 today 脚本
 
-## Step 4.3: 读取 JSON envelope,根据 status 三态分支
+记录 `t0 = now()`。
 
-读取 `/tmp/start-my-day/<module>.json`:
+```bash
+python modules/<module>/<meta.today_script> --output /tmp/start-my-day/<module>.json
+```
 
-| `status` | 行为 |
+退出码非 0 时，把 stderr 的最后 ~2KB 喂给 `synthesize_crash_envelope()`：
+
+```bash
+python -c "
+import json, sys
+from lib.orchestrator import synthesize_crash_envelope
+print(json.dumps(synthesize_crash_envelope(open('/tmp/start-my-day/<module>.stderr').read())))
+"
+```
+
+并把结果作为 envelope。退出码为 0 时，直接读 `/tmp/start-my-day/<module>.json`。
+
+## Step 4.3: 路由判定
+
+```bash
+python -c "
+import json
+from pathlib import Path
+from lib.orchestrator import route, ModuleResult
+envelope = json.loads(Path('/tmp/start-my-day/<module>.json').read_text())
+upstream = json.loads(Path('/tmp/start-my-day/_run_state.json').read_text() or '[]')
+upstream = [ModuleResult(**u) for u in upstream]
+depends_on = <meta.depends_on>  # injected as JSON list literal
+d = route(envelope, upstream_results=upstream, depends_on=depends_on)
+print(json.dumps({'route': d.route, 'reason': d.reason, 'blocked_by': d.blocked_by}))
+"
+```
+
+记录 `route_decision`。
+
+## Step 4.4: 记录 module_routed 事件 + 累积 results
+
+```bash
+python -c "
+import json, os
+from datetime import datetime
+from lib.orchestrator import log_run_event, ModuleResult
+from dataclasses import asdict
+RD = json.loads(os.environ['ROUTE_DECISION'])
+ENV = json.loads(os.environ['ENVELOPE'])
+result = ModuleResult(
+    name='<module>',
+    route=RD['route'],
+    started_at='<t0_iso>',
+    ended_at=datetime.now().astimezone().isoformat(timespec='seconds'),
+    duration_ms=int((datetime.now().timestamp() - float(os.environ['T0_EPOCH'])) * 1000),
+    envelope_path='/tmp/start-my-day/<module>.json' if RD['route'] != 'dep_blocked' else None,
+    stats=ENV.get('stats') if RD['route'] != 'dep_blocked' else None,
+    errors=ENV.get('errors', []),
+    blocked_by=RD['blocked_by'],
+)
+log_run_event('module_routed', name='<module>', route=RD['route'],
+              duration_ms=result.duration_ms, errors=result.errors,
+              blocked_by=result.blocked_by)
+# Append to _run_state.json
+state_path = '/tmp/start-my-day/_run_state.json'
+prior = json.loads(open(state_path).read()) if os.path.exists(state_path) else []
+prior.append(asdict(result))
+open(state_path, 'w').write(json.dumps(prior))
+print(json.dumps(asdict(result)))
+"
+```
+
+## Step 4.5: 根据 route 分支
+
+| `route` | 行为 |
 |---|---|
-| `"ok"` | 输出 `▶️ 开始执行 <module> SKILL_TODAY (stats: ...)`;进入 Step 4.4 |
-| `"empty"` | 输出 `ℹ️ <module>: 今日无内容`;continue 下一模块 |
-| `"error"` | 输出 `❌ <module>: 今日运行出错,errors=...`;continue 下一模块 |
+| `ok` | 输出 `▶️ <module>: ok (stats)`，然后读 `modules/<module>/SKILL_TODAY.md` 并按其指示执行 |
+| `empty` | 输出 `ℹ️ <module>: 今日无内容 (<reason>)`；continue |
+| `error` | 调 `render_error(envelope.errors[0])` 输出错误行（含 hint）；continue |
+| `dep_blocked` | 输出 `⏭️ <module>: 已跳过（依赖 <blocked_by[0]> 今日 status=error）`；continue |
 
-## Step 4.4: 读取并执行模块 SKILL_TODAY.md
+**SKILL_TODAY 上下文（仅 ok 路径需要）：** `MODULE_NAME`、`MODULE_DIR`、`TODAY_JSON=/tmp/start-my-day/<module>.json`、`DATE`、`VAULT_PATH`。
 
-读取 `modules/<module>/SKILL_TODAY.md` 并按其指示执行,**传入上下文**:
-- `MODULE_NAME` = `<module>`
-- `MODULE_DIR`  = `modules/<module>`(可解析为绝对路径)
-- `TODAY_JSON`  = `/tmp/start-my-day/<module>.json`
-- `DATE`        = 当前 `DATE`
-- `VAULT_PATH`  = 环境变量 `$VAULT_PATH`(必须已设置)
+# Step 5: 写 run summary + run_done 事件
 
-执行完成后,自然续衔回本流程,继续 for 循环下一模块。
+记录 `ended_at = now()`。
 
-# Step 5: 输出运行摘要
-
-打印对话最终摘要:
+```bash
+python -c "
+import json, os
+from lib.orchestrator import write_run_summary, log_run_event, ModuleResult
+results_raw = json.loads(open('/tmp/start-my-day/_run_state.json').read())
+results = [ModuleResult(**r) for r in results_raw]
+path = write_run_summary(
+    date=os.environ['DATE'],
+    started_at=os.environ['STARTED_AT'],
+    ended_at=os.environ['ENDED_AT'],
+    args=json.loads(os.environ['STARTMYDAY_ARGS']),
+    results=results,
+)
+summary = {
+    'total': len(results),
+    'ok': sum(1 for r in results if r.route == 'ok'),
+    'empty': sum(1 for r in results if r.route == 'empty'),
+    'error': sum(1 for r in results if r.route == 'error'),
+    'dep_blocked': sum(1 for r in results if r.route == 'dep_blocked'),
+}
+log_run_event('run_done', summary=summary, run_summary_path=str(path))
+print(path)
+"
 ```
-✅ 运行完成
-- 模块总数: N
-- 成功: M
-- 跳过(empty/error): K
-- 详细日志: ~/.local/share/start-my-day/logs/$DATE.jsonl
+
+# Step 6: 输出对话最终摘要
+
+```
+✅ 运行完成 (<duration>)
+  📚 auto-reading    <route>   <stats或error行>
+  🎓 auto-learning   <route>   ...
+  🐦 auto-x          <route>   ...
+  📋 详细日志: ~/.local/share/start-my-day/logs/<DATE>.jsonl
+  📦 Run summary:   ~/.local/share/start-my-day/runs/<DATE>.json
 ```
 
-**P1 不写 `$VAULT_PATH/10_Daily/$DATE-日报.md` 综合日报。** Reading 模块自家写的 `$DATE-论文推荐.md` 已是入口。Phase 2 会引入综合日报。
+如果**所有模块**都是 error / dep_blocked / empty，追加：
+```
+⚠️ 所有模块今日均未成功（可能是平台级问题，例如 $VAULT_PATH 未设置）
+```
 
 # 错误隔离原则
 
-- 任何单个模块失败(today.py 崩 / JSON 错 / SKILL_TODAY 出错),**不**中断后续模块。
-- 仅在所有模块都失败时输出"⚠️ 全部模块失败,请检查日志"。
+- 任何单个模块失败（today.py 崩 / JSON 错 / SKILL_TODAY 出错），**不**中断后续模块。
+- `config/modules.yaml` 缺失或 parse 失败 → Step 2 即抛错，输出 `❌ 平台配置错误: <异常>` 并退出，**不写 run summary**（因为没跑过任何模块）。
+- 用户中途 Ctrl+C → run summary 不写（Step 5 没跑到），JSONL 跑到哪记到哪。
 
 # 已知行为
 
-- P1 只有一个 enabled 模块(auto-reading),所以 for 循环只跑一遍;行为等同于旧仓 `/start-my-day` 的输出。
+- 三个 enabled 模块按 `config/modules.yaml.order` 升序：reading(10) → learning(20) → x(30)。
+- `auto-learning` 声明 `depends_on: [auto-reading]`：reading 今日 `error` 时，learning 自动 `dep_blocked`；reading `empty` **不**阻塞。
 - `$VAULT_PATH` 必须已在 shell 环境中设置。如未设置,提示用户在 `.env` 中配置。
