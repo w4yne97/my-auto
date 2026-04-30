@@ -24,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 import argparse
 import json
 import sqlite3
+import time
 from datetime import datetime, timedelta, timezone
 
 from lib.storage import module_config_file, module_state_dir  # platform lib (top-level)
@@ -184,6 +185,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
 
+    start_t = time.monotonic()
+
     log_event("auto-x", "today_script_start",
               date=datetime.now(timezone.utc).date().isoformat(),
               max_tweets=args.max_tweets,
@@ -211,7 +214,8 @@ def main(argv: list[str] | None = None) -> int:
             _make_error("config", str(e), hint=f"check {config_path}"),
         )
         _atomic_write(output_path, _serialize_envelope(envelope))
-        log_event("auto-x", "today_script_crashed", reason="config")
+        log_event("auto-x", "today_script_crashed", level="error", reason="config",
+                  duration_s=round(time.monotonic() - start_t, 2))
         return 1
 
     # Step 2: fetch
@@ -226,7 +230,8 @@ def main(argv: list[str] | None = None) -> int:
             window_start, window_end, _err_for_code(e),
         )
         _atomic_write(output_path, _serialize_envelope(envelope))
-        log_event("auto-x", "today_script_crashed", reason=e.code)
+        log_event("auto-x", "today_script_crashed", level="error", reason=e.code,
+                  duration_s=round(time.monotonic() - start_t, 2))
         return 1
 
     # Step 3: archive (skipped on --dry-run)
@@ -253,7 +258,8 @@ def main(argv: list[str] | None = None) -> int:
             _make_error("state", str(e), hint=f"rm {seen_path} (loses dedup history)"),
         )
         _atomic_write(output_path, _serialize_envelope(envelope))
-        log_event("auto-x", "today_script_crashed", reason="state")
+        log_event("auto-x", "today_script_crashed", level="error", reason="state",
+                  duration_s=round(time.monotonic() - start_t, 2))
         return 1
     kept = dedup_mod.filter_unseen(conn, scored, now=window_end)
     dedup_mod.cleanup_old_seen(conn, retain_days=7, now=window_end)
@@ -306,7 +312,8 @@ def main(argv: list[str] | None = None) -> int:
         if tmp.exists():
             tmp.unlink()
         sys.stderr.write(f"envelope write failed: {e}\n")
-        log_event("auto-x", "today_script_crashed", reason="envelope_write")
+        log_event("auto-x", "today_script_crashed", level="error", reason="envelope_write",
+                  duration_s=round(time.monotonic() - start_t, 2))
         conn.close()
         return 2
 
@@ -318,10 +325,12 @@ def main(argv: list[str] | None = None) -> int:
         dedup_mod.mark_in_summary(conn, included_ids, window_end.date())
 
     conn.close()
+    # Only reached for ok/empty; error paths return early above.
     log_event("auto-x", "today_script_done",
               status=status,
               total_fetched=len(fetched),
-              total_in_digest=sum(len(cl.scored_tweets) for cl in clusters))
+              total_in_digest=sum(len(cl.scored_tweets) for cl in clusters),
+              duration_s=round(time.monotonic() - start_t, 2))
     return 0 if status in {"ok", "empty"} else 1
 
 
