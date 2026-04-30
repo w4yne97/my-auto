@@ -130,18 +130,28 @@ PYTHONPATH="$PWD" python3 -c "
 import json, os
 from pathlib import Path
 from lib.orchestrator import route, ModuleResult, synthesize_crash_envelope, RouteDecision
+
 output_path = Path('/tmp/start-my-day/<module>.json')
+
+def _atomic_write_envelope(path, env):
+    \"\"\"Write envelope to path atomically so envelope_path in the run summary
+    always points to valid JSON, per spec §7.2 #4.\"\"\"
+    tmp = path.with_suffix(path.suffix + '.tmp')
+    tmp.write_text(json.dumps(env, ensure_ascii=False, indent=2), encoding='utf-8')
+    os.replace(tmp, path)
+
 try:
     if output_path.exists():
         envelope = json.loads(output_path.read_text())
     elif os.path.exists('/tmp/start-my-day/<module>.stderr'):
         envelope = synthesize_crash_envelope(open('/tmp/start-my-day/<module>.stderr').read())
+        _atomic_write_envelope(output_path, envelope)
     else:
         envelope = synthesize_crash_envelope('(no stderr captured)')
+        _atomic_write_envelope(output_path, envelope)
 except json.JSONDecodeError as e:
-    # today.py wrote a malformed envelope — synthesize a crash envelope
-    # so the for-loop can keep going.
     envelope = synthesize_crash_envelope(f'envelope JSON parse failed: {e}')
+    _atomic_write_envelope(output_path, envelope)
 state_file = Path('/tmp/start-my-day/_run_state.json')
 upstream_raw = json.loads(state_file.read_text() or '[]') if state_file.exists() else []
 upstream = [ModuleResult(**u) for u in upstream_raw]
@@ -154,12 +164,13 @@ except ValueError:
     envelope = synthesize_crash_envelope(
         f"unknown envelope.status={envelope.get('status')!r}; module={'<module>'!r}"
     )
+    _atomic_write_envelope(output_path, envelope)
     d = RouteDecision(route='error', reason='unknown envelope status', blocked_by=[])
 print(json.dumps({'route': d.route, 'reason': d.reason, 'blocked_by': d.blocked_by, 'envelope': envelope}))
 "
 ```
 
-把 stdout 解析为 `{route, reason, blocked_by, envelope}`，写入环境变量 `ROUTE_DECISION` (前三个字段) 和 `ENVELOPE`（最后一个）供 Step 4.5 使用。未知 status 时，`envelope` 已被替换为 synthesized crash envelope，`errors[0]` 一定存在。
+把 stdout 解析为 `{route, reason, blocked_by, envelope}`，写入环境变量 `ROUTE_DECISION` (前三个字段) 和 `ENVELOPE`（最后一个）供 Step 4.5 使用。**所有 synthesize_crash_envelope 路径都会原子写回 `output_path`**，确保 `envelope_path` 指向的文件始终是有效 JSON 且与 `envelope` 一致（符合 spec §7.2 #4）。
 
 记录 `route_decision`。
 

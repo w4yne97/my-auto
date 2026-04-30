@@ -248,3 +248,106 @@ sys.exit(0)
     from lib.orchestrator import render_error
     rendered = render_error(r.errors[0])
     assert "❌ crash:" in rendered
+
+
+def test_malformed_envelope_is_rewritten_to_valid_json(tmp_path, monkeypatch):
+    """Per spec §7.2 #4: envelope_path must always point to valid JSON when
+    route ∈ {ok, empty, error}. If today.py writes malformed JSON, the
+    orchestrator synthesizes a crash envelope AND writes it back to disk
+    atomically so sub-F can trust envelope_path."""
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "config").mkdir()
+    (repo / "modules").mkdir()
+
+    # Module that writes malformed JSON to --output.
+    mod_dir = repo / "modules" / "module-bad-json"
+    (mod_dir / "scripts").mkdir(parents=True)
+    (mod_dir / "module.yaml").write_text(yaml.safe_dump({
+        "name": "module-bad-json",
+        "daily": {"today_script": "scripts/today.py", "today_skill": "SKILL_TODAY.md"},
+        "depends_on": [],
+    }))
+    (mod_dir / "scripts" / "today.py").write_text('''
+import argparse, sys
+parser = argparse.ArgumentParser()
+parser.add_argument("--output", required=True)
+args = parser.parse_args()
+with open(args.output, "w", encoding="utf-8") as f:
+    f.write("{\\"this is not\\": valid")  # malformed JSON
+sys.exit(0)
+''')
+    (repo / "config" / "modules.yaml").write_text(yaml.safe_dump({
+        "modules": [{"name": "module-bad-json", "enabled": True, "order": 10}],
+    }))
+
+    from lib.orchestrator import (
+        load_registry, apply_filters, load_module_meta,
+        synthesize_crash_envelope, route, write_run_summary,
+        ModuleResult, RouteDecision,
+    )
+
+    L = apply_filters(load_registry(repo / "config" / "modules.yaml"))
+    started_at = datetime.now().astimezone().isoformat(timespec="seconds")
+    results: list[ModuleResult] = []
+
+    # Mirror SKILL.md Step 4.4 with the new invariant: synthesized envelopes
+    # must be written back to output_path so envelope_path is always valid.
+    def _atomic_write_envelope(path, env):
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        tmp.write_text(json.dumps(env, ensure_ascii=False, indent=2), encoding="utf-8")
+        import os as _os
+        _os.replace(tmp, path)
+
+    for entry in L:
+        meta = load_module_meta(repo, entry.name)
+        out = tmp_path / f"{entry.name}.json"
+        t0 = datetime.now().astimezone()
+        proc = subprocess.run(
+            [sys.executable, str(repo / "modules" / entry.name / meta.today_script),
+             "--output", str(out)],
+            capture_output=True, text=True,
+        )
+        t1 = datetime.now().astimezone()
+        try:
+            if out.exists():
+                envelope = json.loads(out.read_text())
+            else:
+                envelope = synthesize_crash_envelope(proc.stderr or "(no stderr)")
+                _atomic_write_envelope(out, envelope)
+        except json.JSONDecodeError as e:
+            envelope = synthesize_crash_envelope(f"envelope JSON parse failed: {e}")
+            _atomic_write_envelope(out, envelope)
+        try:
+            decision = route(envelope, upstream_results=results, depends_on=meta.depends_on)
+        except ValueError:
+            envelope = synthesize_crash_envelope(
+                f"unknown envelope.status={envelope.get('status')!r}; module={entry.name!r}"
+            )
+            _atomic_write_envelope(out, envelope)
+            decision = RouteDecision(route="error", reason="unknown envelope status", blocked_by=[])
+        results.append(ModuleResult(
+            name=entry.name,
+            route=decision.route,
+            started_at=t0.isoformat(timespec="seconds"),
+            ended_at=t1.isoformat(timespec="seconds"),
+            duration_ms=int((t1 - t0).total_seconds() * 1000),
+            envelope_path=str(out),
+            stats=envelope.get("stats"),
+            errors=envelope.get("errors", []),
+            blocked_by=decision.blocked_by,
+        ))
+
+    assert len(results) == 1
+    r = results[0]
+    assert r.route == "error"
+    assert r.errors[0]["code"] == "crash"
+
+    # The contract: envelope_path must point to valid JSON.
+    on_disk = json.loads(Path(r.envelope_path).read_text())
+    assert on_disk["status"] == "error"
+    assert on_disk["errors"][0]["code"] == "crash"
+    # And it must equal what we recorded in errors[]:
+    assert on_disk["errors"] == r.errors
