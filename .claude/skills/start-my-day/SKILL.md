@@ -49,12 +49,13 @@ print(json.dumps([m.__dict__ for m in L]))
 
 ```bash
 mkdir -p /tmp/start-my-day && rm -f /tmp/start-my-day/*.json
-echo '[]' > /tmp/start-my-day/_run_state.json
 ```
+
+> **不再使用 `_run_state.json` 作为 dep 状态的中间文件**（sub-F 之后已废弃 —— `runs/<DATE>.json` 因增量 + merge-by-name 写入承担了这个角色，且 durable 不会被 /tmp 清理影响）。
 
 # Step 4: 对每个模块依次执行
 
-记录 `started_at = now()`（ISO8601 with timezone）。维护一个 `results: list[ModuleResult]` 累积结果，每跑完一个模块写到 `/tmp/start-my-day/_run_state.json`（供下个模块的 dep 检查读取）。
+记录 `started_at = now()`（ISO8601 with timezone）。每跑完一个模块通过 `write_run_summary` 增量 upsert 到 `~/.local/share/start-my-day/runs/<DATE>.json`（merge-by-name；同时供下个模块的 dep 检查 + 后续 sub-F digest 消费）。
 
 对 `L'` 中的每个 module：
 
@@ -77,13 +78,17 @@ print(json.dumps(meta.__dict__))
 ```bash
 PYTHONPATH="$PWD" python3 -c "
 import json, os
-from pathlib import Path
-from datetime import datetime
-from dataclasses import asdict
-from lib.orchestrator import route, ModuleResult, log_run_event
-state_file = Path('/tmp/start-my-day/_run_state.json')
-upstream_raw = json.loads(state_file.read_text() or '[]') if state_file.exists() else []
-upstream = [ModuleResult(**u) for u in upstream_raw]
+from lib.orchestrator import route, ModuleResult
+from lib.storage import platform_runs_dir
+runs_path = platform_runs_dir() / f\"{os.environ['DATE']}.json\"
+if runs_path.exists():
+    data = json.loads(runs_path.read_text(encoding='utf-8'))
+    # Filter out the current module's row (in case of --only re-run; route() only
+    # cares about depends_on, but it's cleaner to not feed self into upstream).
+    upstream_raw = [m for m in data.get('modules', []) if m.get('name') != '<module>']
+    upstream = [ModuleResult(**u) for u in upstream_raw]
+else:
+    upstream = []  # First module of a fresh-day run; no upstream yet.
 depends_on = <meta.depends_on>
 # Synthetic envelope: route() will short-circuit on dep before reading status.
 d = route({'status': 'ok'}, upstream_results=upstream, depends_on=depends_on)
@@ -93,14 +98,13 @@ print(json.dumps({'route': d.route, 'reason': d.reason, 'blocked_by': d.blocked_
 
 若 `route == 'dep_blocked'`：
 
-- 构造 `ModuleResult(name=<module>, route='dep_blocked', started_at=now, ended_at=now, duration_ms=0, envelope_path=None, stats=None, errors=[], blocked_by=<blocked_by>)` 追加到 `_run_state.json` **以及** `runs/<DATE>.json`。具体形式（与 4.5 同款 python3 -c 调用，仅传当前 dep_blocked 的 result）：
+- 构造 `ModuleResult(name=<module>, route='dep_blocked', ...)` 并通过 `write_run_summary` upsert 到 `runs/<DATE>.json`（merge-by-name 保证不动其它 row）。具体形式：
 
 ```bash
 PYTHONPATH="$PWD" python3 -c "
 import json, os
 from datetime import datetime
 from lib.orchestrator import log_run_event, ModuleResult, write_run_summary
-from dataclasses import asdict
 _now = datetime.now().astimezone().isoformat(timespec='seconds')
 result = ModuleResult(
     name='<module>',
@@ -112,13 +116,6 @@ result = ModuleResult(
 log_run_event('module_routed', date=os.environ['DATE'], name='<module>',
               route='dep_blocked', duration_ms=0, errors=[],
               blocked_by=<blocked_by>)
-state_path = '/tmp/start-my-day/_run_state.json'
-prior = json.loads(open(state_path).read()) if os.path.exists(state_path) else []
-prior.append(asdict(result))
-tmp_path = state_path + '.tmp'
-open(tmp_path, 'w').write(json.dumps(prior))
-os.replace(tmp_path, state_path)
-# sub-F: write to runs/<DATE>.json with merge-by-name (preserves other rows).
 write_run_summary(
     date=os.environ['DATE'],
     started_at=os.environ['STARTED_AT'],
@@ -186,9 +183,14 @@ try:
 except json.JSONDecodeError as e:
     envelope = synthesize_crash_envelope(f'envelope JSON parse failed: {e}')
     _atomic_write_envelope(output_path, envelope)
-state_file = Path('/tmp/start-my-day/_run_state.json')
-upstream_raw = json.loads(state_file.read_text() or '[]') if state_file.exists() else []
-upstream = [ModuleResult(**u) for u in upstream_raw]
+from lib.storage import platform_runs_dir
+runs_path = platform_runs_dir() / f\"{os.environ['DATE']}.json\"
+if runs_path.exists():
+    data = json.loads(runs_path.read_text(encoding='utf-8'))
+    upstream_raw = [m for m in data.get('modules', []) if m.get('name') != '<module>']
+    upstream = [ModuleResult(**u) for u in upstream_raw]
+else:
+    upstream = []
 depends_on = <meta.depends_on>  # injected as JSON list literal; dep_blocked already handled in 4.2, kept for safety
 try:
     d = route(envelope, upstream_results=upstream, depends_on=depends_on)
@@ -233,16 +235,9 @@ result = ModuleResult(
 log_run_event('module_routed', date=os.environ['DATE'], name='<module>', route=RD['route'],
               duration_ms=result.duration_ms, errors=result.errors,
               blocked_by=result.blocked_by)
-# Append to _run_state.json (atomic write so a Ctrl+C mid-write doesn't corrupt the dep state)
-state_path = '/tmp/start-my-day/_run_state.json'
-prior = json.loads(open(state_path).read()) if os.path.exists(state_path) else []
-prior.append(asdict(result))
-tmp_path = state_path + '.tmp'
-open(tmp_path, 'w').write(json.dumps(prior))
-os.replace(tmp_path, state_path)
-# sub-F: incremental write_run_summary so auto-digest's today.py (order=40)
-# can read upstream results from runs/<date>.json. Merge-by-name semantics
-# means this single-result call upserts without clobbering prior modules.
+# sub-F: incremental write_run_summary upserts this row into runs/<DATE>.json.
+# Merge-by-name preserves prior rows; durable file replaces the old _run_state.json
+# intermediate (which was vulnerable to /tmp cleanup).
 write_run_summary(
     date=os.environ['DATE'],
     started_at=os.environ['STARTED_AT'],
@@ -265,34 +260,25 @@ print(json.dumps(asdict(result)))
 
 **SKILL_TODAY 上下文（仅 ok 路径需要）：** `MODULE_NAME`、`MODULE_DIR`、`TODAY_JSON=/tmp/start-my-day/<module>.json`、`DATE`、`VAULT_PATH`。
 
-# Step 5: 写 run summary + run_done 事件
+# Step 5: log run_done 事件
 
-记录 `ended_at = now()`。
+记录 `ended_at = now()`。Step 4 的增量 `write_run_summary` 已经把所有模块 row 写进 `runs/<DATE>.json`，这里只读最新 `summary` 字段、记 `run_done` 事件即可。
 
 ```bash
 PYTHONPATH="$PWD" python3 -c "
 import json, os
 from datetime import datetime
-from lib.orchestrator import write_run_summary, log_run_event, ModuleResult
-results_raw = json.loads(open('/tmp/start-my-day/_run_state.json').read())
-results = [ModuleResult(**r) for r in results_raw]
-path = write_run_summary(
-    date=os.environ['DATE'],
-    started_at=os.environ['STARTED_AT'],
-    ended_at=os.environ['ENDED_AT'],
-    args=json.loads(os.environ['STARTMYDAY_ARGS']),
-    results=results,
-)
-summary = {
-    'total': len(results),
-    'ok': sum(1 for r in results if r.route == 'ok'),
-    'empty': sum(1 for r in results if r.route == 'empty'),
-    'error': sum(1 for r in results if r.route == 'error'),
-    'dep_blocked': sum(1 for r in results if r.route == 'dep_blocked'),
-}
+from lib.orchestrator import log_run_event
+from lib.storage import platform_runs_dir
+runs_path = platform_runs_dir() / f\"{os.environ['DATE']}.json\"
+data = json.loads(runs_path.read_text(encoding='utf-8'))
 duration_ms = int((datetime.fromisoformat(os.environ['ENDED_AT']) - datetime.fromisoformat(os.environ['STARTED_AT'])).total_seconds() * 1000)
-log_run_event('run_done', date=os.environ['DATE'], summary=summary, run_summary_path=str(path), duration_ms=duration_ms)
-print(path)
+log_run_event('run_done',
+              date=os.environ['DATE'],
+              summary=data['summary'],
+              run_summary_path=str(runs_path),
+              duration_ms=duration_ms)
+print(runs_path)
 "
 ```
 
@@ -317,7 +303,7 @@ print(path)
 
 - 任何单个模块失败（today.py 崩 / JSON 错 / SKILL_TODAY 出错），**不**中断后续模块。
 - `config/modules.yaml` 缺失或 parse 失败 → Step 2 即抛错，输出 `❌ 平台配置错误: <异常>` 并退出，**不写 run summary**（因为没跑过任何模块）。
-- 用户中途 Ctrl+C → run summary 不写（Step 5 没跑到），JSONL 跑到哪记到哪。
+- 用户中途 Ctrl+C → `runs/<DATE>.json` 保留截止到最后一个完成模块的 partial snapshot（Step 4 增量写），JSONL 跑到哪记到哪。Step 5 的 `run_done` 事件会缺失，但 run summary 文件仍可读。
 
 # 已知行为
 
