@@ -6,9 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A multi-module daily-routine hub. Each `modules/auto-*/` is an independent vertical (paper tracking, learning planning, social-feed digestion, etc.). The top-level `start-my-day` SKILL orchestrates today's runs across all enabled modules.
 
-**P2 status:** sub-A/B/C/D 完成 / **sub-E 完成**（多模块编排打磨：`lib/orchestrator.py` 8 函数纯逻辑层 + 三模块统一 `errors[]={level,code,detail,hint}` schema + `depends_on` 严格门控 + run summary `~/.local/share/start-my-day/runs/<date>.json`，作为 sub-F 的结构化输入）。Phase 2 继续 sub-F (跨模块综合日报)。
+**P2 status:** sub-A/B/C/D/E 完成 / **sub-F 完成**（跨模块综合日报 `auto-digest` 模块：消费 sub-E 的 `runs/<date>.json` + 各模块 vault 当天文件，写 `$VAULT_PATH/10_Daily/<date>-日报.md`，含 AI 跨模块关联推断段）。**Phase 2 完成**。
 
-**sub-F 握手契约（sub-E 完成后稳定）：** sub-F 读 `~/.local/share/start-my-day/runs/<date>.json`（schema 见 `docs/superpowers/specs/2026-04-29-orchestration-polish-design.md` §3.4）拿到本日所有模块的 route + envelope_path，再按各模块 `module.yaml.vault_outputs` glob 当天 vault 文件做综合日报。`runs/<date>.json` schema_version=1 永不删字段、永不收紧约束。
+**sub-F 实现：** `modules/auto-digest/`（消费 sub-E 的 `runs/<date>.json` + 各模块 `module.yaml.daily.daily_markdown_glob` 指向的 vault 文件；spec: `docs/superpowers/specs/2026-04-30-cross-module-daily-digest-design.md`）。sub-F 完成时附带两处 sub-E 内联收紧：`write_run_summary` 改 merge-by-name + SKILL.md Step 4 增量写 `runs/<date>.json`（保证 `--only auto-digest` 重跑不丢上游 row）。`runs/<date>.json` schema_version=1 永不删字段、永不收紧约束。
 
 **Vault topology after sub-B:**
 

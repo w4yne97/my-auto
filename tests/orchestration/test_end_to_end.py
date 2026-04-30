@@ -8,6 +8,7 @@ the spec §3.4 schema.
 """
 from __future__ import annotations
 import json
+import os
 import subprocess
 import sys
 from datetime import datetime
@@ -351,3 +352,199 @@ sys.exit(0)
     assert on_disk["errors"][0]["code"] == "crash"
     # And it must equal what we recorded in errors[]:
     assert on_disk["errors"] == r.errors
+
+
+def test_full_run_with_digest_consumes_runs_summary(tmp_path, monkeypatch):
+    """sub-F E2E: a 4th module reads runs/<date>.json (incrementally written
+    by Phase B SKILL.md changes) and surfaces upstream rows in its envelope.
+
+    We use a fake 'mock-digest' that emulates auto-digest's contract: read
+    runs/<date>.json, output an envelope whose payload.upstream_modules
+    mirrors the modules[] from the run summary.
+    """
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "config").mkdir()
+    (repo / "modules").mkdir()
+
+    _write_fake_module(repo, "module-a", status="ok")
+    _write_fake_module(repo, "module-b", status="error")
+    _write_fake_module(repo, "module-c", status="ok", depends_on=["module-b"])
+
+    # 4th module — reads runs/<date>.json and surfaces upstream rows.
+    digest_dir = repo / "modules" / "mock-digest"
+    (digest_dir / "scripts").mkdir(parents=True)
+    (digest_dir / "module.yaml").write_text(yaml.safe_dump({
+        "name": "mock-digest",
+        "daily": {"today_script": "scripts/today.py", "today_skill": "SKILL_TODAY.md"},
+        "depends_on": [],
+    }))
+    (digest_dir / "scripts" / "today.py").write_text('''
+import argparse, json, os
+from pathlib import Path
+parser = argparse.ArgumentParser()
+parser.add_argument("--output", required=True)
+args = parser.parse_args()
+xdg = os.environ.get("XDG_DATA_HOME")
+runs_path = Path(xdg) / "start-my-day" / "runs" / "2026-04-29.json"
+upstream = []
+if runs_path.exists():
+    summary = json.loads(runs_path.read_text())
+    upstream = [m for m in summary.get("modules", []) if m.get("name") != "mock-digest"]
+envelope = {
+    "module": "mock-digest",
+    "schema_version": 1,
+    "status": "ok",
+    "stats": {"upstream_count": len(upstream)},
+    "payload": {"upstream_modules": upstream},
+    "errors": [],
+}
+with open(args.output, "w", encoding="utf-8") as f:
+    json.dump(envelope, f)
+''')
+
+    (repo / "config" / "modules.yaml").write_text(yaml.safe_dump({
+        "modules": [
+            {"name": "module-a", "enabled": True, "order": 10},
+            {"name": "module-b", "enabled": True, "order": 20},
+            {"name": "module-c", "enabled": True, "order": 30},
+            {"name": "mock-digest", "enabled": True, "order": 40},
+        ]
+    }))
+
+    from lib.orchestrator import (
+        load_registry, apply_filters, load_module_meta,
+        synthesize_crash_envelope, route, write_run_summary,
+        ModuleResult,
+    )
+
+    L = apply_filters(load_registry(repo / "config" / "modules.yaml"))
+    started_at = datetime.now().astimezone().isoformat(timespec="seconds")
+    results: list[ModuleResult] = []
+
+    for entry in L:
+        meta = load_module_meta(repo, entry.name)
+        pre = route({"status": "ok"}, upstream_results=results, depends_on=meta.depends_on)
+        if pre.route == "dep_blocked":
+            now = datetime.now().astimezone().isoformat(timespec="seconds")
+            r = ModuleResult(
+                name=entry.name, route="dep_blocked",
+                started_at=now, ended_at=now, duration_ms=0,
+                envelope_path=None, stats=None, errors=[],
+                blocked_by=pre.blocked_by,
+            )
+            results.append(r)
+            # Phase B: incremental write so order=40 module sees prior rows.
+            write_run_summary("2026-04-29",
+                              started_at=started_at,
+                              ended_at=now,
+                              args={"only": None, "skip": [], "date": "2026-04-29"},
+                              results=[r])
+            continue
+
+        out = tmp_path / f"{entry.name}.json"
+        t0 = datetime.now().astimezone()
+        proc = subprocess.run(
+            [sys.executable, str(repo / "modules" / entry.name / meta.today_script),
+             "--output", str(out)],
+            capture_output=True, text=True,
+            env={**os.environ, "XDG_DATA_HOME": str(tmp_path / "xdg")},
+        )
+        t1 = datetime.now().astimezone()
+        envelope = synthesize_crash_envelope(proc.stderr) if (proc.returncode != 0 and not out.exists()) else json.loads(out.read_text())
+        decision = route(envelope, upstream_results=results, depends_on=meta.depends_on)
+        r = ModuleResult(
+            name=entry.name, route=decision.route,
+            started_at=t0.isoformat(timespec="seconds"),
+            ended_at=t1.isoformat(timespec="seconds"),
+            duration_ms=int((t1 - t0).total_seconds() * 1000),
+            envelope_path=str(out) if decision.route != "dep_blocked" else None,
+            stats=envelope.get("stats") if decision.route != "dep_blocked" else None,
+            errors=envelope.get("errors", []),
+            blocked_by=decision.blocked_by,
+        )
+        results.append(r)
+        write_run_summary("2026-04-29",
+                          started_at=started_at,
+                          ended_at=t1.isoformat(timespec="seconds"),
+                          args={"only": None, "skip": [], "date": "2026-04-29"},
+                          results=[r])
+
+    # Read final run summary.
+    summary_path = tmp_path / "xdg" / "start-my-day" / "runs" / "2026-04-29.json"
+    summary = json.loads(summary_path.read_text())
+    assert summary["summary"] == {"total": 4, "ok": 2, "empty": 0, "error": 1, "dep_blocked": 1}
+    by_name = {m["name"]: m for m in summary["modules"]}
+    assert set(by_name.keys()) == {"module-a", "module-b", "module-c", "mock-digest"}
+    assert by_name["mock-digest"]["route"] == "ok"
+
+    # Critical assertion: mock-digest's envelope saw the 3 upstream rows.
+    digest_envelope = json.loads((tmp_path / "mock-digest.json").read_text())
+    upstream_names = sorted(u["name"] for u in digest_envelope["payload"]["upstream_modules"])
+    assert upstream_names == ["module-a", "module-b", "module-c"]
+
+
+def test_only_digest_rerun_preserves_upstream_rows(tmp_path, monkeypatch):
+    """sub-F merge semantics: --only re-run preserves rows for unfiltered
+    modules in runs/<date>.json (so the next sub-F invocation can still
+    see upstream context)."""
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
+
+    from lib.orchestrator import write_run_summary, ModuleResult
+
+    # First "full run" — 3 upstream + digest.
+    full_results = [
+        ModuleResult(name="module-a", route="ok",
+                     started_at="2026-04-29T08:00:00+08:00",
+                     ended_at="2026-04-29T08:00:01+08:00", duration_ms=1000,
+                     envelope_path="/tmp/start-my-day/module-a.json",
+                     stats={"items": 1}, errors=[], blocked_by=[]),
+        ModuleResult(name="module-b", route="error",
+                     started_at="2026-04-29T08:00:01+08:00",
+                     ended_at="2026-04-29T08:00:02+08:00", duration_ms=1000,
+                     envelope_path="/tmp/start-my-day/module-b.json",
+                     stats={}, errors=[{"level": "error", "code": "x", "detail": "y", "hint": "z"}], blocked_by=[]),
+        ModuleResult(name="auto-digest", route="ok",
+                     started_at="2026-04-29T08:00:02+08:00",
+                     ended_at="2026-04-29T08:00:03+08:00", duration_ms=1000,
+                     envelope_path="/tmp/start-my-day/auto-digest.json",
+                     stats={"modules_total": 2}, errors=[], blocked_by=[]),
+    ]
+    for r in full_results:
+        write_run_summary("2026-04-29",
+                          started_at="2026-04-29T08:00:00+08:00",
+                          ended_at=r.ended_at,
+                          args={"only": None, "skip": [], "date": "2026-04-29"},
+                          results=[r])
+
+    # Now simulate `--only auto-digest` re-run at 09:00.
+    new_digest = ModuleResult(
+        name="auto-digest", route="ok",
+        started_at="2026-04-29T09:00:00+08:00",
+        ended_at="2026-04-29T09:00:01+08:00", duration_ms=1000,
+        envelope_path="/tmp/start-my-day/auto-digest.json",
+        stats={"modules_total": 2, "regenerated": True}, errors=[], blocked_by=[],
+    )
+    summary_path = write_run_summary(
+        "2026-04-29",
+        started_at="2026-04-29T09:00:00+08:00",
+        ended_at="2026-04-29T09:00:01+08:00",
+        args={"only": "auto-digest", "skip": [], "date": "2026-04-29"},
+        results=[new_digest],
+    )
+
+    summary = json.loads(summary_path.read_text())
+    by_name = {m["name"]: m for m in summary["modules"]}
+    # All 3 names still present
+    assert set(by_name.keys()) == {"module-a", "module-b", "auto-digest"}
+    # module-a / module-b rows preserved with original values
+    assert by_name["module-a"]["route"] == "ok"
+    assert by_name["module-b"]["route"] == "error"
+    # auto-digest row replaced with new values
+    assert by_name["auto-digest"]["stats"] == {"modules_total": 2, "regenerated": True}
+    # started_at preserved from first write
+    assert summary["started_at"] == "2026-04-29T08:00:00+08:00"
+    # summary recomputed
+    assert summary["summary"] == {"total": 3, "ok": 2, "empty": 0, "error": 1, "dep_blocked": 0}

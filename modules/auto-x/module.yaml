@@ -5,6 +5,7 @@ description: Daily X (Twitter) Following-timeline digest with keyword filtering.
 daily:
   today_script: scripts/today.py
   today_skill: SKILL_TODAY.md
+  daily_markdown_glob: "x/10_Daily/{date}.md"
 
 vault_outputs:
   - path: x/10_Daily/{date}.md

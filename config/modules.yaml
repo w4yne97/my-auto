@@ -1,6 +1,7 @@
 # Platform module registry — controls which modules are enabled and their order.
 # Phase 2 sub-C (2026-04-29): auto-learning joined.
 # Phase 2 sub-D (2026-04-29): auto-x joined.
+# Phase 2 sub-F (2026-04-30): auto-digest joined.
 
 modules:
   - name: auto-reading
@@ -12,3 +13,6 @@ modules:
   - name: auto-x
     enabled: true
     order: 30
+  - name: auto-digest
+    enabled: true
+    order: 40    # cross-module daily digest; depends_on=[] so it runs even when upstream all failed
