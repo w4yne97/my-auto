@@ -182,7 +182,12 @@ def render_error(error: dict) -> str:
 # --- Logging shim -----------------------------------------------------
 
 def log_run_event(event: str, **fields) -> None:
-    """Wrap lib.logging.log_event with module='start-my-day' tag."""
+    """Wrap lib.logging.log_event with module='start-my-day' tag.
+
+    Callers should pass date='YYYY-MM-DD' so the JSONL record is written
+    to logs/<date>.jsonl (otherwise defaults to today, which is wrong
+    when rerunning a prior date via /start-my-day <date>).
+    """
     log_event("start-my-day", event, **fields)
 
 

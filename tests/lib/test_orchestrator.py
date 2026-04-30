@@ -272,6 +272,20 @@ class TestLogRunEvent:
         assert rec["date"] == "2026-04-29"
         assert rec["modules_ordered"] == ["a", "b"]
 
+    def test_log_run_event_with_date_routes_to_that_date_file(self, tmp_path, monkeypatch):
+        """log_run_event(date=...) must thread through to the underlying log file path."""
+        monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+        log_run_event("run_start", date="2026-04-29", args={"date": "2026-04-29"},
+                      modules_ordered=["auto-reading"])
+        log_dir = tmp_path / "start-my-day" / "logs"
+        files = sorted(log_dir.glob("*.jsonl"))
+        assert len(files) == 1
+        assert files[0].name == "2026-04-29.jsonl"
+        rec = json.loads(files[0].read_text().strip())
+        assert rec["module"] == "start-my-day"
+        assert rec["event"] == "run_start"
+        assert rec["date"] == "2026-04-29"
+
 
 class TestWriteRunSummary:
     def _make_results(self):

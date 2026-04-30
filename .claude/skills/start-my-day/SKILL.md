@@ -22,10 +22,12 @@ description: 每日多模块编排器 —— 读取注册表、依次执行各 a
 
 记录到内存中的 `args = {"date": DATE, "only": ONLY, "skip": SKIP_LIST}`。
 
+> **执行前提：** 所有 Python 命令在仓根执行 + 用 `PYTHONPATH="$PWD"` + `python3`（项目要求 ≥3.12，且 today.py / lib.orchestrator 都依赖 top-level `lib.*` 包）。
+
 # Step 2: 加载注册表 + 应用过滤
 
 ```bash
-python -c "
+PYTHONPATH="$PWD" python3 -c "
 import json, sys
 from pathlib import Path
 from lib.orchestrator import load_registry, apply_filters, log_run_event
@@ -59,7 +61,7 @@ echo '[]' > /tmp/start-my-day/_run_state.json
 ## Step 4.1: 加载模块自描述
 
 ```bash
-python -c "
+PYTHONPATH="$PWD" python3 -c "
 import json
 from pathlib import Path
 from lib.orchestrator import load_module_meta
@@ -73,7 +75,7 @@ print(json.dumps(meta.__dict__))
 ## Step 4.2: 依赖门控（先于跑 today.py）
 
 ```bash
-python -c "
+PYTHONPATH="$PWD" python3 -c "
 import json, os
 from pathlib import Path
 from datetime import datetime
@@ -103,7 +105,7 @@ print(json.dumps({'route': d.route, 'reason': d.reason, 'blocked_by': d.blocked_
 记录 `t0 = now()`。
 
 ```bash
-python modules/<module>/<meta.today_script> --output /tmp/start-my-day/<module>.json 2>/tmp/start-my-day/<module>.stderr
+PYTHONPATH="$PWD" python3 modules/<module>/<meta.today_script> --output /tmp/start-my-day/<module>.json 2>/tmp/start-my-day/<module>.stderr
 ```
 
 读取 envelope 的规则（**重要**——auto-x 等模块在 error 路径上也会写结构化 envelope，必须优先信任文件）：
@@ -112,7 +114,7 @@ python modules/<module>/<meta.today_script> --output /tmp/start-my-day/<module>.
 - **若文件不存在 + 退出码非 0** → today.py 在写 envelope 前就崩了，调用 `synthesize_crash_envelope()` 兜底：
 
 ```bash
-python -c "
+PYTHONPATH="$PWD" python3 -c "
 import json
 from lib.orchestrator import synthesize_crash_envelope
 print(json.dumps(synthesize_crash_envelope(open('/tmp/start-my-day/<module>.stderr').read())))
@@ -124,22 +126,31 @@ print(json.dumps(synthesize_crash_envelope(open('/tmp/start-my-day/<module>.stde
 ## Step 4.4: 路由判定
 
 ```bash
-python -c "
+PYTHONPATH="$PWD" python3 -c "
 import json, os
 from pathlib import Path
-from lib.orchestrator import route, ModuleResult, synthesize_crash_envelope
+from lib.orchestrator import route, ModuleResult, synthesize_crash_envelope, RouteDecision
 output_path = Path('/tmp/start-my-day/<module>.json')
-if output_path.exists():
-    envelope = json.loads(output_path.read_text())
-elif os.path.exists('/tmp/start-my-day/<module>.stderr'):
-    envelope = synthesize_crash_envelope(open('/tmp/start-my-day/<module>.stderr').read())
-else:
-    envelope = synthesize_crash_envelope('(no stderr captured)')
+try:
+    if output_path.exists():
+        envelope = json.loads(output_path.read_text())
+    elif os.path.exists('/tmp/start-my-day/<module>.stderr'):
+        envelope = synthesize_crash_envelope(open('/tmp/start-my-day/<module>.stderr').read())
+    else:
+        envelope = synthesize_crash_envelope('(no stderr captured)')
+except json.JSONDecodeError as e:
+    # today.py wrote a malformed envelope — synthesize a crash envelope
+    # so the for-loop can keep going.
+    envelope = synthesize_crash_envelope(f'envelope JSON parse failed: {e}')
 state_file = Path('/tmp/start-my-day/_run_state.json')
-upstream = json.loads(state_file.read_text() or '[]') if state_file.exists() else []
-upstream = [ModuleResult(**u) for u in upstream]
+upstream_raw = json.loads(state_file.read_text() or '[]') if state_file.exists() else []
+upstream = [ModuleResult(**u) for u in upstream_raw]
 depends_on = <meta.depends_on>  # injected as JSON list literal; dep_blocked already handled in 4.2, kept for safety
-d = route(envelope, upstream_results=upstream, depends_on=depends_on)
+try:
+    d = route(envelope, upstream_results=upstream, depends_on=depends_on)
+except ValueError:
+    # Unknown envelope.status — treat as an error route, keep going.
+    d = RouteDecision(route='error', reason='unknown envelope status', blocked_by=[])
 print(json.dumps({'route': d.route, 'reason': d.reason, 'blocked_by': d.blocked_by}))
 "
 ```
@@ -149,7 +160,7 @@ print(json.dumps({'route': d.route, 'reason': d.reason, 'blocked_by': d.blocked_
 ## Step 4.5: 记录 module_routed 事件 + 累积 results
 
 ```bash
-python -c "
+PYTHONPATH="$PWD" python3 -c "
 import json, os
 from datetime import datetime
 from lib.orchestrator import log_run_event, ModuleResult
@@ -167,7 +178,7 @@ result = ModuleResult(
     errors=ENV.get('errors', []),
     blocked_by=RD['blocked_by'],
 )
-log_run_event('module_routed', name='<module>', route=RD['route'],
+log_run_event('module_routed', date=os.environ['DATE'], name='<module>', route=RD['route'],
               duration_ms=result.duration_ms, errors=result.errors,
               blocked_by=result.blocked_by)
 # Append to _run_state.json (atomic write so a Ctrl+C mid-write doesn't corrupt the dep state)
@@ -197,7 +208,7 @@ print(json.dumps(asdict(result)))
 记录 `ended_at = now()`。
 
 ```bash
-python -c "
+PYTHONPATH="$PWD" python3 -c "
 import json, os
 from datetime import datetime
 from lib.orchestrator import write_run_summary, log_run_event, ModuleResult
@@ -218,7 +229,7 @@ summary = {
     'dep_blocked': sum(1 for r in results if r.route == 'dep_blocked'),
 }
 duration_ms = int((datetime.fromisoformat(os.environ['ENDED_AT']) - datetime.fromisoformat(os.environ['STARTED_AT'])).total_seconds() * 1000)
-log_run_event('run_done', summary=summary, run_summary_path=str(path), duration_ms=duration_ms)
+log_run_event('run_done', date=os.environ['DATE'], summary=summary, run_summary_path=str(path), duration_ms=duration_ms)
 print(path)
 "
 ```

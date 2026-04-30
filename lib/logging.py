@@ -17,13 +17,15 @@ def _log_path(date: str | None = None) -> Path:
     return platform_log_dir() / f"{d}.jsonl"
 
 
-def log_event(module: str, event: str, *, level: str = "info", **fields) -> None:
+def log_event(module: str, event: str, *, level: str = "info", date: str | None = None, **fields) -> None:
     rec = {
         "ts": datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
         "level": level,
         "module": module,
         "event": event,
     }
+    if date is not None:
+        rec["date"] = date
     rec.update(fields)
-    with _log_path().open("a", encoding="utf-8") as f:
+    with _log_path(date).open("a", encoding="utf-8") as f:
         f.write(json.dumps(rec, ensure_ascii=False) + "\n")
