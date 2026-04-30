@@ -303,6 +303,7 @@ print(path)
   📚 auto-reading    <route>   <stats或error行>
   🎓 auto-learning   <route>   ...
   🐦 auto-x          <route>   ...
+  📊 auto-digest     <route>   ✅ 综合日报: $VAULT_PATH/10_Daily/<DATE>-日报.md  (route=ok 时)
   📋 详细日志: ~/.local/share/start-my-day/logs/<DATE>.jsonl
   📦 Run summary:   ~/.local/share/start-my-day/runs/<DATE>.json
 ```
@@ -320,6 +321,7 @@ print(path)
 
 # 已知行为
 
-- 三个 enabled 模块按 `config/modules.yaml.order` 升序：reading(10) → learning(20) → x(30)。
+- 四个 enabled 模块按 `config/modules.yaml.order` 升序：reading(10) → learning(20) → x(30) → digest(40)。
+- `auto-digest`（order=40）的 `depends_on: []`：上游全失败时它仍跑，写一份"今天什么都没成功"的诊断日报到 `$VAULT_PATH/10_Daily/<DATE>-日报.md`。
 - `auto-learning` 声明 `depends_on: [auto-reading]`：reading 今日 `error` 时，learning 自动 `dep_blocked`；reading `empty` **不**阻塞。
 - `$VAULT_PATH` 必须已在 shell 环境中设置。如未设置,提示用户在 `.env` 中配置。
