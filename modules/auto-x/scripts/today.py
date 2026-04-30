@@ -59,11 +59,11 @@ def _make_error(code: str, detail: str, hint: str | None = None) -> dict:
 
 
 def _make_warning(code: str, detail: str) -> dict:
-    return {"level": "warning", "code": code, "detail": detail}
+    return {"level": "warning", "code": code, "detail": detail, "hint": None}
 
 
 def _make_info(code: str, detail: str) -> dict:
-    return {"level": "info", "code": code, "detail": detail}
+    return {"level": "info", "code": code, "detail": detail, "hint": None}
 
 
 def _serialize_envelope(envelope: dict) -> str:

@@ -130,7 +130,9 @@ def test_full_run_with_dep_block(tmp_path, monkeypatch):
     assert by_name["module-c"]["envelope_path"] is None
     assert by_name["module-c"]["stats"] is None
 
-    # JSONL log should also contain run_start + 3×module_routed (no run_done since we didn't call it)
+    # The minimal driver above doesn't call log_run_event, so no JSONL should
+    # be written. (write_run_summary itself does not log; it only writes the
+    # snapshot.) This anchors the contract that lib.orchestrator helpers are
+    # log-agnostic — the SKILL.md prose owns logging via log_run_event.
     log_files = list((tmp_path / "xdg" / "start-my-day" / "logs").glob("*.jsonl"))
-    # The driver above doesn't call log_run_event (kept minimal).
-    # If you want, extend the test to also call log_run_event and assert events.
+    assert log_files == [], f"unexpected JSONL log written: {log_files}"

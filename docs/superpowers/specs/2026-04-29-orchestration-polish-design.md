@@ -440,10 +440,10 @@ sub-F 在自己的 SKILL_TODAY 阶段这样消费 sub-E 的输出：
 ```python
 import json
 from pathlib import Path
-from lib.storage import platform_state_dir
+from lib.storage import platform_runs_dir
 
 run_summary = json.loads(
-    (platform_state_dir() / "start-my-day" / "runs" / f"{date}.json").read_text()
+    (platform_runs_dir() / f"{date}.json").read_text()
 )
 
 for m in run_summary["modules"]:

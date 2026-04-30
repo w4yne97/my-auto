@@ -74,29 +74,38 @@ print(json.dumps(meta.__dict__))
 记录 `t0 = now()`。
 
 ```bash
-python modules/<module>/<meta.today_script> --output /tmp/start-my-day/<module>.json
+python modules/<module>/<meta.today_script> --output /tmp/start-my-day/<module>.json 2>/tmp/start-my-day/<module>.stderr
 ```
 
-退出码非 0 时，把 stderr 的最后 ~2KB 喂给 `synthesize_crash_envelope()`：
+读取 envelope 的规则（**重要**——auto-x 等模块在 error 路径上也会写结构化 envelope，必须优先信任文件）：
+
+- **若 `/tmp/start-my-day/<module>.json` 已存在** → 直接读它（即使退出码非 0；模块的 today.py 已写了带 `code`/`hint` 的结构化 error envelope，例如 auto-x 的 cookie 过期提示）。
+- **若文件不存在 + 退出码非 0** → today.py 在写 envelope 前就崩了，调用 `synthesize_crash_envelope()` 兜底：
 
 ```bash
 python -c "
-import json, sys
+import json
 from lib.orchestrator import synthesize_crash_envelope
 print(json.dumps(synthesize_crash_envelope(open('/tmp/start-my-day/<module>.stderr').read())))
 "
 ```
 
-并把结果作为 envelope。退出码为 0 时，直接读 `/tmp/start-my-day/<module>.json`。
+并把结果作为 envelope。
 
 ## Step 4.3: 路由判定
 
 ```bash
 python -c "
-import json
+import json, os
 from pathlib import Path
-from lib.orchestrator import route, ModuleResult
-envelope = json.loads(Path('/tmp/start-my-day/<module>.json').read_text())
+from lib.orchestrator import route, ModuleResult, synthesize_crash_envelope
+output_path = Path('/tmp/start-my-day/<module>.json')
+if output_path.exists():
+    envelope = json.loads(output_path.read_text())
+elif os.path.exists('/tmp/start-my-day/<module>.stderr'):
+    envelope = synthesize_crash_envelope(open('/tmp/start-my-day/<module>.stderr').read())
+else:
+    envelope = synthesize_crash_envelope('(no stderr captured)')
 upstream = json.loads(Path('/tmp/start-my-day/_run_state.json').read_text() or '[]')
 upstream = [ModuleResult(**u) for u in upstream]
 depends_on = <meta.depends_on>  # injected as JSON list literal
@@ -131,11 +140,13 @@ result = ModuleResult(
 log_run_event('module_routed', name='<module>', route=RD['route'],
               duration_ms=result.duration_ms, errors=result.errors,
               blocked_by=result.blocked_by)
-# Append to _run_state.json
+# Append to _run_state.json (atomic write so a Ctrl+C mid-write doesn't corrupt the dep state)
 state_path = '/tmp/start-my-day/_run_state.json'
 prior = json.loads(open(state_path).read()) if os.path.exists(state_path) else []
 prior.append(asdict(result))
-open(state_path, 'w').write(json.dumps(prior))
+tmp_path = state_path + '.tmp'
+open(tmp_path, 'w').write(json.dumps(prior))
+os.replace(tmp_path, state_path)
 print(json.dumps(asdict(result)))
 "
 ```
@@ -158,6 +169,7 @@ print(json.dumps(asdict(result)))
 ```bash
 python -c "
 import json, os
+from datetime import datetime
 from lib.orchestrator import write_run_summary, log_run_event, ModuleResult
 results_raw = json.loads(open('/tmp/start-my-day/_run_state.json').read())
 results = [ModuleResult(**r) for r in results_raw]
@@ -175,7 +187,8 @@ summary = {
     'error': sum(1 for r in results if r.route == 'error'),
     'dep_blocked': sum(1 for r in results if r.route == 'dep_blocked'),
 }
-log_run_event('run_done', summary=summary, run_summary_path=str(path))
+duration_ms = int((datetime.fromisoformat(os.environ['ENDED_AT']) - datetime.fromisoformat(os.environ['STARTED_AT'])).total_seconds() * 1000)
+log_run_event('run_done', summary=summary, run_summary_path=str(path), duration_ms=duration_ms)
 print(path)
 "
 ```
