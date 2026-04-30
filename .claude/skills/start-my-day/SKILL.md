@@ -93,7 +93,7 @@ print(json.dumps({'route': d.route, 'reason': d.reason, 'blocked_by': d.blocked_
 
 若 `route == 'dep_blocked'`：
 
-- 构造 `ModuleResult(name=<module>, route='dep_blocked', started_at=now, ended_at=now, duration_ms=0, envelope_path=None, stats=None, errors=[], blocked_by=<blocked_by>)` 追加到 `_run_state.json`。
+- 构造 `ModuleResult(name=<module>, route='dep_blocked', started_at=now, ended_at=now, duration_ms=0, envelope_path=None, stats=None, errors=[], blocked_by=<blocked_by>)` 追加到 `_run_state.json` **以及** `runs/<DATE>.json`（调 `write_run_summary` 与 4.5 同样语义；merge-by-name 保证不动其它 row）。
 - 调 `log_run_event('module_routed', date=<DATE>, name=<module>, route='dep_blocked', duration_ms=0, errors=[], blocked_by=<blocked_by>)`。
 - 输出 `⏭️ <module>: 已跳过（依赖 <blocked_by[0]> 今日 status=error）`。
 - **continue 到下一个模块**（不再执行 Step 4.3+）。
@@ -180,7 +180,7 @@ print(json.dumps({'route': d.route, 'reason': d.reason, 'blocked_by': d.blocked_
 PYTHONPATH="$PWD" python3 -c "
 import json, os
 from datetime import datetime
-from lib.orchestrator import log_run_event, ModuleResult
+from lib.orchestrator import log_run_event, ModuleResult, write_run_summary
 from dataclasses import asdict
 RD = json.loads(os.environ['ROUTE_DECISION'])
 ENV = json.loads(os.environ['ENVELOPE'])
@@ -205,6 +205,16 @@ prior.append(asdict(result))
 tmp_path = state_path + '.tmp'
 open(tmp_path, 'w').write(json.dumps(prior))
 os.replace(tmp_path, state_path)
+# sub-F: incremental write_run_summary so auto-digest's today.py (order=40)
+# can read upstream results from runs/<date>.json. Merge-by-name semantics
+# means this single-result call upserts without clobbering prior modules.
+write_run_summary(
+    date=os.environ['DATE'],
+    started_at=os.environ['STARTED_AT'],
+    ended_at=datetime.now().astimezone().isoformat(timespec='seconds'),
+    args=json.loads(os.environ['STARTMYDAY_ARGS']),
+    results=[result],
+)
 print(json.dumps(asdict(result)))
 "
 ```
