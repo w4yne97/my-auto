@@ -107,29 +107,40 @@ auto_generated: true
 
 ```bash
 PYTHONPATH="$PWD" python3 -c "
-import os
-from lib.obsidian_cli import ObsidianCLI
+import os, sys
+from lib.obsidian_cli import ObsidianCLI, CLINotFoundError, ObsidianNotRunningError, VaultNotFoundError
 DATE = os.environ['DATE']
 content = '''<填入 Step 4 渲染好的完整 markdown 字符串>'''
-cli = ObsidianCLI()
-cli.create_note(f'10_Daily/{DATE}-日报.md', content, overwrite=True)
+try:
+    cli = ObsidianCLI()
+    cli.create_note(f'10_Daily/{DATE}-日报.md', content, overwrite=True)
+    print(f'✅ 综合日报: \$VAULT_PATH/10_Daily/{DATE}-日报.md')
+except (CLINotFoundError, ObsidianNotRunningError, VaultNotFoundError) as e:
+    # Obsidian unavailable — degrade to stdout so the user still sees the diagnostic.
+    # This is sub-F's β2-extended principle: when the environment itself is broken,
+    # the digest is more valuable than ever; vault unreachable should never silence it.
+    print(f'⚠️  Vault 写入失败 ({type(e).__name__}: {e})；以下为本应写入的日报内容:', file=sys.stderr)
+    print('---BEGIN AUTO-DIGEST---')
+    print(content)
+    print('---END AUTO-DIGEST---')
+    print(f'修复 Obsidian 后可重跑: /start-my-day --only auto-digest {DATE}', file=sys.stderr)
 "
 ```
 
 注意：
 - `create_note` 的 `path` 参数是相对 vault 根的路径(`10_Daily/<DATE>-日报.md`)，**不是**绝对路径。
 - `overwrite=True` 让重跑覆盖之前的日报版本。
-- 若 Obsidian 未运行 / vault 不可达 / 写入失败：让 `ObsidianCLI` 异常自然抛出到顶层编排器(与 reading/x 一致)；不要 try/except 把错误吞掉。
+- **Obsidian 不可达时降级到 stdout**：若 `ObsidianCLI` 抛 `CLINotFoundError` / `ObsidianNotRunningError` / `VaultNotFoundError`，把组装好的 markdown 直接 print 到 stdout（用 `---BEGIN/END AUTO-DIGEST---` 围栏便于人眼识别），**不**让异常杀掉编排器收尾。诊断信息（β2 的核心价值）永远不能被 vault 写不动这种环境问题吃掉。
+- 其它异常（如磁盘满、权限错）仍然抛出到编排器（同 reading/x 一致行为）。
 
 # Step 6: 末尾打印
 
-```
-✅ 综合日报: $VAULT_PATH/10_Daily/<DATE>-日报.md
-```
+Step 5 已经在两条路径里各自打印了行（成功 → `✅ 综合日报: ...`；vault 不可达 → `⚠️ Vault 写入失败...` + stdout digest）。无需再额外 print。
 
 # 错误处理
 
-- Step 5 写入失败(Obsidian 未运行 / 路径权限 / 等) → 直接抛出错误信息给编排器，**不**降级到 /tmp 暂存(保持与 reading/x 一致的"Obsidian 必须在跑"约束)。
+- Step 5 vault 不可达 (`CLINotFoundError` / `ObsidianNotRunningError` / `VaultNotFoundError`) → **降级到 stdout 打印 digest markdown**（用 `---BEGIN/END AUTO-DIGEST---` 围栏），不抛异常杀掉编排器收尾。理由：sub-F 在"全平台炸了"时是用户最需要看到 hint 的地方；vault 写不动恰恰常常和上游模块挂掉同因（Obsidian 未跑），此时让诊断面板沉默是最反直觉的行为。
+- Step 5 其它写入失败（磁盘满 / 权限错 / 等） → 直接抛出错误信息给编排器（与 reading/x 一致）。
 - Step 3 推断失败(信息不足) → 走退化字符串，**仍写出日报**(Step 4-5 继续执行)。
 - envelope.status=error(α1) → Step 1 已退出，到不了这里。
 
