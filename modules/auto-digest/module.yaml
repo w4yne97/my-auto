@@ -1,0 +1,17 @@
+name: auto-digest
+display_name: Auto-Digest
+description: 跨模块每日综合日报 —— 消费 sub-E 的 runs/<date>.json + 各模块 vault 当天文件
+schema_version: 1
+version: 1.0.0
+
+daily:
+  today_script: scripts/today.py
+  today_skill: SKILL_TODAY.md
+  section_title: "📊 综合日报"
+
+vault_outputs:
+  - "10_Daily/{date}-日报.md"
+
+depends_on: []   # spec §0.4 / Q6 β2: digest still runs even when all upstream failed
+
+owns_skills: []
