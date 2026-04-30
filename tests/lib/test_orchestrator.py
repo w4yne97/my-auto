@@ -346,7 +346,8 @@ class TestWriteRunSummary:
         )
         data = json.loads(path.read_text())
         assert len(data["modules"]) == 2  # Latest run wins, not appended
-        assert data["started_at"] == "2026-04-29T09:00:00+08:00"
+        # Sub-F merge semantics (spec §2.2.1): started_at preserved from first write.
+        assert data["started_at"] == "2026-04-29T08:00:00+08:00"
 
     def test_no_tmp_file_left_behind(self, tmp_path, monkeypatch):
         monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
@@ -370,3 +371,148 @@ class TestWriteRunSummary:
                 args={},
                 results=[],
             )
+
+
+class TestWriteRunSummaryMerge:
+    """Merge-by-name semantics introduced in sub-F (spec §2.2.1).
+
+    --only <module> reruns must NOT clobber existing rows for unfiltered modules.
+    """
+
+    def _result(self, name: str, route: str = "ok", *, started_at: str = "2026-04-30T08:00:00+08:00",
+                ended_at: str = "2026-04-30T08:00:01+08:00") -> ModuleResult:
+        return ModuleResult(
+            name=name, route=route,
+            started_at=started_at, ended_at=ended_at, duration_ms=1000,
+            envelope_path=f"/tmp/start-my-day/{name}.json",
+            stats={"items": 1}, errors=[], blocked_by=[],
+        )
+
+    def test_merge_upserts_same_name_keeps_other_rows(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+        # First write: 3 upstream modules.
+        write_run_summary(
+            "2026-04-30",
+            started_at="2026-04-30T08:00:00+08:00",
+            ended_at="2026-04-30T08:02:00+08:00",
+            args={"only": None, "skip": [], "date": "2026-04-30"},
+            results=[self._result("auto-reading"), self._result("auto-learning"), self._result("auto-x", route="error")],
+        )
+        # Second write: --only auto-digest run; only auto-digest result is passed.
+        path = write_run_summary(
+            "2026-04-30",
+            started_at="2026-04-30T09:00:00+08:00",
+            ended_at="2026-04-30T09:00:05+08:00",
+            args={"only": "auto-digest", "skip": [], "date": "2026-04-30"},
+            results=[self._result("auto-digest")],
+        )
+        data = json.loads(path.read_text())
+        names = [m["name"] for m in data["modules"]]
+        assert sorted(names) == ["auto-digest", "auto-learning", "auto-reading", "auto-x"]
+        # Existing rows preserved
+        by_name = {m["name"]: m for m in data["modules"]}
+        assert by_name["auto-x"]["route"] == "error"
+        assert by_name["auto-digest"]["route"] == "ok"
+
+    def test_merge_replaces_same_name_with_latest_values(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+        write_run_summary(
+            "2026-04-30",
+            started_at="2026-04-30T08:00:00+08:00",
+            ended_at="2026-04-30T08:00:01+08:00",
+            args={},
+            results=[self._result("auto-reading", route="error")],
+        )
+        path = write_run_summary(
+            "2026-04-30",
+            started_at="2026-04-30T09:00:00+08:00",
+            ended_at="2026-04-30T09:00:01+08:00",
+            args={},
+            results=[self._result("auto-reading", route="ok")],  # same name, new route
+        )
+        data = json.loads(path.read_text())
+        assert len(data["modules"]) == 1
+        assert data["modules"][0]["route"] == "ok"  # latest value wins for same-name row
+
+    def test_merge_preserves_first_started_at(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+        write_run_summary(
+            "2026-04-30",
+            started_at="2026-04-30T08:00:00+08:00",
+            ended_at="2026-04-30T08:00:01+08:00",
+            args={},
+            results=[self._result("auto-reading")],
+        )
+        path = write_run_summary(
+            "2026-04-30",
+            started_at="2026-04-30T09:00:00+08:00",
+            ended_at="2026-04-30T09:00:05+08:00",
+            args={},
+            results=[self._result("auto-x")],
+        )
+        data = json.loads(path.read_text())
+        # Spec §2.2.1: started_at preserved from first write.
+        assert data["started_at"] == "2026-04-30T08:00:00+08:00"
+        # ended_at updates to latest.
+        assert data["ended_at"] == "2026-04-30T09:00:05+08:00"
+        # duration_ms recomputed from preserved started_at to latest ended_at.
+        # 08:00:00 → 09:00:05 = 3605 seconds = 3605000 ms
+        assert data["duration_ms"] == 3605000
+
+    def test_merge_recomputes_summary_counts(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+        write_run_summary(
+            "2026-04-30",
+            started_at="2026-04-30T08:00:00+08:00",
+            ended_at="2026-04-30T08:00:01+08:00",
+            args={},
+            results=[self._result("auto-reading"), self._result("auto-learning", route="error")],
+        )
+        # Now upsert auto-learning to ok via a re-run.
+        path = write_run_summary(
+            "2026-04-30",
+            started_at="2026-04-30T09:00:00+08:00",
+            ended_at="2026-04-30T09:00:01+08:00",
+            args={},
+            results=[self._result("auto-learning", route="ok")],
+        )
+        data = json.loads(path.read_text())
+        assert data["summary"] == {"total": 2, "ok": 2, "empty": 0, "error": 0, "dep_blocked": 0}
+
+    def test_merge_handles_corrupt_existing_file_as_fresh_start(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+        runs_dir = tmp_path / "start-my-day" / "runs"
+        runs_dir.mkdir(parents=True)
+        # Write malformed JSON that should be ignored.
+        (runs_dir / "2026-04-30.json").write_text("{not valid json")
+        path = write_run_summary(
+            "2026-04-30",
+            started_at="2026-04-30T08:00:00+08:00",
+            ended_at="2026-04-30T08:00:01+08:00",
+            args={},
+            results=[self._result("auto-reading")],
+        )
+        data = json.loads(path.read_text())
+        assert len(data["modules"]) == 1
+        assert data["modules"][0]["name"] == "auto-reading"
+
+    def test_merge_handles_schema_version_mismatch_as_fresh_start(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+        runs_dir = tmp_path / "start-my-day" / "runs"
+        runs_dir.mkdir(parents=True)
+        (runs_dir / "2026-04-30.json").write_text(json.dumps({
+            "schema_version": 999,  # future schema; treat as fresh
+            "date": "2026-04-30",
+            "modules": [{"name": "auto-future-only", "route": "ok"}],
+        }))
+        path = write_run_summary(
+            "2026-04-30",
+            started_at="2026-04-30T08:00:00+08:00",
+            ended_at="2026-04-30T08:00:01+08:00",
+            args={},
+            results=[self._result("auto-reading")],
+        )
+        data = json.loads(path.read_text())
+        # Future-schema row was discarded; only the new row remains.
+        names = [m["name"] for m in data["modules"]]
+        assert names == ["auto-reading"]
