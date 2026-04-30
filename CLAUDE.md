@@ -6,7 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A multi-module daily-routine hub. Each `modules/auto-*/` is an independent vertical (paper tracking, learning planning, social-feed digestion, etc.). The top-level `start-my-day` SKILL orchestrates today's runs across all enabled modules.
 
-**P2 status:** sub-A 完成 / sub-B 完成 / sub-C 完成 (auto-learning 模块迁入,15 个 learn-* skills + today.py + SKILL_TODAY.md;状态文件位于 `~/.local/share/start-my-day/auto-learning/`,静态结构 `modules/auto-learning/config/domain-tree.yaml`)。**sub-D 完成** (auto-x 模块——每日 X Following timeline → keyword 过滤 → daily digest)。Phase 2 继续 sub-E (多模块编排，原 sub-D) → sub-F (跨模块日报，原 sub-E)。
+**P2 status:** sub-A/B/C/D 完成 / **sub-E 完成**（多模块编排打磨：`lib/orchestrator.py` 8 函数纯逻辑层 + 三模块统一 `errors[]={level,code,detail,hint}` schema + `depends_on` 严格门控 + run summary `~/.local/share/start-my-day/runs/<date>.json`，作为 sub-F 的结构化输入）。Phase 2 继续 sub-F (跨模块综合日报)。
+
+**sub-F 握手契约（sub-E 完成后稳定）：** sub-F 读 `~/.local/share/start-my-day/runs/<date>.json`（schema 见 `docs/superpowers/specs/2026-04-29-orchestration-polish-design.md` §3.4）拿到本日所有模块的 route + envelope_path，再按各模块 `module.yaml.vault_outputs` glob 当天 vault 文件做综合日报。`runs/<date>.json` schema_version=1 永不删字段、永不收紧约束。
 
 **Vault topology after sub-B:**
 

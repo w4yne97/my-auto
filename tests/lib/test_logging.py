@@ -76,3 +76,20 @@ def test_log_event_filename_uses_today_date(isolated_state_root):
     today = datetime.now().date().isoformat()
     expected = isolated_state_root / "start-my-day" / "logs" / f"{today}.jsonl"
     assert expected.exists()
+
+
+def test_log_event_with_explicit_date_writes_to_that_date_file(tmp_path, monkeypatch):
+    """When date='YYYY-MM-DD' is passed, log_event writes to logs/<date>.jsonl,
+    not logs/<today>.jsonl. Critical for /start-my-day rerunning a prior date."""
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    from lib.logging import log_event
+    log_event("auto-x", "today_script_done", date="2026-04-29", status="ok")
+    log_dir = tmp_path / "start-my-day" / "logs"
+    files = sorted(log_dir.glob("*.jsonl"))
+    assert len(files) == 1
+    assert files[0].name == "2026-04-29.jsonl", f"expected 2026-04-29.jsonl, got {files[0].name}"
+    rec = json.loads(files[0].read_text().strip())
+    assert rec["module"] == "auto-x"
+    assert rec["event"] == "today_script_done"
+    assert rec["date"] == "2026-04-29"
+    assert rec["status"] == "ok"

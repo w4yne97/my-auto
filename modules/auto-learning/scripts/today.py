@@ -161,7 +161,12 @@ def main() -> None:
                 "status": "error",
                 "stats": {},
                 "payload": {},
-                "errors": [{"type": type(e).__name__, "message": str(e)}],
+                "errors": [{
+                    "level": "error",
+                    "code": "unhandled_exception",
+                    "detail": f"{type(e).__name__}: {e}",
+                    "hint": None,
+                }],
             }
             output_path.write_text(json.dumps(error_envelope, ensure_ascii=False, indent=2))
         except Exception:

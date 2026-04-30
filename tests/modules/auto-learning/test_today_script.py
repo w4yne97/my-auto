@@ -1,6 +1,7 @@
 """Shape-only tests for auto-learning's today.py — does the envelope parse?"""
 import importlib.util
 import json
+import pytest
 import sys
 from pathlib import Path
 from unittest.mock import patch
@@ -109,3 +110,26 @@ class TestTodayShape:
             _mod.main()
         result = json.loads(out.read_text())
         assert isinstance(result["stats"], dict)
+
+    def test_error_envelope_uses_unified_shape(self, populated_state, tmp_path, monkeypatch):
+        """Per spec §3.1: catch-all errors[] uses {level, code, detail, hint} shape."""
+        monkeypatch.setenv("VAULT_PATH", str(tmp_path / "vault"))
+
+        def boom(*a, **kw):
+            raise RuntimeError("forced for test")
+        monkeypatch.setattr(_mod, "load_domain_tree", boom)
+
+        out = tmp_path / "auto-learning.json"
+        with patch.object(sys, "argv", ["today.py", "--output", str(out)]):
+            with pytest.raises(SystemExit) as excinfo:
+                _mod.main()
+        assert excinfo.value.code == 1
+
+        result = json.loads(out.read_text())
+        assert result["status"] == "error"
+        assert len(result["errors"]) == 1
+        err = result["errors"][0]
+        assert set(err.keys()) == {"level", "code", "detail", "hint"}
+        assert err["level"] == "error"
+        assert err["code"] == "unhandled_exception"
+        assert err["hint"] is None

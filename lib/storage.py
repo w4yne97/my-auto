@@ -58,6 +58,12 @@ def platform_log_dir() -> Path:
     return p
 
 
+def platform_runs_dir() -> Path:
+    p = _state_root() / "runs"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+
 # --- vault: Obsidian root ---
 
 def vault_path() -> Path:

@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import sqlite3
+import subprocess
 import sys
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -278,3 +280,49 @@ def test_dry_run_no_side_effects(env, monkeypatch):
         rows = list(db.execute("SELECT in_summary_date FROM seen WHERE tweet_id='A'"))
         db.close()
         assert rows == [] or rows[0][0] is None
+
+
+def test_today_script_emits_log_event_start_and_crashed(tmp_path):
+    """auto-x today.py must emit today_script_start + today_script_crashed
+    via lib.logging.log_event when the config is unreachable (sub-E)."""
+    REPO_ROOT = Path(__file__).resolve().parents[3]
+    SCRIPT = REPO_ROOT / "modules" / "auto-x" / "scripts" / "today.py"
+    fake_xdg = tmp_path / "xdg"
+    fake_xdg.mkdir()
+
+    output = tmp_path / "auto-x.json"
+    proc = subprocess.run(
+        [sys.executable, str(SCRIPT),
+         "--config", "/tmp/definitely-nonexistent-keywords-xyz.yaml",
+         "--output", str(output)],
+        cwd=str(REPO_ROOT), capture_output=True, text=True,
+        env={**os.environ, "PYTHONPATH": str(REPO_ROOT),
+             "XDG_DATA_HOME": str(fake_xdg)},
+    )
+    assert proc.returncode == 1, f"stderr:\n{proc.stderr}"
+
+    log_files = list((fake_xdg / "start-my-day" / "logs").glob("*.jsonl"))
+    assert log_files, f"No JSONL log written; stderr:\n{proc.stderr}"
+
+    events = [json.loads(line) for line in log_files[0].read_text().splitlines() if line.strip()]
+    auto_x_events = [e for e in events if e.get("module") == "auto-x"]
+    event_names = {e["event"] for e in auto_x_events}
+    assert "today_script_start" in event_names
+    assert "today_script_crashed" in event_names
+    crash_events = [e for e in auto_x_events if e["event"] == "today_script_crashed"]
+    assert crash_events[0]["reason"] == "config"
+
+
+def test_make_error_always_includes_hint_key():
+    """Per sub-E spec §3.1, errors[].hint must always be present (None when absent)."""
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "modules" / "auto-x" / "scripts"))
+    from today import _make_error  # noqa: E402
+
+    err1 = _make_error("foo", "bar")
+    assert "hint" in err1
+    assert err1["hint"] is None
+
+    err2 = _make_error("foo", "bar", hint="do x")
+    assert err2["hint"] == "do x"
