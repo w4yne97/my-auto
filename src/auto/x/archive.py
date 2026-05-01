@@ -8,7 +8,7 @@ from dataclasses import asdict
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from models import Tweet
+from auto.x.models import Tweet
 
 
 _DATED_FILE_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})\.jsonl$")

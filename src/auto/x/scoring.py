@@ -6,7 +6,7 @@ from pathlib import Path
 
 import yaml
 
-from models import KeywordConfig, KeywordRule, ScoredTweet, Tweet
+from auto.x.models import KeywordConfig, KeywordRule, ScoredTweet, Tweet
 
 
 SUPPORTED_SCHEMA_VERSION = 1

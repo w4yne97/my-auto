@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import datetime
 
-from models import Cluster, DigestPayload, ScoredTweet, Tweet
+from auto.x.models import Cluster, DigestPayload, ScoredTweet, Tweet
 
 
 def cluster_and_truncate(

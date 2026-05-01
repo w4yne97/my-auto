@@ -15,7 +15,7 @@ from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any
 
-from models import Tweet
+from auto.x.models import Tweet
 
 
 @dataclass

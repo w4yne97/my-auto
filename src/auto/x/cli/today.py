@@ -1,4 +1,4 @@
-"""auto-x daily orchestrator.
+"""auto.x daily orchestrator.
 
 Pipeline:
   1. Resolve paths (state root, config)
@@ -18,29 +18,26 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-# Module-local lib must be on sys.path BEFORE the bare-name imports below.
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
-
 import argparse
 import json
 import sqlite3
 import time
 from datetime import datetime, timedelta, timezone
 
-from lib.storage import module_config_file, module_state_dir  # platform lib (top-level)
-from lib.logging import log_event  # platform lib (top-level)
+from auto.core.storage import module_config_file, module_state_dir  # platform lib (top-level)
+from auto.core.logging import log_event  # platform lib (top-level)
 
-import archive as archive_mod
-import dedup as dedup_mod
-import digest as digest_mod
-import fetcher
-import scoring
-from fetcher import FetcherError
-from models import Cluster, ScoredTweet, Tweet
+import auto.x.archive as archive_mod
+import auto.x.dedup as dedup_mod
+import auto.x.digest as digest_mod
+import auto.x.fetcher as fetcher
+import auto.x.scoring as scoring
+from auto.x.fetcher import FetcherError
+from auto.x.models import Cluster, ScoredTweet, Tweet
 
 
 SCHEMA_VERSION = 1
-MODULE_NAME = "auto-x"
+MODULE_NAME = "x"
 
 
 # --- Test seams ----------------------------------------------------------
@@ -134,7 +131,7 @@ def _err_for_code(e: FetcherError) -> dict:
     hints = {
         "auth": (
             "cookies missing or expired; re-export from your logged-in Chrome via "
-            "Cookie-Editor and run: python modules/auto-x/scripts/import_cookies.py "
+            "Cookie-Editor and run: python -m auto.x.cli.import_cookies "
             "/path/to/cookies.json"
         ),
         "rate_limited": "wait ~30 min and rerun",
@@ -172,12 +169,12 @@ def _build_error_envelope(
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="auto-x daily fetch + envelope.")
+    parser = argparse.ArgumentParser(description="auto.x daily fetch + envelope.")
     parser.add_argument("--output", required=True, help="Where to write envelope JSON")
     parser.add_argument(
         "--config",
         default=None,
-        help="Override keywords.yaml path (default: in-repo modules/auto-x/config/keywords.yaml)",
+        help="Override keywords.yaml path (default: in-repo modules/x/config/keywords.yaml)",
     )
     parser.add_argument("--top-k", type=int, default=30)
     parser.add_argument("--window-hours", type=int, default=24)
@@ -187,7 +184,7 @@ def main(argv: list[str] | None = None) -> int:
 
     start_t = time.monotonic()
 
-    log_event("auto-x", "today_script_start",
+    log_event("x", "today_script_start",
               date=datetime.now(timezone.utc).date().isoformat(),
               max_tweets=args.max_tweets,
               window_hours=args.window_hours)
@@ -214,7 +211,7 @@ def main(argv: list[str] | None = None) -> int:
             _make_error("config", str(e), hint=f"check {config_path}"),
         )
         _atomic_write(output_path, _serialize_envelope(envelope))
-        log_event("auto-x", "today_script_crashed", level="error", reason="config",
+        log_event("x", "today_script_crashed", level="error", reason="config",
                   duration_s=round(time.monotonic() - start_t, 2))
         return 1
 
@@ -230,7 +227,7 @@ def main(argv: list[str] | None = None) -> int:
             window_start, window_end, _err_for_code(e),
         )
         _atomic_write(output_path, _serialize_envelope(envelope))
-        log_event("auto-x", "today_script_crashed", level="error", reason=e.code,
+        log_event("x", "today_script_crashed", level="error", reason=e.code,
                   duration_s=round(time.monotonic() - start_t, 2))
         return 1
 
@@ -258,7 +255,7 @@ def main(argv: list[str] | None = None) -> int:
             _make_error("state", str(e), hint=f"rm {seen_path} (loses dedup history)"),
         )
         _atomic_write(output_path, _serialize_envelope(envelope))
-        log_event("auto-x", "today_script_crashed", level="error", reason="state",
+        log_event("x", "today_script_crashed", level="error", reason="state",
                   duration_s=round(time.monotonic() - start_t, 2))
         return 1
     kept = dedup_mod.filter_unseen(conn, scored, now=window_end)
@@ -312,7 +309,7 @@ def main(argv: list[str] | None = None) -> int:
         if tmp.exists():
             tmp.unlink()
         sys.stderr.write(f"envelope write failed: {e}\n")
-        log_event("auto-x", "today_script_crashed", level="error", reason="envelope_write",
+        log_event("x", "today_script_crashed", level="error", reason="envelope_write",
                   duration_s=round(time.monotonic() - start_t, 2))
         conn.close()
         return 2
@@ -326,7 +323,7 @@ def main(argv: list[str] | None = None) -> int:
 
     conn.close()
     # Only reached for ok/empty; error paths return early above.
-    log_event("auto-x", "today_script_done",
+    log_event("x", "today_script_done",
               status=status,
               total_fetched=len(fetched),
               total_in_digest=sum(len(cl.scored_tweets) for cl in clusters),

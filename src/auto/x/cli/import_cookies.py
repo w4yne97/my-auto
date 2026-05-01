@@ -11,11 +11,11 @@ Usage:
        https://chromewebstore.google.com/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm
     2. Open https://x.com, click Cookie-Editor → "Export" → "Export as JSON"
     3. Save the JSON to e.g. /tmp/x-cookies.json
-    4. Run: python modules/auto-x/scripts/import_cookies.py /tmp/x-cookies.json
+    4. Run: python -m auto.x.cli.import_cookies /tmp/x-cookies.json
 
 The script validates the export contains the required cookies (auth_token, ct0),
 converts the Cookie-Editor format to Playwright's storage_state format, and
-writes ~/.local/share/start-my-day/auto-x/session/storage_state.json.
+writes ~/.local/share/start-my-day/x/session/storage_state.json.
 """
 
 from __future__ import annotations
@@ -33,8 +33,8 @@ def _default_session_dir() -> Path:
     """Resolve the session directory at run time so XDG_DATA_HOME is honored.
     Mirrors what `today.py` does via `lib.storage.module_state_dir`, so the
     importer and the fetcher always agree on where storage_state.json lives."""
-    from lib.storage import module_state_dir  # type: ignore[import-not-found]
-    return module_state_dir("auto-x") / "session"
+    from auto.core.storage import module_state_dir
+    return module_state_dir("x") / "session"
 
 
 def _convert_same_site(value: str | None) -> str:
@@ -86,7 +86,7 @@ def convert_cookies(raw: list[dict]) -> list[dict]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Import X cookies into auto-x Playwright session.",
+        description="Import X cookies into auto.x Playwright session.",
     )
     parser.add_argument(
         "input",
@@ -99,7 +99,7 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help=(
             "Where to write storage_state.json. Default: "
-            "lib.storage.module_state_dir('auto-x')/session, "
+            "auto.core.storage.module_state_dir('x')/session, "
             "which honors $XDG_DATA_HOME if set."
         ),
     )
@@ -150,7 +150,7 @@ def main(argv: list[str] | None = None) -> int:
     target.write_text(json.dumps(storage_state, indent=2))
 
     print(f"Imported {len(converted)} cookies → {target}")
-    print("You can now run: python modules/auto-x/scripts/today.py --output /tmp/x.json")
+    print("You can now run: python -m auto.x.cli.today --output /tmp/x.json")
     return 0
 
 
