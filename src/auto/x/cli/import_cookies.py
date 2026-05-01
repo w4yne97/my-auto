@@ -150,7 +150,7 @@ def main(argv: list[str] | None = None) -> int:
     target.write_text(json.dumps(storage_state, indent=2))
 
     print(f"Imported {len(converted)} cookies → {target}")
-    print("You can now run: python -m auto.x.cli.today --output /tmp/x.json")
+    print("You can now run: python -m auto.x.digest --output /tmp/x.json")
     return 0
 
 
