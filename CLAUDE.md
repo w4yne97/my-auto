@@ -4,100 +4,59 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-A multi-module daily-routine hub. Each `modules/auto-*/` is an independent vertical (paper tracking, learning planning, social-feed digestion, etc.). The top-level `start-my-day` SKILL orchestrates today's runs across all enabled modules.
+A personal collection of `auto-*` automation modules. Each `src/auto/<name>/` is an independent vertical (paper tracking, learning routes, X-timeline digest). There is **no top-level orchestrator** — each module is invoked independently via its own slash commands.
 
-**P2 status:** sub-A/B/C/D 完成 / **sub-E 完成**（多模块编排打磨：`lib/orchestrator.py` 8 函数纯逻辑层 + 三模块统一 `errors[]={level,code,detail,hint}` schema + `depends_on` 严格门控 + run summary `~/.local/share/start-my-day/runs/<date>.json`，作为 sub-F 的结构化输入）。Phase 2 继续 sub-F (跨模块综合日报)。
-
-**sub-F 握手契约（sub-E 完成后稳定）：** sub-F 读 `~/.local/share/start-my-day/runs/<date>.json`（schema 见 `docs/superpowers/specs/2026-04-29-orchestration-polish-design.md` §3.4）拿到本日所有模块的 route + envelope_path，再按各模块 `module.yaml.vault_outputs` glob 当天 vault 文件做综合日报。`runs/<date>.json` schema_version=1 永不删字段、永不收紧约束。
-
-**Vault topology after sub-B:**
-
-- `$VAULT_PATH/{00_Config,10_Daily,20_Papers,30_Insights,40_Digests,40_Ideas,90_System}/` — auto-reading's flat top-level (unchanged from P1).
-- `$VAULT_PATH/learning/{00_Map,10_Foundations,20_Core,30_Data,50_Learning-Log}/` — auto-learning's namespace (subtree introduced by sub-B; populated by sub-C).
-- `$VAULT_PATH/x/10_Daily/<YYYY-MM-DD>.md` — auto-x's daily digest namespace (subtree introduced by sub-D).
-- `~/Documents/knowledge-vault/` is preserved byte-identical as the primary rollback path.
-
-**Vault merge rollback recipe:**
-
-```bash
-# If the merge needs to be undone:
-rm -rf ~/Documents/auto-reading-vault
-mv ~/Documents/auto-reading-vault.premerge-<stamp> ~/Documents/auto-reading-vault
-# knowledge-vault was never modified — no restore needed.
-```
-
-**auto-learning workflow (sub-C):**
-
-- 每日:`start-my-day` 跑 `python modules/auto-learning/scripts/today.py --output ...` → `SKILL_TODAY` → "🎓 今日学习" 段
-- 交互:`/learn-route next → /learn-study X → /learn-note → /learn-review → /learn-progress`
-- 状态:`~/.local/share/start-my-day/auto-learning/{knowledge-map,learning-route,progress,study-log}.yaml`
-- 静态:`modules/auto-learning/config/domain-tree.yaml`(知识图谱拓扑,~129 概念)
-
-**auto-x workflow (sub-D):**
-
-- 每日: `start-my-day` 跑 `python modules/auto-x/scripts/today.py --output ...` → `SKILL_TODAY.md` → `$VAULT_PATH/x/10_Daily/<date>.md`
-- 一次性认证: 从已登录的正常 Chrome 用 Cookie-Editor 导出 x.com cookies → `python modules/auto-x/scripts/import_cookies.py /path/to/cookies.json` → cookies 写入 `~/.local/share/start-my-day/auto-x/session/storage_state.json`. (放弃 headless 登录——X 的 bot 检测会让 `/i/flow/login` 直接挂掉)
-- 静态: `modules/auto-x/config/keywords.yaml` (关键字、weight、muted/boosted authors)
-- 状态: `~/.local/share/start-my-day/auto-x/{session/, seen.sqlite, raw/}`
-- Cookie 过期 → orchestrator 报 `auth` 错误，提示重跑 login 工具
+**Phase 3 status:** Library restructure (sub-G/H/I/J/K). Sub-G + sub-H complete. See `docs/superpowers/specs/2026-04-30-library-restructure-design.md`.
 
 ## Architecture
 
 ```
-.claude/skills/start-my-day/SKILL.md          (top-level orchestrator)
-                  │  reads
+.claude/skills/<name>/SKILL.md          ← user-facing slash commands (32+ skills)
+                  │  invokes
                   ▼
-config/modules.yaml                            (platform registry)
-                  │  for each enabled module
+src/auto/<module>/                      ← Python package; each module independent
+  ├── daily.py / digest.py              ← reusable high-level data-collection functions
+  ├── cli/                              ← python -m auto.<module>.cli.<X> entrypoints
+  └── (module-specific helpers)
+                  │  imports
                   ▼
-modules/<name>/module.yaml                     (module self-description)
-                  │
-                  ├── scripts/today.py         (Python data prep → JSON envelope)
-                  └── SKILL_TODAY.md           (Claude AI workflow → vault notes)
-                                │  imports
-                                ▼
-                              lib/             (shared kernel)
-                                │  subprocess
-                                ▼
-                            Obsidian CLI ──► auto-reading-vault
+src/auto/core/                          ← shared kernel
+  ├── storage.py                        ← E3 trichotomy (config / state / vault)
+  ├── logging.py                        ← JSONL platform logger
+  ├── obsidian_cli.py                   ← Obsidian CLI wrapper
+  └── vault.py                          ← generic vault helpers
+                  │  subprocess
+                  ▼
+            Obsidian CLI ──► $VAULT_PATH
 ```
 
-## Key Files
+Modules do NOT declare cross-module dependencies. The only inter-module flow is `/learn-from-insight` reading reading-module's `$VAULT_PATH/30_Insights/` — a soft, file-based dependency.
 
-- `config/modules.yaml` — which modules are enabled and in what order
-- `modules/auto-reading/module.yaml` — reading module self-description (incl. `owns_skills` declaration)
-- `modules/auto-reading/scripts/today.py` — reading's Python entry; outputs §3.3 JSON envelope
-- `modules/auto-reading/SKILL_TODAY.md` — reading's AI workflow (called by orchestrator)
-- `lib/storage.py` — E3 storage path helpers (config / state / vault / log)
-- `lib/logging.py` — JSONL platform logger to `~/.local/share/start-my-day/logs/`
+## Modules
+
+- **`auto.reading`** — paper tracking / Insight knowledge graph / research Idea pipeline. Owns 14 skills: `paper-{search,analyze,import,deep-read}`, `insight-{init,update,absorb,review,connect}`, `idea-{generate,develop,review}`, `reading-config`, `weekly-digest` (renamed `reading-weekly` in sub-J).
+- **`auto.learning`** — SWE post-training knowledge graph / learning route planning. Owns 15 skills: `learn-{connect,from-insight,gap,init,marketing,note,plan,progress,research,review,route,status,study,tree,weekly}`.
+- **`auto.x`** — X (Twitter) Following timeline digest. Will own 2 skills: `x-digest`, `x-cookies` (sub-I creates them).
 
 ## Storage Trichotomy (E3)
 
-- **Static config** (in repo, version-controlled): `modules/<name>/config/*.yaml`
-- **Runtime state** (outside repo, runtime-mutable): `~/.local/share/start-my-day/<name>/`
-- **Knowledge artifacts** (Obsidian vault, human-readable): `$VAULT_PATH/<subdir>/`
+- **Static config** (in repo, version-controlled): `modules/<name>/config/*.yaml` — user-editable.
+- **Runtime state** (outside repo, runtime-mutable): `~/.local/share/auto/<name>/` — knowledge maps, cookies, sqlite caches, raw archives.
+- **Knowledge artifacts** (Obsidian, human-readable): `$VAULT_PATH/<subdir>/`.
 
-Use `lib.storage` helpers, never hardcode these paths.
+Use `auto.core.storage` helpers, never hardcode these paths.
+
+State directories:
+- `~/.local/share/auto/reading/` — reading-specific caches (none currently).
+- `~/.local/share/auto/learning/` — `knowledge-map.yaml`, `learning-route.yaml`, `progress.yaml`, `study-log.yaml`.
+- `~/.local/share/auto/x/` — `session/storage_state.json` (Playwright cookies), `seen.sqlite` (dedup), `raw/` (30-day JSONL archive).
+- `~/.local/share/auto/logs/` — `<date>.jsonl` per-module event logs.
 
 ## Vault Configuration
 
-Same as the prior `auto-reading` repo:
-- All vault operations go through `lib/obsidian_cli.py` (hard dependency on Obsidian app running).
-- Vault path discovery: `$VAULT_PATH` env var.
-- Multi-vault: `OBSIDIAN_VAULT_NAME` env var. P1 uses single vault `auto-reading-vault`.
-
-## Module Contract (G3)
-
-Every module under `modules/<name>/` exposes:
-
-1. `module.yaml` — self-description (name, daily.today_script, daily.today_skill, vault_outputs, owns_skills, ...).
-2. `scripts/today.py --output <path>` — produces a §3.3 JSON envelope with `module`, `schema_version`, `status` (`ok`/`empty`/`error`), `stats`, `payload`, `errors`. **No AI** in `today.py`; it's pure data prep.
-3. `SKILL_TODAY.md` — Claude-driven workflow that consumes the envelope and writes vault notes.
-
-The orchestrator routes by `status`:
-- `ok` → run SKILL_TODAY
-- `empty` → skip; print one-liner
-- `error` → skip; report errors
+- All vault operations go through `auto.core.obsidian_cli` (hard dependency on Obsidian app running).
+- Vault path: `$VAULT_PATH` env var.
+- Multi-vault: `OBSIDIAN_VAULT_NAME` env var. Default vault: `auto-reading-vault`.
 
 ## Commands
 
@@ -110,29 +69,28 @@ pip install -e '.[dev]'
 pytest -m 'not integration'
 
 # Run a specific test file
-pytest tests/lib/test_storage.py -v
+pytest tests/core/test_storage.py -v
 
 # Run with coverage
-pytest --cov=lib --cov-report=term-missing -m 'not integration'
+pytest --cov=src/auto --cov-report=term-missing -m 'not integration'
 
-# Integration tests (require Obsidian running)
+# Integration tests (require Obsidian running / X cookies)
 pytest -m integration -v
 
-# Smoke-test today.py
-python modules/auto-reading/scripts/today.py \
-    --output /tmp/start-my-day/auto-reading.json --top-n 20
+# Smoke-test a module's CLI entry
+python -m auto.reading.cli.search_papers --help
+python -m auto.x.digest --output /tmp/x.json
 ```
 
-## Adding a New Module
+## Module daily helpers
 
-1. Create `modules/<name>/{scripts,config}/`.
-2. Write `modules/<name>/module.yaml` (see existing one for shape).
-3. Write `modules/<name>/scripts/today.py` that emits a §3.3 envelope.
-4. Write `modules/<name>/SKILL_TODAY.md`.
-5. Add an entry to `config/modules.yaml` (`enabled: true`, `order: <number>`).
-6. (Optional) Declare any module-owned slash commands under `module.yaml.owns_skills`.
+- `auto.reading.daily.collect_top_papers(config_path, top_n) → list[ScoredPaper]`: alphaXiv + arXiv search, dedup against vault, exclude-keyword filter, score.
+- `auto.learning.daily.recommend_today_session() → TodaySession | None`: load all state + recommend next concept + find related materials.
+- `auto.x.digest.run(output_path, *, ...)`: full X-timeline pipeline, writes envelope JSON.
 
-## Spec and Plan
+These are reusable across skills (e.g., `reading-weekly` calls `collect_top_papers` over a 7-day window).
 
-- Phase 1 design spec: `docs/superpowers/specs/2026-04-27-start-my-day-platformization-design.md`
-- Phase 1 implementation plan: `docs/superpowers/plans/2026-04-27-start-my-day-platformization-implementation.md`
+## Specs and Plans
+
+- **Phase 3 (current restructure)**: `docs/superpowers/specs/2026-04-30-library-restructure-design.md` + `plans/2026-04-30-library-restructure-implementation.md`.
+- **Historical (P1 sub-A~D, P2 sub-E)**: `docs/superpowers/specs/2026-04-{27,28,29}-*.md` (superseded but kept as archive).
