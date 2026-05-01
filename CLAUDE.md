@@ -34,7 +34,7 @@ Modules do NOT declare cross-module dependencies. The only inter-module flow is 
 
 ## Modules
 
-- **`auto.reading`** — paper tracking / Insight knowledge graph / research Idea pipeline. Owns 14 skills: `paper-{search,analyze,import,deep-read}`, `insight-{init,update,absorb,review,connect}`, `idea-{generate,develop,review}`, `reading-config`, `weekly-digest` (renamed `reading-weekly` in sub-J).
+- **`auto.reading`** — paper tracking / Insight knowledge graph / research Idea pipeline. Owns 14 skills: `paper-{search,analyze,import,deep-read}`, `insight-{init,update,absorb,review,connect}`, `idea-{generate,develop,review}`, `reading-config`, `reading-weekly`.
 - **`auto.learning`** — SWE post-training knowledge graph / learning route planning. Owns 15 skills: `learn-{connect,from-insight,gap,init,marketing,note,plan,progress,research,review,route,status,study,tree,weekly}`.
 - **`auto.x`** — X (Twitter) Following timeline digest. Will own 2 skills: `x-digest`, `x-cookies` (sub-I creates them).
 

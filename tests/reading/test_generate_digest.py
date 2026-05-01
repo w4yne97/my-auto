@@ -1,4 +1,4 @@
-"""Integration tests for weekly-digest/scripts/generate_digest.py."""
+"""Integration tests for auto.reading.cli.generate_digest."""
 
 import json
 import sys

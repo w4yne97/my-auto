@@ -266,7 +266,7 @@ def run(
 
     start_t = time.monotonic()
 
-    log_event("x", "today_script_start",
+    log_event("x", "digest_run_start",
               date=clock().date().isoformat(),
               max_tweets=max_tweets,
               window_hours=window_hours)
@@ -290,7 +290,7 @@ def run(
             _make_error("config", str(e), hint=f"check {config_path}"),
         )
         _atomic_write(output_path, _serialize_envelope(envelope))
-        log_event("x", "today_script_crashed", level="error", reason="config",
+        log_event("x", "digest_run_crashed", level="error", reason="config",
                   duration_s=round(time.monotonic() - start_t, 2))
         return 1
 
@@ -306,7 +306,7 @@ def run(
             window_start, window_end, _err_for_code(e),
         )
         _atomic_write(output_path, _serialize_envelope(envelope))
-        log_event("x", "today_script_crashed", level="error", reason=e.code,
+        log_event("x", "digest_run_crashed", level="error", reason=e.code,
                   duration_s=round(time.monotonic() - start_t, 2))
         return 1
 
@@ -334,7 +334,7 @@ def run(
             _make_error("state", str(e), hint=f"rm {seen_path} (loses dedup history)"),
         )
         _atomic_write(output_path, _serialize_envelope(envelope))
-        log_event("x", "today_script_crashed", level="error", reason="state",
+        log_event("x", "digest_run_crashed", level="error", reason="state",
                   duration_s=round(time.monotonic() - start_t, 2))
         return 1
     kept = dedup_mod.filter_unseen(conn, scored, now=window_end)
@@ -388,7 +388,7 @@ def run(
         if tmp.exists():
             tmp.unlink()
         sys.stderr.write(f"envelope write failed: {e}\n")
-        log_event("x", "today_script_crashed", level="error", reason="envelope_write",
+        log_event("x", "digest_run_crashed", level="error", reason="envelope_write",
                   duration_s=round(time.monotonic() - start_t, 2))
         conn.close()
         return 2
@@ -402,7 +402,7 @@ def run(
 
     conn.close()
     # Only reached for ok/empty; error paths return early above.
-    log_event("x", "today_script_done",
+    log_event("x", "digest_run_done",
               status=status,
               total_fetched=len(fetched),
               total_in_digest=sum(len(cl.scored_tweets) for cl in clusters),

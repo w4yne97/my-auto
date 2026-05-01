@@ -135,7 +135,7 @@ scoring_weights 使用默认值，告知用户可以后续调整。
 🌐 语言: {language}
 
 现在你可以运行:
-- /start-my-day — 获取今日论文推荐
+- /paper-search — 搜索今日论文推荐
 - /paper-search <关键词> — 搜索特定论文
 - /insight-init <主题> — 创建 insight 知识主题
 ```

@@ -94,7 +94,7 @@ def test_same_site_mapping():
 def test_default_state_dir_honors_xdg_data_home(tmp_path, monkeypatch):
     """Without --state-dir, importer must resolve via lib.storage.module_state_dir
     so XDG_DATA_HOME is honored. Otherwise a user with XDG_DATA_HOME set would
-    write cookies to one path while today.py reads from another → silent auth
+    write cookies to one path while auto.x.digest reads from another → silent auth
     failure."""
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
     cookies = [

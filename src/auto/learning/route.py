@@ -31,7 +31,7 @@ def recommend_next_concept(
     concept = domain_tree.get(next_entry.concept_id)
     if concept is None:
         # Route references a concept missing from the static graph.
-        # Treat as recommendation-undefined → caller decides (today.py emits error).
+        # Treat as recommendation-undefined → caller decides (e.g., daily.py returns None).
         return None
 
     state = knowledge_map.get(concept.id) or ConceptState(

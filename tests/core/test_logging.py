@@ -16,30 +16,30 @@ def _read_today_log(state_root):
 
 
 def test_log_event_writes_jsonl_line(isolated_state_root):
-    log_event("auto-reading", "today_script_start")
+    log_event("reading", "daily_collect_start")
     lines = _read_today_log(isolated_state_root)
     assert len(lines) == 1
     rec = json.loads(lines[0])
-    assert rec["module"] == "auto-reading"
-    assert rec["event"] == "today_script_start"
+    assert rec["module"] == "reading"
+    assert rec["event"] == "daily_collect_start"
     assert rec["level"] == "info"
     assert "ts" in rec
 
 
 def test_log_event_default_level_info(isolated_state_root):
-    log_event("auto-reading", "ev")
+    log_event("reading", "ev")
     rec = json.loads(_read_today_log(isolated_state_root)[0])
     assert rec["level"] == "info"
 
 
 def test_log_event_explicit_level(isolated_state_root):
-    log_event("auto-reading", "ev", level="error")
+    log_event("reading", "ev", level="error")
     rec = json.loads(_read_today_log(isolated_state_root)[0])
     assert rec["level"] == "error"
 
 
 def test_log_event_extra_fields(isolated_state_root):
-    log_event("auto-reading", "today_script_done", status="ok",
+    log_event("reading", "daily_collect_done", status="ok",
               stats={"after_filter": 28}, duration_s=21.4)
     rec = json.loads(_read_today_log(isolated_state_root)[0])
     assert rec["status"] == "ok"
@@ -48,8 +48,8 @@ def test_log_event_extra_fields(isolated_state_root):
 
 
 def test_log_event_appends_multiple_lines(isolated_state_root):
-    log_event("auto-reading", "first")
-    log_event("auto-reading", "second")
+    log_event("reading", "first")
+    log_event("reading", "second")
     log_event("__platform__", "third")
     lines = _read_today_log(isolated_state_root)
     assert len(lines) == 3
@@ -58,7 +58,7 @@ def test_log_event_appends_multiple_lines(isolated_state_root):
 
 
 def test_log_event_timestamp_iso_format(isolated_state_root):
-    log_event("auto-reading", "ev")
+    log_event("reading", "ev")
     rec = json.loads(_read_today_log(isolated_state_root)[0])
     # Should parse as ISO 8601 with timezone
     parsed = datetime.fromisoformat(rec["ts"])
@@ -66,13 +66,13 @@ def test_log_event_timestamp_iso_format(isolated_state_root):
 
 
 def test_log_event_unicode_safe(isolated_state_root):
-    log_event("auto-reading", "ev", detail="今日推荐 5 篇论文")
+    log_event("reading", "ev", detail="今日推荐 5 篇论文")
     rec = json.loads(_read_today_log(isolated_state_root)[0])
     assert rec["detail"] == "今日推荐 5 篇论文"
 
 
 def test_log_event_filename_uses_today_date(isolated_state_root):
-    log_event("auto-reading", "ev")
+    log_event("reading", "ev")
     today = datetime.now().date().isoformat()
     expected = isolated_state_root / "auto" / "logs" / f"{today}.jsonl"
     assert expected.exists()
@@ -83,13 +83,13 @@ def test_log_event_with_explicit_date_writes_to_that_date_file(tmp_path, monkeyp
     not logs/<today>.jsonl. Critical for /start-my-day rerunning a prior date."""
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
     from auto.core.logging import log_event
-    log_event("auto-x", "today_script_done", date="2026-04-29", status="ok")
+    log_event("x", "digest_run_done", date="2026-04-29", status="ok")
     log_dir = tmp_path / "auto" / "logs"
     files = sorted(log_dir.glob("*.jsonl"))
     assert len(files) == 1
     assert files[0].name == "2026-04-29.jsonl", f"expected 2026-04-29.jsonl, got {files[0].name}"
     rec = json.loads(files[0].read_text().strip())
-    assert rec["module"] == "auto-x"
-    assert rec["event"] == "today_script_done"
+    assert rec["module"] == "x"
+    assert rec["event"] == "digest_run_done"
     assert rec["date"] == "2026-04-29"
     assert rec["status"] == "ok"

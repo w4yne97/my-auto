@@ -31,7 +31,7 @@ REQUIRED_COOKIES = frozenset({"auth_token", "ct0"})
 
 def _default_session_dir() -> Path:
     """Resolve the session directory at run time so XDG_DATA_HOME is honored.
-    Mirrors what `today.py` does via `lib.storage.module_state_dir`, so the
+    Mirrors what `auto.x.digest` does via `auto.core.storage.module_state_dir`, so the
     importer and the fetcher always agree on where storage_state.json lives."""
     from auto.core.storage import module_state_dir
     return module_state_dir("x") / "session"

@@ -1,5 +1,5 @@
 ---
-name: weekly-digest
+name: reading-weekly
 description: 生成每周论文总结，包括 Top 论文、领域概况和 Insight 进展
 ---
 
@@ -113,5 +113,5 @@ papers_count: {数量}
 
 ## 错误处理
 
-- 本周无论文数据：生成空周报框架，提示用户本周未运行 `/start-my-day`
+- 本周无论文数据：生成空周报框架，提示用户本周未运行 `/paper-search` 或 `/paper-import`
 - 部分数据缺失：跳过缺失部分，标注 "数据不完整"

@@ -32,7 +32,7 @@ class RouteEntry:
 
 @dataclass(frozen=True)
 class Recommendation:
-    """today.py's recommended concept output."""
+    """Output of recommend_next_concept (consumed by auto.learning.daily.recommend_today_session)."""
     concept: Concept
     state: ConceptState
     prerequisites_satisfied: bool
