@@ -1,7 +1,7 @@
 """Tests for arXiv API client."""
 
 import textwrap
-from datetime import date
+from datetime import date, timedelta
 from urllib.parse import unquote
 
 import pytest
@@ -13,7 +13,10 @@ from auto.reading.sources.arxiv_api import (
 )
 
 
-SAMPLE_XML = textwrap.dedent("""\
+# Use a date within the smallest `days=` window any test passes to search_arxiv,
+# otherwise the date-range filter strips the fixture paper and len()==1 fails.
+SAMPLE_PUBLISHED = date.today() - timedelta(days=1)
+SAMPLE_XML = textwrap.dedent(f"""\
     <?xml version="1.0" encoding="UTF-8"?>
     <feed xmlns="http://www.w3.org/2005/Atom"
           xmlns:arxiv="http://arxiv.org/schemas/atom">
@@ -21,7 +24,7 @@ SAMPLE_XML = textwrap.dedent("""\
         <id>http://arxiv.org/abs/2406.12345v1</id>
         <title>Test Paper: A New Approach</title>
         <summary>This paper presents a novel method for code generation.</summary>
-        <published>2026-03-10T00:00:00Z</published>
+        <published>{SAMPLE_PUBLISHED.isoformat()}T00:00:00Z</published>
         <author><name>Alice Smith</name></author>
         <author><name>Bob Jones</name></author>
         <arxiv:primary_category term="cs.AI"/>
@@ -41,7 +44,7 @@ class TestParseArxivXml:
         assert p.title == "Test Paper: A New Approach"
         assert p.authors == ["Alice Smith", "Bob Jones"]
         assert "novel method" in p.abstract
-        assert p.published == date(2026, 3, 10)
+        assert p.published == SAMPLE_PUBLISHED
         assert p.categories == ["cs.AI", "cs.CL"]
         assert p.source == "arxiv"
 
