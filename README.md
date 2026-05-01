@@ -1,50 +1,66 @@
-# Start-My-Day
+# my-auto
 
-> 个人每日事项中枢 — 基于 Claude Code Skills 的多模块编排器
+> Personal `auto-*` automation toolkit — independent module library, Skill-driven entrypoints
 
-`start-my-day` 是一个可扩展的"每日例行事项"中枢,把"读论文"、"做学习计划"、"刷小红书社群灵感"等垂直方向作为独立模块(`auto-*`)管理,通过统一入口 `/start-my-day` 编排今日所有事项。
+`my-auto` is a collection of personal automation modules (`auto.reading` / `auto.learning` / `auto.x`), each owning a vertical workflow (paper tracking, learning routes, X-timeline digest). Modules are independently invoked via 30+ fine-grained slash commands; there is **no top-level orchestrator**.
 
-**Phase 1**:已迁入 `auto-reading` 模块,保留全部既有能力(论文跟踪、Insight 知识图谱、Idea 挖掘)。
-**Phase 2**(规划中):接入 `auto-learning`、统一 vault、AI 综合日报。
+## Modules
 
-## 工作方式
+| Module | Purpose | User-facing skills |
+|---|---|---|
+| `auto.reading` | arXiv + alphaXiv paper tracking, Insight knowledge graph, research Idea pipeline | `paper-{search,analyze,import,deep-read}`, `insight-{init,update,absorb,review,connect}`, `idea-{generate,develop,review}`, `reading-config`, `reading-weekly` |
+| `auto.learning` | SWE post-training knowledge graph + learning route planning | `learn-{connect,from-insight,gap,init,marketing,note,plan,progress,research,review,route,status,study,tree,weekly}` |
+| `auto.x` | X (Twitter) Following timeline digest | `x-digest`, `x-cookies` |
 
-```
-你 ──► /start-my-day  ──►  顶层编排器读取 modules.yaml
-                              │
-                              ▼
-                      for 每个 enabled 模块:
-                        ├── 跑 today.py (Python 数据加工 → JSON envelope)
-                        └── 读 SKILL_TODAY.md (Claude AI 工作流 → vault 笔记)
-```
-
-## 安装
+## Install
 
 ```bash
-git clone <repo-url>
-cd start-my-day
+git clone https://github.com/WayneWong97/my-auto.git
+cd my-auto
 python -m venv .venv && source .venv/bin/activate
 pip install -e '.[dev]'
-cp .env.example .env  # 编辑 VAULT_PATH 等
+cp .env.example .env  # set VAULT_PATH (and OBSIDIAN_VAULT_NAME if multi-vault)
 ```
 
-## 当前模块
+Requires Python ≥ 3.12. The Obsidian desktop app must be running for vault operations.
 
-- [`modules/auto-reading/`](modules/auto-reading/README.md) — 论文每日跟踪 / Insight 知识图谱 / 研究 Idea 挖掘
+## Run
 
-## 平台命令
+Each skill is an independent entry point. Examples:
 
-| 命令 | 说明 |
-|---|---|
-| `/start-my-day [日期] [--only X] [--skip X,Y]` | 编排器:跑今日所有 enabled 模块 |
+```
+/paper-search "diffusion model"      # search arXiv + alphaXiv (auto.reading)
+/learn-status                         # current learning streak/phase (auto.learning)
+/x-digest                             # today's X timeline digest (auto.x)
+/reading-weekly                       # this week's paper digest (auto.reading)
+```
 
-每个模块自带子命令(详见模块自身 README)。
+Direct Python invocation also supported:
 
-## 架构
+```bash
+python -m auto.reading.cli.search_papers --keywords "..." --output /tmp/papers.json
+python -m auto.x.digest --output /tmp/x.json --max-tweets 50
+```
 
-详见:
-- 设计 spec:`docs/superpowers/specs/2026-04-27-start-my-day-platformization-design.md`
-- 实施 plan:`docs/superpowers/plans/2026-04-27-start-my-day-platformization-implementation.md`
+## State and configuration
+
+- **In-repo, version-controlled config**: `modules/<name>/config/*.yaml` — edit `modules/reading/config/research_interests.yaml` to tune your research domains.
+- **Runtime state** (honors `XDG_DATA_HOME`): `~/.local/share/auto/{reading,learning,x,logs}/` — knowledge maps, X cookies, dedup tables, JSONL event logs.
+- **Knowledge artifacts**: Obsidian vault under `$VAULT_PATH/`.
+
+## Test
+
+```bash
+pytest -m 'not integration'                    # ~400 unit tests, ~3 sec
+pytest --cov=src/auto --cov-report=term-missing -m 'not integration'
+pytest -m integration                          # needs Obsidian running + valid X cookies
+```
+
+## Documentation
+
+- **Architecture**: `CLAUDE.md`.
+- **Phase 3 design (current restructure)**: `docs/superpowers/specs/2026-04-30-library-restructure-design.md` + corresponding plan in `plans/`.
+- **Historical specs** (P1, P2 sub-A~E): `docs/superpowers/specs/2026-04-{27,28,29}-*.md`.
 
 ## License
 

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A personal collection of `auto-*` automation modules. Each `src/auto/<name>/` is an independent vertical (paper tracking, learning routes, X-timeline digest). There is **no top-level orchestrator** — each module is invoked independently via its own slash commands.
 
-**Phase 3 status:** Library restructure (sub-G/H/I/J/K). Sub-G + sub-H complete. See `docs/superpowers/specs/2026-04-30-library-restructure-design.md`.
+**Phase 3 status:** Library restructure complete (sub-G/H/I/J/K all merged). See `docs/superpowers/specs/2026-04-30-library-restructure-design.md`.
 
 ## Architecture
 
@@ -36,7 +36,7 @@ Modules do NOT declare cross-module dependencies. The only inter-module flow is 
 
 - **`auto.reading`** — paper tracking / Insight knowledge graph / research Idea pipeline. Owns 14 skills: `paper-{search,analyze,import,deep-read}`, `insight-{init,update,absorb,review,connect}`, `idea-{generate,develop,review}`, `reading-config`, `reading-weekly`.
 - **`auto.learning`** — SWE post-training knowledge graph / learning route planning. Owns 15 skills: `learn-{connect,from-insight,gap,init,marketing,note,plan,progress,research,review,route,status,study,tree,weekly}`.
-- **`auto.x`** — X (Twitter) Following timeline digest. Will own 2 skills: `x-digest`, `x-cookies` (sub-I creates them).
+- **`auto.x`** — X (Twitter) Following timeline digest. Owns 2 skills: `x-digest`, `x-cookies`.
 
 ## Storage Trichotomy (E3)
 
