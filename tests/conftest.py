@@ -6,7 +6,7 @@ import pytest
 
 @pytest.fixture
 def isolated_state_root(monkeypatch, tmp_path):
-    """Override ~/.local/share/start-my-day/ to a tmp dir during tests."""
+    """Override ~/.local/share/auto/ to a tmp dir during tests."""
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
     yield tmp_path
 
@@ -17,7 +17,7 @@ def mock_cli():
 
     Generic across all modules — no paper / domain knowledge encoded here.
     Reading-specific fixture overrides should live at
-    tests/modules/auto-reading/conftest.py.
+    tests/reading/conftest.py.
     """
     cli = MagicMock()
     cli.vault_path = "/tmp/test-vault"

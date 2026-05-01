@@ -1,6 +1,6 @@
-"""Load auto-learning's 4 runtime YAMLs + 1 static YAML into dataclasses.
+"""Load learning module's 4 runtime YAMLs + 1 static YAML into dataclasses.
 
-Runtime files live at ~/.local/share/start-my-day/learning/ (per E3).
+Runtime files live at ~/.local/share/auto/learning/ (per E3).
 Static domain-tree.yaml lives at modules/learning/config/.
 
 Schema notes (verified against the real production files):

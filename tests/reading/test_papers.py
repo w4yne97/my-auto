@@ -1,4 +1,4 @@
-"""Tests for modules/auto-reading/lib/papers.py — reading-domain vault operations."""
+"""Tests for auto.reading.papers — reading-domain vault operations."""
 
 from datetime import date
 from pathlib import Path

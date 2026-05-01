@@ -15,7 +15,7 @@ Usage:
 
 The script validates the export contains the required cookies (auth_token, ct0),
 converts the Cookie-Editor format to Playwright's storage_state format, and
-writes ~/.local/share/start-my-day/x/session/storage_state.json.
+writes ~/.local/share/auto/x/session/storage_state.json.
 """
 
 from __future__ import annotations

@@ -66,7 +66,7 @@ class TestRealConfigSmoke:
     """Smoke tests against the real production domain-tree.yaml.
 
     These run WITHOUT the `populated_state` fixture (no monkeypatch), so they
-    hit modules/auto-learning/config/domain-tree.yaml directly — verifying the
+    hit modules/learning/config/domain-tree.yaml directly — verifying the
     loader handles the real schema, not just the synthetic fixture shape.
     """
 

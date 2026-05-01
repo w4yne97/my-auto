@@ -58,7 +58,7 @@ def fetch_following_timeline(
         raise FetcherError(
             "auth",
             f"no storage_state at {storage_state}; "
-            "run: python modules/auto-x/scripts/import_cookies.py /path/to/cookies.json",
+            "run: python -m auto.x.cli.import_cookies /path/to/cookies.json",
         )
 
     from playwright.sync_api import (  # type: ignore[import-not-found]

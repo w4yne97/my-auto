@@ -1,7 +1,7 @@
-"""Shared test data for auto-learning tests.
+"""Shared test data for learning module tests.
 
 Schemas mirror the real production YAMLs (verified against
-~/Documents/code/learning/state/* and modules/auto-learning/config/domain-tree.yaml):
+~/.local/share/auto/learning/* and modules/learning/config/domain-tree.yaml):
 - domain-tree: domains[X].subtopics[Y].concepts is a LIST of dicts with bare ids.
 - knowledge-map.concepts is keyed by FULL PATH; uses `depth` (not `current_depth`)
   and splits sources into `vault_notes` / `reading_refs` / `web_refs`.

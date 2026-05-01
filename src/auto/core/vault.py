@@ -1,7 +1,7 @@
 """Vault business logic — platform-generic operations only.
 
 Reading-domain functions (load_config, scan_papers, build_dedup_set, etc.)
-were extracted to modules/auto-reading/lib/papers.py during Phase 2 sub-A.
+live at src/auto/reading/papers.py.
 """
 
 import os
