@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Emit auto-learning's daily envelope for start-my-day orchestration.
 
-Reads state from ~/.local/share/start-my-day/auto-learning/, the static
-domain-tree from modules/auto-learning/config/, and walks the merged vault for
+Reads state from ~/.local/share/start-my-day/learning/, the static
+domain-tree from modules/learning/config/, and walks the merged vault for
 related materials. NO AI — pure data prep.
 
 Usage:
-    python modules/auto-learning/scripts/today.py \\
-        --output /tmp/start-my-day/auto-learning.json \\
+    python -m auto.learning.cli.today \\
+        --output /tmp/start-my-day/learning.json \\
         [--vault-name auto-reading-vault] [--verbose]
 """
 import argparse
@@ -18,15 +18,12 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-# Module-local lib must be on sys.path BEFORE the bare-name imports
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
+from auto.core.logging import log_event
+from auto.core.storage import vault_path
 
-from lib.logging import log_event
-from lib.storage import vault_path
-
-from state import load_domain_tree, load_knowledge_map, load_learning_route, load_progress
-from route import recommend_next_concept
-from materials import find_related_materials
+from auto.learning.state import load_domain_tree, load_knowledge_map, load_learning_route, load_progress
+from auto.learning.route import recommend_next_concept
+from auto.learning.materials import find_related_materials
 
 logger = logging.getLogger("auto-learning-today")
 
@@ -35,7 +32,7 @@ def _cleanup_tmp(output_path: Path) -> None:
     """Ensure parent dir exists; clean stale *.json under known platform tmp paths."""
     output_dir = output_path.parent
     output_dir.mkdir(parents=True, exist_ok=True)
-    if output_dir.name in ("auto-learning", "start-my-day"):
+    if output_dir.name in ("learning", "start-my-day"):
         for f in output_dir.glob("*.json"):
             if f.resolve() != output_path.resolve():
                 try:
@@ -58,7 +55,7 @@ def main() -> None:
         stream=sys.stderr,
     )
 
-    log_event("auto-learning", "today_script_start",
+    log_event("learning", "today_script_start",
               date=datetime.now().date().isoformat())
 
     output_path = Path(args.output)
@@ -126,7 +123,7 @@ def main() -> None:
             }
 
         result = {
-            "module": "auto-learning",
+            "module": "learning",
             "schema_version": 1,
             "generated_at": datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
             "date": datetime.now().date().isoformat(),
@@ -138,14 +135,14 @@ def main() -> None:
 
         _cleanup_tmp(output_path)
         output_path.write_text(json.dumps(result, ensure_ascii=False, indent=2))
-        log_event("auto-learning", "today_script_done",
+        log_event("learning", "today_script_done",
                   status=status,
                   stats=stats,
                   duration_s=round(time.monotonic() - start_t, 2))
         logger.info("Wrote envelope (status=%s) to %s", status, output_path)
 
     except Exception as e:
-        log_event("auto-learning", "today_script_crashed",
+        log_event("learning", "today_script_crashed",
                   level="error",
                   error_type=type(e).__name__,
                   message=str(e),
@@ -154,7 +151,7 @@ def main() -> None:
         try:
             output_path.parent.mkdir(parents=True, exist_ok=True)
             error_envelope = {
-                "module": "auto-learning",
+                "module": "learning",
                 "schema_version": 1,
                 "generated_at": datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
                 "date": datetime.now().date().isoformat(),

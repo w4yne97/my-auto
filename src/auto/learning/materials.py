@@ -1,7 +1,7 @@
 """Cross-vault material search: find learning + reading notes for a concept."""
 from pathlib import Path
 
-from models import Concept, Materials
+from auto.learning.models import Concept, Materials
 
 
 def _search_dir(root: Path, query_terms: tuple[str, ...], limit: int = 5) -> tuple[str, ...]:

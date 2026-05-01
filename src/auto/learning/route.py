@@ -1,6 +1,6 @@
 """Recommend the next concept to study from the learning route."""
 
-from models import Concept, ConceptState, Recommendation, RouteEntry
+from auto.learning.models import Concept, ConceptState, Recommendation, RouteEntry
 
 
 def _is_prerequisite_satisfied(state: ConceptState | None) -> bool:

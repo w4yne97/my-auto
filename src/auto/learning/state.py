@@ -1,7 +1,7 @@
 """Load auto-learning's 4 runtime YAMLs + 1 static YAML into dataclasses.
 
-Runtime files live at ~/.local/share/start-my-day/auto-learning/ (per E3).
-Static domain-tree.yaml lives at modules/auto-learning/config/.
+Runtime files live at ~/.local/share/start-my-day/learning/ (per E3).
+Static domain-tree.yaml lives at modules/learning/config/.
 
 Schema notes (verified against the real production files):
 - domain-tree.yaml: domains[X].subtopics[Y].concepts is a LIST of dicts with
@@ -20,11 +20,11 @@ from pathlib import Path
 
 import yaml
 
-from lib.storage import module_state_dir, module_config_file
+from auto.core.storage import module_state_dir, module_config_file
 
-from models import Concept, ConceptState, RouteEntry, Progress
+from auto.learning.models import Concept, ConceptState, RouteEntry, Progress
 
-_MODULE_NAME = "auto-learning"
+_MODULE_NAME = "learning"
 
 
 def _state_file(filename: str) -> Path:
@@ -57,7 +57,7 @@ def load_domain_tree() -> dict[str, Concept]:
     - Concept.prerequisites = tuple of full paths (resolved from bare ids).
 
     Raises FileNotFoundError if domain-tree.yaml is absent — it is a required
-    repo invariant shipped at modules/auto-learning/config/domain-tree.yaml,
+    repo invariant shipped at modules/learning/config/domain-tree.yaml,
     not a runtime state file. (Other loaders return defaults on missing files.)
     """
     path = module_config_file(_MODULE_NAME, "domain-tree.yaml")
