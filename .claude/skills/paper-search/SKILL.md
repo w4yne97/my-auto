@@ -23,7 +23,7 @@ description: 按关键词搜索 arXiv 论文，在对话中展示排序结果
 
 ## Step 2: 读取配置
 
-1. 读取 `modules/auto-reading/config/research_interests.yaml`
+1. 读取 `modules/reading/config/research_interests.yaml`
    - 如果 `VAULT_PATH` 未设置，尝试从已知配置文件中获取 `vault_path`
    - 如果配置不存在，提示用户运行 `/config`
 2. 提取 `research_domains`、`scoring_weights`
@@ -31,8 +31,8 @@ description: 按关键词搜索 arXiv 论文，在对话中展示排序结果
 ## Step 3: 调用 search_papers.py
 
 ```bash
-python modules/auto-reading/scripts/search_papers.py \
-  --config "modules/auto-reading/config/research_interests.yaml" \
+python -m auto.reading.cli.search_papers \
+  --config "modules/reading/config/research_interests.yaml" \
   --keywords {用户关键词} \
   --output /tmp/auto-reading/search_result.json \
   --days {days} \

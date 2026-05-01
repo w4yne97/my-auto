@@ -13,7 +13,7 @@ description: 扫描新论文，更新 Insight 主题的技术点和发展脉络
 
 ## Step 1: 读取配置和主题信息
 
-1. 读取 `modules/auto-reading/config/research_interests.yaml`，获取 `vault_path`
+1. 读取 `modules/reading/config/research_interests.yaml`，获取 `vault_path`
 2. 从用户命令中提取主题名称，如 `/insight-update RL-for-Coding-Agent`
 3. 读取 `$VAULT_PATH/30_Insights/<topic>/_index.md`
    - 提取 `updated` 日期 — 作为扫描起始日期
@@ -28,7 +28,7 @@ description: 扫描新论文，更新 Insight 主题的技术点和发展脉络
 调用 scan_recent_papers.py，以主题的 `updated` 日期为起点：
 
 ```bash
-python modules/auto-reading/scripts/scan_recent_papers.py \
+python -m auto.reading.cli.scan_recent_papers \
   --since {_index.md 的 updated 日期} \
   --output /tmp/auto-reading/recent_papers.json
 ```

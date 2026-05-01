@@ -13,12 +13,12 @@ description: 生成每周论文总结，包括 Top 论文、领域概况和 Insi
 
 ## Step 1: 读取配置
 
-读取 `modules/auto-reading/config/research_interests.yaml`，获取 `vault_path` 和 `research_domains` 信息。
+读取 `modules/reading/config/research_interests.yaml`，获取 `vault_path` 和 `research_domains` 信息。
 
 ## Step 2: 调用 generate_digest.py
 
 ```bash
-python modules/auto-reading/scripts/generate_digest.py \
+python -m auto.reading.cli.generate_digest \
   --output /tmp/auto-reading/digest_data.json \
   --days 7
 ```
