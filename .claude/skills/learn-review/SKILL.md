@@ -7,7 +7,7 @@ description: 对最近学习的概念进行测验,验证 depth 与 confidence。
 
 ## 步骤
 
-1. 读取 `~/.local/share/start-my-day/auto-learning/knowledge-map.yaml`，找到最近 `last_studied` 不为 null 的概念（按时间倒序）
+1. 读取 `~/.local/share/auto/learning/knowledge-map.yaml`，找到最近 `last_studied` 不为 null 的概念（按时间倒序）
 2. 选取最近 1-3 个概念进行测验
 3. 对每个概念，根据其当前 depth 级别出题：
    - L0→L1: 基础理解题（"请解释 X 是什么，为什么重要？"）

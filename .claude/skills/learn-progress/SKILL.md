@@ -15,14 +15,14 @@ description: 更新学习进度,聚合 study-log 到 progress.yaml。
 
 ### 如果有参数（更新模式）：
 1. 解析用户输入的概念路径、新 depth、confidence
-2. 读取 `~/.local/share/start-my-day/auto-learning/knowledge-map.yaml`
+2. 读取 `~/.local/share/auto/learning/knowledge-map.yaml`
 3. 更新对应概念的 depth、confidence、last_studied（今天日期）、study_sessions +1
-4. 重新计算 `~/.local/share/start-my-day/auto-learning/progress.yaml` 的聚合统计
-5. 追加一条记录到 `~/.local/share/start-my-day/auto-learning/study-log.yaml`
+4. 重新计算 `~/.local/share/auto/learning/progress.yaml` 的聚合统计
+5. 追加一条记录到 `~/.local/share/auto/learning/study-log.yaml`
 6. 输出更新确认
 
 ### 显示当前进度 dashboard：
-1. 读取 `~/.local/share/start-my-day/auto-learning/progress.yaml`
+1. 读取 `~/.local/share/auto/learning/progress.yaml`
 2. 输出格式化的进度面板
 
 ## 输出格式

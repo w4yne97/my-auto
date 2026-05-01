@@ -7,7 +7,7 @@ description: 分析当前知识体系的缺口,找出 prerequisites 链中的薄
 
 ## 步骤
 
-1. 读取 `~/.local/share/start-my-day/auto-learning/knowledge-map.yaml`
+1. 读取 `~/.local/share/auto/learning/knowledge-map.yaml`
 2. 对每个概念计算 gap = target_depth - current_depth
 3. 按领域分组，统计每个领域的缺口情况
 4. 识别关键缺口：高 priority 但低 depth 的概念

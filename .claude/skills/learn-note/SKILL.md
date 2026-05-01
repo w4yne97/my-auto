@@ -13,7 +13,7 @@ description: 创建或更新结构化知识笔记，写入 knowledge-vault，自
 
 ### Step 1: 定位概念
 
-1. 在 `~/.local/share/start-my-day/auto-learning/knowledge-map.yaml` 中查找概念
+1. 在 `~/.local/share/auto/learning/knowledge-map.yaml` 中查找概念
 2. 确定对应的 vault 路径：`$VAULT_PATH/learning/{vault_section}/{concept-id}.md`
 3. 检查笔记是否已存在
 
@@ -26,7 +26,7 @@ description: 创建或更新结构化知识笔记，写入 knowledge-vault，自
 
 ### Step 3: 写入笔记
 
-使用 `modules/auto-learning/lib/templates/knowledge-note.md` 模板，创建/更新笔记：
+使用 `modules/learning/lib/templates/knowledge-note.md` 模板，创建/更新笔记：
 
 ```yaml
 ---
@@ -96,7 +96,7 @@ graph LR
 
 ### Step 7: 更新状态
 
-1. 更新 `~/.local/share/start-my-day/auto-learning/knowledge-map.yaml` 中该概念的 `vault_notes` 字段
+1. 更新 `~/.local/share/auto/learning/knowledge-map.yaml` 中该概念的 `vault_notes` 字段
 2. 确认笔记路径已添加
 
 ## 写作规范
