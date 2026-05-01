@@ -25,14 +25,14 @@ description: 获取单篇论文元数据并生成详细分析笔记到 Obsidian 
 
 ## Step 2: 读取配置
 
-读取 `modules/auto-reading/config/research_interests.yaml`，提取 `research_domains` 用于确定论文所属领域。
+读取 `modules/reading/config/research_interests.yaml`，提取 `research_domains` 用于确定论文所属领域。
 
 ## Step 3: 调用 generate_note.py
 
 ```bash
-python modules/auto-reading/scripts/generate_note.py \
+python -m auto.reading.cli.generate_note \
   --arxiv-id {arxiv_id} \
-  --config "modules/auto-reading/config/research_interests.yaml" \
+  --config "modules/reading/config/research_interests.yaml" \
   --output /tmp/auto-reading/paper_meta.json
 ```
 

@@ -23,7 +23,7 @@ description: 发现 Insight 主题之间的跨主题关联，更新关联部分
 
 ## Step 2: 读取配置
 
-读取 `modules/auto-reading/config/research_interests.yaml`，获取 `vault_path`。
+读取 `modules/reading/config/research_interests.yaml`，获取 `vault_path`。
 
 ## Step 3: 读取主题内容
 

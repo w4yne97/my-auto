@@ -7,7 +7,7 @@ description: 根据已有 reading vault 内容自动评估知识深度,初始化
 
 ## 步骤
 
-1. 读取 `~/.local/share/start-my-day/auto-learning/knowledge-map.yaml` 获取所有概念列表
+1. 读取 `~/.local/share/auto/learning/knowledge-map.yaml` 获取所有概念列表
 2. 读取 `$VAULT_PATH/30_Insights/` 中的各个 `_index.md`，了解已有洞察覆盖
 3. 对于每个概念，检查是否在 reading vault 中有对应的洞察或论文笔记：
    - 如果有详细的洞察笔记（在 30_Insights 中有专门的技术点文件），提升到 L1
@@ -17,7 +17,7 @@ description: 根据已有 reading vault 内容自动评估知识深度,初始化
    - depth（根据上述规则）
    - reading_refs（关联的 vault 文件路径）
    - confidence（基于覆盖程度给一个初始值）
-5. 更新 `~/.local/share/start-my-day/auto-learning/progress.yaml` 的聚合统计
+5. 更新 `~/.local/share/auto/learning/progress.yaml` 的聚合统计
 6. 输出初始化报告
 
 ## 输出格式

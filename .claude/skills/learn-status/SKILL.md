@@ -7,8 +7,8 @@ description: 快速显示当前学习状态:streak、phase、近期 sessions。
 
 ## 步骤
 
-1. 读取 `~/.local/share/start-my-day/auto-learning/progress.yaml`
-2. 读取 `~/.local/share/start-my-day/auto-learning/knowledge-map.yaml`，统计各状态概念数量
+1. 读取 `~/.local/share/auto/learning/progress.yaml`
+2. 读取 `~/.local/share/auto/learning/knowledge-map.yaml`，统计各状态概念数量
 3. 找出最近学习的 3 个概念
 4. 找出下一个推荐学习的概念（最高 gap score）
 

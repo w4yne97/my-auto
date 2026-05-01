@@ -39,7 +39,7 @@ description: 批量导入已有论文到 Obsidian vault 知识体系（支持 ar
 从 vault 配置获取研究领域信息：
 
 1. 如果环境变量 `VAULT_PATH` 未设置，尝试从已知配置文件中获取 `vault_path`
-2. 读取 `modules/auto-reading/config/research_interests.yaml`
+2. 读取 `modules/reading/config/research_interests.yaml`
 3. 提取 `research_domains` 用于后续论文领域匹配
 
 ### Step 3: 调用解析脚本
@@ -47,9 +47,9 @@ description: 批量导入已有论文到 Obsidian vault 知识体系（支持 ar
 将收集到的输入传给 Python 脚本进行解析、去重和元数据获取：
 
 ```bash
-python modules/auto-reading/scripts/resolve_and_fetch.py \
+python -m auto.reading.cli.resolve_and_fetch \
   --inputs {input1} {input2} ... \
-  --config "modules/auto-reading/config/research_interests.yaml" \
+  --config "modules/reading/config/research_interests.yaml" \
   --output /tmp/auto-reading/import_result.json
 ```
 
