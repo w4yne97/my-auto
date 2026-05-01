@@ -1,8 +1,8 @@
 """
-Minimal JSONL logging for the start-my-day platform.
+Minimal JSONL logging for the auto platform.
 
 Single function: log_event(module, event, level="info", **fields)
-Writes one JSON line to ~/.local/share/start-my-day/logs/<date>.jsonl.
+Writes one JSON line to ~/.local/share/auto/logs/<date>.jsonl.
 """
 from __future__ import annotations
 import json

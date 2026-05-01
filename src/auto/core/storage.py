@@ -1,9 +1,9 @@
 """
-Storage path helpers for the start-my-day platform.
+Storage path helpers for the auto platform (was start-my-day).
 
 E3 trichotomy:
   - config: in repo, version-controlled    -> modules/<name>/config/<file>
-  - state:  outside repo, runtime-mutable  -> ~/.local/share/start-my-day/<name>/<file>
+  - state:  outside repo, runtime-mutable  -> ~/.local/share/auto/<name>/<file>
   - vault:  Obsidian, human-readable       -> $VAULT_PATH/<subdir>/<file>
 """
 from __future__ import annotations
@@ -12,8 +12,10 @@ from pathlib import Path
 
 
 def repo_root() -> Path:
-    """Repo root, discovered by walking up from this file's location."""
-    return Path(__file__).resolve().parent.parent
+    """Repo root, discovered by walking up from this file's location.
+    src/auto/core/storage.py → parents[3] = repo
+    """
+    return Path(__file__).resolve().parents[3]
 
 
 def module_dir(module: str) -> Path:
@@ -36,9 +38,9 @@ def module_config_file(module: str, filename: str) -> Path:
 # --- state: outside-repo, runtime-mutable ---
 
 def _state_root() -> Path:
-    """Honors XDG_DATA_HOME; defaults to ~/.local/share/start-my-day/."""
+    """Honors XDG_DATA_HOME; defaults to ~/.local/share/auto/."""
     base = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
-    return Path(base) / "start-my-day"
+    return Path(base) / "auto"
 
 
 def module_state_dir(module: str, *, ensure: bool = True) -> Path:

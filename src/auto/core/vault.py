@@ -8,7 +8,7 @@ import os
 from datetime import date
 from pathlib import Path
 
-from lib.obsidian_cli import ObsidianCLI
+from auto.core.obsidian_cli import ObsidianCLI
 
 
 def create_cli(vault_name: str | None = None) -> ObsidianCLI:
