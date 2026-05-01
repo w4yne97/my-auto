@@ -3,7 +3,7 @@ import os
 import pytest
 from pathlib import Path
 
-from lib.storage import (
+from auto.core.storage import (
     repo_root,
     module_dir,
     module_config_dir,
@@ -17,7 +17,7 @@ from lib.storage import (
 
 def test_repo_root_is_lib_parent():
     root = repo_root()
-    assert (root / "lib" / "storage.py").exists()
+    assert (root / "src" / "auto" / "core" / "storage.py").exists()
 
 
 def test_module_dir_returns_modules_subpath():
@@ -43,7 +43,7 @@ def test_module_config_dir_does_not_auto_create(tmp_path, monkeypatch):
 
 def test_module_state_dir_uses_xdg_data_home(isolated_state_root):
     p = module_state_dir("auto-reading")
-    assert p == isolated_state_root / "start-my-day" / "auto-reading"
+    assert p == isolated_state_root / "auto" / "auto-reading"
     assert p.exists()  # auto-created by default
 
 
@@ -51,7 +51,7 @@ def test_module_state_dir_default_under_home(monkeypatch, tmp_path):
     monkeypatch.delenv("XDG_DATA_HOME", raising=False)
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     p = module_state_dir("auto-reading")
-    assert p == tmp_path / ".local" / "share" / "start-my-day" / "auto-reading"
+    assert p == tmp_path / ".local" / "share" / "auto" / "auto-reading"
     assert p.exists()
 
 
@@ -62,12 +62,12 @@ def test_module_state_dir_ensure_false_skips_create(isolated_state_root):
 
 def test_module_state_file_joins_filename(isolated_state_root):
     p = module_state_file("auto-reading", "progress.yaml")
-    assert p == isolated_state_root / "start-my-day" / "auto-reading" / "progress.yaml"
+    assert p == isolated_state_root / "auto" / "auto-reading" / "progress.yaml"
 
 
 def test_platform_log_dir(isolated_state_root):
     p = platform_log_dir()
-    assert p == isolated_state_root / "start-my-day" / "logs"
+    assert p == isolated_state_root / "auto" / "logs"
     assert p.exists()
 
 
@@ -92,7 +92,7 @@ def test_vault_path_raises_when_unset(monkeypatch):
 
 def test_platform_runs_dir_under_state_root(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
-    from lib.storage import platform_runs_dir
+    from auto.core.storage import platform_runs_dir
     p = platform_runs_dir()
-    assert p == tmp_path / "start-my-day" / "runs"
+    assert p == tmp_path / "auto" / "runs"
     assert p.exists() and p.is_dir()

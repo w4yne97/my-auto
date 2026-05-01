@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from lib.vault import (
+from auto.core.vault import (
     get_vault_path,
     parse_date_field,
     list_daily_notes,

@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from lib.orchestrator import (
+from auto.core.orchestrator import (
     ModuleEntry,
     ModuleMeta,
     ModuleResult,
@@ -262,7 +262,7 @@ class TestLogRunEvent:
     def test_writes_jsonl_line_with_orchestrator_module_tag(self, tmp_path, monkeypatch):
         monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
         log_run_event("run_start", date="2026-04-29", modules_ordered=["a", "b"])
-        log_dir = tmp_path / "start-my-day" / "logs"
+        log_dir = tmp_path / "auto" / "logs"
         files = list(log_dir.glob("*.jsonl"))
         assert len(files) == 1
         line = files[0].read_text(encoding="utf-8").strip().splitlines()[-1]
@@ -277,7 +277,7 @@ class TestLogRunEvent:
         monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
         log_run_event("run_start", date="2026-04-29", args={"date": "2026-04-29"},
                       modules_ordered=["auto-reading"])
-        log_dir = tmp_path / "start-my-day" / "logs"
+        log_dir = tmp_path / "auto" / "logs"
         files = sorted(log_dir.glob("*.jsonl"))
         assert len(files) == 1
         assert files[0].name == "2026-04-29.jsonl"
@@ -318,7 +318,7 @@ class TestWriteRunSummary:
             args={"only": None, "skip": [], "date": "2026-04-29"},
             results=self._make_results(),
         )
-        assert path == tmp_path / "start-my-day" / "runs" / "2026-04-29.json"
+        assert path == tmp_path / "auto" / "runs" / "2026-04-29.json"
         data = json.loads(path.read_text())
         assert data["schema_version"] == 1
         assert data["date"] == "2026-04-29"

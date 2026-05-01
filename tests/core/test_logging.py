@@ -5,11 +5,11 @@ from datetime import datetime
 
 import pytest
 
-from lib.logging import log_event
+from auto.core.logging import log_event
 
 
 def _read_today_log(state_root):
-    log_dir = state_root / "start-my-day" / "logs"
+    log_dir = state_root / "auto" / "logs"
     files = list(log_dir.glob("*.jsonl"))
     assert len(files) == 1, f"expected 1 log file, got {len(files)}"
     return files[0].read_text(encoding="utf-8").splitlines()
@@ -74,7 +74,7 @@ def test_log_event_unicode_safe(isolated_state_root):
 def test_log_event_filename_uses_today_date(isolated_state_root):
     log_event("auto-reading", "ev")
     today = datetime.now().date().isoformat()
-    expected = isolated_state_root / "start-my-day" / "logs" / f"{today}.jsonl"
+    expected = isolated_state_root / "auto" / "logs" / f"{today}.jsonl"
     assert expected.exists()
 
 
@@ -82,9 +82,9 @@ def test_log_event_with_explicit_date_writes_to_that_date_file(tmp_path, monkeyp
     """When date='YYYY-MM-DD' is passed, log_event writes to logs/<date>.jsonl,
     not logs/<today>.jsonl. Critical for /start-my-day rerunning a prior date."""
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
-    from lib.logging import log_event
+    from auto.core.logging import log_event
     log_event("auto-x", "today_script_done", date="2026-04-29", status="ok")
-    log_dir = tmp_path / "start-my-day" / "logs"
+    log_dir = tmp_path / "auto" / "logs"
     files = sorted(log_dir.glob("*.jsonl"))
     assert len(files) == 1
     assert files[0].name == "2026-04-29.jsonl", f"expected 2026-04-29.jsonl, got {files[0].name}"

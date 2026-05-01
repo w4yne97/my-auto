@@ -6,7 +6,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from lib.obsidian_cli import (
+from auto.core.obsidian_cli import (
     ObsidianCLI,
     CLINotFoundError,
     ObsidianNotRunningError,

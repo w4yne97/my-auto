@@ -6,7 +6,7 @@ Skip: pytest -m "not integration" (default in CI)
 
 import pytest
 
-from lib.obsidian_cli import ObsidianCLI, CLINotFoundError
+from auto.core.obsidian_cli import ObsidianCLI, CLINotFoundError
 
 
 def _cli_available() -> bool:
