@@ -3,12 +3,12 @@
 # Phase 2 sub-D (2026-04-29): auto-x joined.
 
 modules:
-  - name: auto-reading
+  - name: reading
     enabled: true
     order: 10
-  - name: auto-learning
+  - name: learning
     enabled: true
-    order: 20    # learning runs AFTER reading (depends_on: [auto-reading])
-  - name: auto-x
+    order: 20    # learning runs AFTER reading (depends_on: [reading])
+  - name: x
     enabled: true
     order: 30

@@ -3,15 +3,15 @@ name: start-my-day
 description: 每日多模块编排器 —— 读取注册表、依次执行各 auto-* 模块的 today 流程
 ---
 
-你是个人每日事项中枢的编排器。本仓 `start-my-day` 通过模块化方式管理多个垂直方向(`modules/auto-*/`),你的工作是**按注册表顺序**调度它们，并把今日运行结果落地为结构化 run summary（供综合日报模块消费）。
+你是个人每日事项中枢的编排器。本仓 `start-my-day` 通过模块化方式管理多个垂直方向(`modules/*/`),你的工作是**按注册表顺序**调度它们，并把今日运行结果落地为结构化 run summary（供综合日报模块消费）。
 
 # 入口与参数
 
 用户调用形式:
 - `/start-my-day` — 跑今天所有 enabled 模块
 - `/start-my-day 2026-04-26` — 指定日期重跑
-- `/start-my-day --only auto-reading` — 仅跑指定模块
-- `/start-my-day --skip auto-learning,auto-x` — 跳过指定模块
+- `/start-my-day --only reading` — 仅跑指定模块
+- `/start-my-day --skip learning,x` — 跳过指定模块
 
 # Step 1: 解析参数
 
@@ -22,15 +22,15 @@ description: 每日多模块编排器 —— 读取注册表、依次执行各 a
 
 记录到内存中的 `args = {"date": DATE, "only": ONLY, "skip": SKIP_LIST}`。
 
-> **执行前提：** 所有 Python 命令在仓根执行 + 用 `PYTHONPATH="$PWD"` + `python3`（项目要求 ≥3.12，且 today.py / lib.orchestrator 都依赖 top-level `lib.*` 包）。
+> **执行前提：** 所有 Python 命令在仓根执行（项目要求 ≥3.12，已 pip install -e . 安装 auto 包）。
 
 # Step 2: 加载注册表 + 应用过滤
 
 ```bash
-PYTHONPATH="$PWD" python3 -c "
+python -c "
 import json, sys
 from pathlib import Path
-from lib.orchestrator import load_registry, apply_filters, log_run_event
+from auto.core.orchestrator import load_registry, apply_filters, log_run_event
 import os
 ARGS = json.loads(os.environ['STARTMYDAY_ARGS'])
 L = load_registry(Path('config/modules.yaml'))
@@ -61,10 +61,10 @@ echo '[]' > /tmp/start-my-day/_run_state.json
 ## Step 4.1: 加载模块自描述
 
 ```bash
-PYTHONPATH="$PWD" python3 -c "
+python -c "
 import json
 from pathlib import Path
-from lib.orchestrator import load_module_meta
+from auto.core.orchestrator import load_module_meta
 meta = load_module_meta(Path.cwd(), '<module>')
 print(json.dumps(meta.__dict__))
 "
@@ -75,12 +75,12 @@ print(json.dumps(meta.__dict__))
 ## Step 4.2: 依赖门控（先于跑 today.py）
 
 ```bash
-PYTHONPATH="$PWD" python3 -c "
+python -c "
 import json, os
 from pathlib import Path
 from datetime import datetime
 from dataclasses import asdict
-from lib.orchestrator import route, ModuleResult, log_run_event
+from auto.core.orchestrator import route, ModuleResult, log_run_event
 state_file = Path('/tmp/start-my-day/_run_state.json')
 upstream_raw = json.loads(state_file.read_text() or '[]') if state_file.exists() else []
 upstream = [ModuleResult(**u) for u in upstream_raw]
@@ -105,18 +105,18 @@ print(json.dumps({'route': d.route, 'reason': d.reason, 'blocked_by': d.blocked_
 记录 `t0 = now()`。
 
 ```bash
-PYTHONPATH="$PWD" python3 modules/<module>/<meta.today_script> --output /tmp/start-my-day/<module>.json 2>/tmp/start-my-day/<module>.stderr
+python -m auto.<module>.cli.today --output /tmp/start-my-day/<module>.json 2>/tmp/start-my-day/<module>.stderr
 ```
 
-读取 envelope 的规则（**重要**——auto-x 等模块在 error 路径上也会写结构化 envelope，必须优先信任文件）：
+读取 envelope 的规则（**重要**——x 等模块在 error 路径上也会写结构化 envelope，必须优先信任文件）：
 
-- **若 `/tmp/start-my-day/<module>.json` 已存在** → 直接读它（即使退出码非 0；模块的 today.py 已写了带 `code`/`hint` 的结构化 error envelope，例如 auto-x 的 cookie 过期提示）。
+- **若 `/tmp/start-my-day/<module>.json` 已存在** → 直接读它（即使退出码非 0；模块的 today.py 已写了带 `code`/`hint` 的结构化 error envelope，例如 x 模块的 cookie 过期提示）。
 - **若文件不存在 + 退出码非 0** → today.py 在写 envelope 前就崩了，调用 `synthesize_crash_envelope()` 兜底：
 
 ```bash
-PYTHONPATH="$PWD" python3 -c "
+python -c "
 import json
-from lib.orchestrator import synthesize_crash_envelope
+from auto.core.orchestrator import synthesize_crash_envelope
 print(json.dumps(synthesize_crash_envelope(open('/tmp/start-my-day/<module>.stderr').read())))
 "
 ```
@@ -126,10 +126,10 @@ print(json.dumps(synthesize_crash_envelope(open('/tmp/start-my-day/<module>.stde
 ## Step 4.4: 路由判定
 
 ```bash
-PYTHONPATH="$PWD" python3 -c "
+python -c "
 import json, os
 from pathlib import Path
-from lib.orchestrator import route, ModuleResult, synthesize_crash_envelope, RouteDecision
+from auto.core.orchestrator import route, ModuleResult, synthesize_crash_envelope, RouteDecision
 
 output_path = Path('/tmp/start-my-day/<module>.json')
 
@@ -177,10 +177,10 @@ print(json.dumps({'route': d.route, 'reason': d.reason, 'blocked_by': d.blocked_
 ## Step 4.5: 记录 module_routed 事件 + 累积 results
 
 ```bash
-PYTHONPATH="$PWD" python3 -c "
+python -c "
 import json, os
 from datetime import datetime
-from lib.orchestrator import log_run_event, ModuleResult
+from auto.core.orchestrator import log_run_event, ModuleResult
 from dataclasses import asdict
 RD = json.loads(os.environ['ROUTE_DECISION'])
 ENV = json.loads(os.environ['ENVELOPE'])
@@ -225,10 +225,10 @@ print(json.dumps(asdict(result)))
 记录 `ended_at = now()`。
 
 ```bash
-PYTHONPATH="$PWD" python3 -c "
+python -c "
 import json, os
 from datetime import datetime
-from lib.orchestrator import write_run_summary, log_run_event, ModuleResult
+from auto.core.orchestrator import write_run_summary, log_run_event, ModuleResult
 results_raw = json.loads(open('/tmp/start-my-day/_run_state.json').read())
 results = [ModuleResult(**r) for r in results_raw]
 path = write_run_summary(
@@ -255,11 +255,11 @@ print(path)
 
 ```
 ✅ 运行完成 (<duration>)
-  📚 auto-reading    <route>   <stats或error行>
-  🎓 auto-learning   <route>   ...
-  🐦 auto-x          <route>   ...
-  📋 详细日志: ~/.local/share/start-my-day/logs/<DATE>.jsonl
-  📦 Run summary:   ~/.local/share/start-my-day/runs/<DATE>.json
+  📚 reading    <route>   <stats或error行>
+  🎓 learning   <route>   ...
+  🐦 x          <route>   ...
+  📋 详细日志: ~/.local/share/auto/logs/<DATE>.jsonl
+  📦 Run summary:   ~/.local/share/auto/runs/<DATE>.json
 ```
 
 如果**所有模块**都是 error / dep_blocked / empty，追加：
@@ -276,5 +276,5 @@ print(path)
 # 已知行为
 
 - 三个 enabled 模块按 `config/modules.yaml.order` 升序：reading(10) → learning(20) → x(30)。
-- `auto-learning` 声明 `depends_on: [auto-reading]`：reading 今日 `error` 时，learning 自动 `dep_blocked`；reading `empty` **不**阻塞。
+- `learning` 声明 `depends_on: [reading]`：reading 今日 `error` 时，learning 自动 `dep_blocked`；reading `empty` **不**阻塞。
 - `$VAULT_PATH` 必须已在 shell 环境中设置。如未设置,提示用户在 `.env` 中配置。

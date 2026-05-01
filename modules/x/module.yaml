@@ -1,4 +1,4 @@
-name: auto-x
+name: x
 schema_version: 1
 description: Daily X (Twitter) Following-timeline digest with keyword filtering.
 

@@ -1,4 +1,4 @@
-name: auto-learning
+name: learning
 display_name: Auto-Learning
 description: SWE 后训练领域知识图谱 / 学习路线规划 / 知识变现
 version: 1.0.0
@@ -21,7 +21,7 @@ vault_outputs:
   - "learning/30_Data/"
 
 # Cross-module dependencies
-depends_on: [auto-reading]   # reads insights + papers from auto-reading vault outputs
+depends_on: [reading]   # reads insights + papers from reading vault outputs
 
 # Module config files
 configs:
