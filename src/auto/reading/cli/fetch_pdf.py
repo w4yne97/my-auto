@@ -17,16 +17,13 @@ from pathlib import Path
 
 import fitz  # PyMuPDF, only to count pages
 
-# Reading-local lib goes on sys.path BEFORE its bare-name imports below
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
+from auto.core.obsidian_cli import ObsidianCLI, CLINotFoundError, ObsidianNotRunningError
 
-from lib.obsidian_cli import ObsidianCLI, CLINotFoundError, ObsidianNotRunningError
-
-from models import Paper
-from scoring import best_domain
-from sources.arxiv_api import fetch_paper
-from sources.arxiv_pdf import download_pdf, InvalidArxivIdError
-from papers import build_dedup_set, load_config, write_paper_note
+from auto.reading.models import Paper
+from auto.reading.scoring import best_domain
+from auto.reading.sources.arxiv_api import fetch_paper
+from auto.reading.sources.arxiv_pdf import download_pdf, InvalidArxivIdError
+from auto.reading.papers import build_dedup_set, load_config, write_paper_note
 
 logger = logging.getLogger("fetch_pdf")
 

@@ -15,15 +15,12 @@ import logging
 import sys
 from pathlib import Path
 
-# Reading-local lib goes on sys.path BEFORE its bare-name imports below
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
+from auto.core.vault import create_cli
 
-from lib.vault import create_cli
-
-from resolver import resolve_inputs
-from scoring import best_domain, matched_keywords
-from sources.arxiv_api import fetch_papers_batch
-from papers import load_config, build_dedup_set
+from auto.reading.resolver import resolve_inputs
+from auto.reading.scoring import best_domain, matched_keywords
+from auto.reading.sources.arxiv_api import fetch_papers_batch
+from auto.reading.papers import load_config, build_dedup_set
 
 logger = logging.getLogger("resolve_and_fetch")
 

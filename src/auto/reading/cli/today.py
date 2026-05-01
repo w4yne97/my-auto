@@ -16,17 +16,14 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-# Reading-local lib goes on sys.path BEFORE its bare-name imports below
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
+from auto.core.logging import log_event
+from auto.core.vault import create_cli
 
-from lib.logging import log_event
-from lib.vault import create_cli
-
-from models import scored_paper_to_dict
-from sources.alphaxiv import fetch_trending, AlphaXivError
-from sources.arxiv_api import search_arxiv
-from scoring import score_papers
-from papers import load_config, build_dedup_set
+from auto.reading.models import scored_paper_to_dict
+from auto.reading.sources.alphaxiv import fetch_trending, AlphaXivError
+from auto.reading.sources.arxiv_api import search_arxiv
+from auto.reading.scoring import score_papers
+from auto.reading.papers import load_config, build_dedup_set
 
 logger = logging.getLogger("today")
 
@@ -35,7 +32,7 @@ def _cleanup_tmp(output_path: Path) -> None:
     """Ensure parent dir exists; clean stale *.json under known platform tmp paths."""
     output_dir = output_path.parent
     output_dir.mkdir(parents=True, exist_ok=True)
-    if output_dir.name in ("auto-reading", "start-my-day"):
+    if output_dir.name in ("reading", "auto"):
         for f in output_dir.glob("*.json"):
             if f.resolve() != output_path.resolve():
                 try:
@@ -64,13 +61,13 @@ def main() -> None:
         stream=sys.stderr,
     )
 
-    log_event("auto-reading", "today_script_start",
+    log_event("reading", "today_script_start",
               date=datetime.now().date().isoformat(),
               top_n=args.top_n)
 
     try:
-        from lib.storage import module_config_file
-        config_path = args.config or str(module_config_file("auto-reading", "research_interests.yaml"))
+        from auto.core.storage import module_config_file
+        config_path = args.config or str(module_config_file("reading", "research_interests.yaml"))
         config = load_config(config_path)
 
         domains = config.get("research_domains", {})
@@ -140,7 +137,7 @@ def main() -> None:
         status = "empty" if len(candidates) == 0 else "ok"
 
         result = {
-            "module": "auto-reading",
+            "module": "reading",
             "schema_version": 1,
             "generated_at": datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
             "date": datetime.now().date().isoformat(),
@@ -158,7 +155,7 @@ def main() -> None:
         }
 
         output_path.write_text(json.dumps(result, ensure_ascii=False, indent=2))
-        log_event("auto-reading", "today_script_done",
+        log_event("reading", "today_script_done",
                   status=status,
                   stats=result["stats"],
                   duration_s=round(time.monotonic() - start_t, 2))
@@ -166,7 +163,7 @@ def main() -> None:
                     status, len(candidates), output_path)
 
     except Exception as e:
-        log_event("auto-reading", "today_script_crashed",
+        log_event("reading", "today_script_crashed",
                   level="error",
                   error_type=type(e).__name__,
                   message=str(e),
@@ -176,7 +173,7 @@ def main() -> None:
             output_path = Path(args.output)
             output_path.parent.mkdir(parents=True, exist_ok=True)
             error_envelope = {
-                "module": "auto-reading",
+                "module": "reading",
                 "schema_version": 1,
                 "generated_at": datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
                 "date": datetime.now().date().isoformat(),

@@ -11,8 +11,8 @@ from pathlib import Path
 
 import yaml
 
-from lib.obsidian_cli import ObsidianCLI
-from lib.vault import parse_date_field
+from auto.core.obsidian_cli import ObsidianCLI
+from auto.core.vault import parse_date_field
 
 logger = logging.getLogger(__name__)
 

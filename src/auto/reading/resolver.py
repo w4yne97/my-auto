@@ -4,7 +4,7 @@ import logging
 import re
 from dataclasses import dataclass
 
-from sources.arxiv_api import search_arxiv_by_title
+from auto.reading.sources.arxiv_api import search_arxiv_by_title
 
 logger = logging.getLogger(__name__)
 

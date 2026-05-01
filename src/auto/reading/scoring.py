@@ -3,7 +3,7 @@
 import logging
 from datetime import date, timedelta
 
-from models import Paper, ScoredPaper
+from auto.reading.models import Paper, ScoredPaper
 
 logger = logging.getLogger(__name__)
 
