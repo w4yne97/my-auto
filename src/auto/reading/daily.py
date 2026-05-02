@@ -1,14 +1,14 @@
 """Reading module's daily-collection helpers (extracted from cli/today.py).
 
-Pure-ish: takes a config path, returns scored papers. No filesystem I/O for
+Pure-ish: takes a config path, returns a DailyCollection. No filesystem I/O for
 output, no envelope JSON construction, no sys.exit — those are caller concerns.
 
-Function `collect_top_papers` is reusable across skills (e.g. reading-weekly,
-or future read-only inspection scripts).
+`collect_top_papers` is reusable across CLIs (e.g. scan_today.py) and skills.
 """
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -28,16 +28,31 @@ class DailyError(Exception):
     """Raised when the daily collection cannot proceed."""
 
 
+@dataclass(frozen=True)
+class DailyCollection:
+    """Result of a daily-collection run, with stage counts for observability.
+
+    `papers` is the Top-N scored slice (sorted by rule_score desc).
+    The three count fields measure the funnel: fetched -> dedup -> filter.
+    """
+
+    papers: list[ScoredPaper]
+    total_fetched: int
+    total_after_dedup: int
+    total_after_filter: int
+
+
 def collect_top_papers(
     config_path: Path,
     top_n: int = 20,
     *,
     vault_name: str | None = None,
-) -> list[ScoredPaper]:
+) -> DailyCollection:
     """Collect Top-N scored papers across alphaXiv + arXiv per the config.
 
-    Returns a list of ScoredPaper sorted by rule_score desc. Empty list if
-    no papers survive dedup + filter. Raises DailyError on config failure.
+    Returns a DailyCollection. `papers` is empty if no papers survive
+    dedup + filter; counts still reflect the upstream pipeline. Raises
+    DailyError on config failure.
 
     The function uses module-level imports so monkeypatch can replace
     fetch_trending / search_arxiv / build_dedup_set / create_cli for testing.
@@ -84,7 +99,9 @@ def collect_top_papers(
                 continue
             papers.extend(domain_papers)
 
-    # Dedup
+    total_fetched = len(papers)
+
+    # Dedup against vault + within-batch
     seen_ids: set[str] = set()
     unique = []
     for p in papers:
@@ -92,6 +109,7 @@ def collect_top_papers(
             continue
         seen_ids.add(p.arxiv_id)
         unique.append(p)
+    total_after_dedup = len(unique)
 
     # Filter by excluded keywords
     filtered = []
@@ -100,6 +118,12 @@ def collect_top_papers(
         if any(excl in text for excl in excluded):
             continue
         filtered.append(p)
+    total_after_filter = len(filtered)
 
     scored = score_papers(filtered, domains, weights)
-    return scored[:top_n]
+    return DailyCollection(
+        papers=scored[:top_n],
+        total_fetched=total_fetched,
+        total_after_dedup=total_after_dedup,
+        total_after_filter=total_after_filter,
+    )
