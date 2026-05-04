@@ -1,0 +1,4 @@
+interface:
+  display_name: "Auto Learning"
+  short_description: "Run my-auto learning map and study workflows"
+  default_prompt: "Use $auto-learning to inspect learning status, plan a study session, or update learning progress."

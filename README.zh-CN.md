@@ -30,6 +30,23 @@
 | 学习输入 | `learn-note`, `learn-research`, `learn-gap`, `learn-connect`, `learn-from-insight`, `learn-marketing` |
 | X 摘要 | `x-digest`, `x-cookies` |
 
+## Codex 支持
+
+这个仓库在原有 Claude Code skills 之外，增加了 Codex 适配层。
+
+- `AGENTS.md` 为 Codex 提供项目级上下文：架构、存储规则、常用命令和工作区约束。
+- `codex/skills/auto-reading` 聚合论文、Insight 和 Idea 工作流。
+- `codex/skills/auto-learning` 聚合学习地图、路线、学习会话和进度工作流。
+- `codex/skills/auto-x` 聚合 X cookies 和 digest 工作流。
+
+安装仓库内置的 Codex skills：
+
+```bash
+bash codex/install-skills.sh
+```
+
+安装后重启 Codex。重启后可以直接调用 `$auto-reading`、`$auto-learning` 和 `$auto-x`。原有 `.claude/skills/*` 仍然保留，作为 Claude Code 的入口和详细工作流参考。
+
 示例：
 
 ```text
@@ -157,7 +174,11 @@ python -m auto.x.digest --help
 ## 文档
 
 - 架构概览：`CLAUDE.md`
-- 模块文档：`modules/reading/README.md`, `modules/x/README.md`
+- Codex 项目指引：`AGENTS.md`
+- 模块文档：
+  - Reading：`modules/reading/README.md`, `modules/reading/README.zh-CN.md`
+  - Learning：`modules/learning/README.md`, `modules/learning/README.zh-CN.md`
+  - X：`modules/x/README.md`, `modules/x/README.zh-CN.md`
 - 当前 library restructure 设计：`docs/superpowers/specs/2026-04-30-library-restructure-design.md`
 - 实施计划：`docs/superpowers/plans/`
 - 历史设计记录：`docs/superpowers/specs/`

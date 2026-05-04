@@ -30,6 +30,23 @@ The repository currently ships 32 user-facing skills:
 | Learning inputs | `learn-note`, `learn-research`, `learn-gap`, `learn-connect`, `learn-from-insight`, `learn-marketing` |
 | X digest | `x-digest`, `x-cookies` |
 
+## Codex Support
+
+This repo includes a Codex adaptation layer alongside the original Claude Code skills.
+
+- `AGENTS.md` gives Codex project-level context: architecture, storage rules, commands, and worktree hygiene.
+- `codex/skills/auto-reading` aggregates paper, Insight, and Idea workflows.
+- `codex/skills/auto-learning` aggregates learning-map, route, study, and progress workflows.
+- `codex/skills/auto-x` aggregates X cookie and digest workflows.
+
+Install the repo-local Codex skills into native Codex discovery:
+
+```bash
+bash codex/install-skills.sh
+```
+
+Then restart Codex. After restart, Codex can invoke `$auto-reading`, `$auto-learning`, and `$auto-x` directly. The original `.claude/skills/*` files remain the detailed workflow references and are still usable by Claude Code.
+
 Examples:
 
 ```text
@@ -157,7 +174,11 @@ python -m auto.x.digest --help
 ## Documentation
 
 - Architecture overview: `CLAUDE.md`
-- Module docs: `modules/reading/README.md`, `modules/x/README.md`
+- Codex project guidance: `AGENTS.md`
+- Module docs:
+  - Reading: `modules/reading/README.md`, `modules/reading/README.zh-CN.md`
+  - Learning: `modules/learning/README.md`, `modules/learning/README.zh-CN.md`
+  - X: `modules/x/README.md`, `modules/x/README.zh-CN.md`
 - Current library restructure design: `docs/superpowers/specs/2026-04-30-library-restructure-design.md`
 - Implementation plans: `docs/superpowers/plans/`
 - Historical design notes: `docs/superpowers/specs/`

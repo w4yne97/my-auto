@@ -1,0 +1,4 @@
+interface:
+  display_name: "Auto Reading"
+  short_description: "Run my-auto paper, Insight, and Idea workflows"
+  default_prompt: "Use $auto-reading to search papers, update reading digests, or work with Insight and Idea vault workflows."

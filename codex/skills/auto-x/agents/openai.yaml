@@ -1,0 +1,4 @@
+interface:
+  display_name: "Auto X"
+  short_description: "Run my-auto X cookie and digest workflows"
+  default_prompt: "Use $auto-x to import X cookies, run the daily digest, or diagnose X auth and digest errors."
