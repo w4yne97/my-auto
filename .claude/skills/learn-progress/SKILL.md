@@ -17,9 +17,15 @@ description: 更新学习进度,聚合 study-log 到 progress.yaml。
 1. 解析用户输入的概念路径、新 depth、confidence
 2. 读取 `~/.local/share/auto/learning/knowledge-map.yaml`
 3. 更新对应概念的 depth、confidence、last_studied（今天日期）、study_sessions +1
-4. 重新计算 `~/.local/share/auto/learning/progress.yaml` 的聚合统计
-5. 追加一条记录到 `~/.local/share/auto/learning/study-log.yaml`
-6. 输出更新确认
+4. 如果用户要提升 depth，检查是否有对应 evidence：
+   - L1: explain
+   - L2: explain、compare、apply
+   - L3: explain、compare、apply、critique
+   如果 evidence 不足，明确提示这是未验证提升，并建议先运行 `/learn-review`
+5. 重新计算 `~/.local/share/auto/learning/progress.yaml` 的聚合统计
+6. 追加一条记录到 `~/.local/share/auto/learning/study-log.yaml`
+7. 检查 `learning-route.yaml` 是否与 knowledge-map 漂移；route 可更新为缓存，但 knowledge-map 是事实源
+8. 输出更新确认
 
 ### 显示当前进度 dashboard：
 1. 读取 `~/.local/share/auto/learning/progress.yaml`

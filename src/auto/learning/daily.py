@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 from auto.core.storage import vault_path
 from auto.learning.materials import find_related_materials
-from auto.learning.route import recommend_next_concept
+from auto.learning.planner import plan_next_concepts
 from auto.learning.state import (
     load_domain_tree,
     load_knowledge_map,
@@ -54,9 +54,10 @@ def recommend_today_session() -> TodaySession | None:
     route = load_learning_route()
     progress = load_progress()
 
-    rec = recommend_next_concept(domain_tree, knowledge_map, route)
-    if rec is None:
+    plan = plan_next_concepts(domain_tree, knowledge_map, route=route, limit=1)
+    if not plan:
         return None
+    rec = plan[0]
 
     materials = find_related_materials(rec.concept, vault_path())
 

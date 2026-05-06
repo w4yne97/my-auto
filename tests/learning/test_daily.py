@@ -47,7 +47,7 @@ def test_recommend_returns_session_when_route_has_next(monkeypatch, tmp_path):
     monkeypatch.setattr("auto.learning.daily.load_knowledge_map", lambda: {})
     monkeypatch.setattr("auto.learning.daily.load_learning_route", lambda: ())
     monkeypatch.setattr("auto.learning.daily.load_progress", lambda: _fake_progress())
-    monkeypatch.setattr("auto.learning.daily.recommend_next_concept", lambda *a, **k: _fake_recommendation())
+    monkeypatch.setattr("auto.learning.daily.plan_next_concepts", lambda *a, **k: (_fake_recommendation(),))
     monkeypatch.setattr("auto.learning.daily.find_related_materials", lambda *a, **k: _fake_materials())
     monkeypatch.setattr("auto.learning.daily.vault_path", lambda: tmp_path)
 
@@ -70,7 +70,7 @@ def test_recommend_returns_none_when_route_exhausted(monkeypatch):
     monkeypatch.setattr("auto.learning.daily.load_knowledge_map", lambda: {})
     monkeypatch.setattr("auto.learning.daily.load_learning_route", lambda: ())
     monkeypatch.setattr("auto.learning.daily.load_progress", lambda: _fake_progress())
-    monkeypatch.setattr("auto.learning.daily.recommend_next_concept", lambda *a, **k: None)
+    monkeypatch.setattr("auto.learning.daily.plan_next_concepts", lambda *a, **k: ())
 
     session = recommend_today_session()
     assert session is None
@@ -83,7 +83,7 @@ def test_recommend_session_includes_progress_snapshot(monkeypatch, tmp_path):
     monkeypatch.setattr("auto.learning.daily.load_knowledge_map", lambda: {})
     monkeypatch.setattr("auto.learning.daily.load_learning_route", lambda: ())
     monkeypatch.setattr("auto.learning.daily.load_progress", lambda: p)
-    monkeypatch.setattr("auto.learning.daily.recommend_next_concept", lambda *a, **k: _fake_recommendation())
+    monkeypatch.setattr("auto.learning.daily.plan_next_concepts", lambda *a, **k: (_fake_recommendation(),))
     monkeypatch.setattr("auto.learning.daily.find_related_materials", lambda *a, **k: _fake_materials())
     monkeypatch.setattr("auto.learning.daily.vault_path", lambda: tmp_path)
 

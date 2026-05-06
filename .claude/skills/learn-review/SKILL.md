@@ -15,7 +15,11 @@ description: 对最近学习的概念进行测验,验证 depth 与 confidence。
    - L2→L3: 专家级题目（"X 的主要局限是什么？你会如何改进？"）
 4. 每个概念出 2-3 道题
 5. 等待用户回答后，给出评估和反馈
-6. 最后请用户对每个概念打 confidence 分（0.0 - 1.0）
+6. 记录或输出 evidence 结果：
+   - L1: explain
+   - L2: explain、compare、apply
+   - L3: explain、compare、apply、critique
+7. 最后请用户对每个概念打 confidence 分（0.0 - 1.0），但若 evidence 未通过，应建议降低 confidence 或保持当前 depth
 
 ## 输出格式
 

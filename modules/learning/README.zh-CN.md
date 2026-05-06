@@ -31,13 +31,25 @@ print(recommend_today_session())
 PY
 ```
 
+直接查看动态 planner：
+
+```bash
+.venv/bin/python - <<'PY'
+from auto.learning.state import load_domain_tree, load_knowledge_map, load_learning_route
+from auto.learning.planner import plan_next_concepts
+
+for candidate in plan_next_concepts(load_domain_tree(), load_knowledge_map(), route=load_learning_route()):
+    print(candidate.concept.id, candidate.score, candidate.gap, candidate.priority)
+PY
+```
+
 运行 learning 模块测试：
 
 ```bash
 .venv/bin/pytest tests/learning -m 'not integration'
 ```
 
-多数面向用户的 learning 工作流由 agent 执行：Claude Code 或 Codex 读取状态文件，遵循 skill 指令，并以不破坏 schema 的方式更新 YAML。
+多数面向用户的 learning 工作流由 agent 执行：Claude Code 或 Codex 读取状态文件，遵循 skill 指令，并以不破坏 schema 的方式更新 YAML。事实源有意拆分：`domain-tree.yaml` 是静态图谱，`knowledge-map.yaml` 是实时掌握状态，`learning-route.yaml` 只是连续性/展示用缓存。
 
 ## Claude Code 调用方式
 

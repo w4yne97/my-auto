@@ -36,6 +36,16 @@ class TestFindMaterials:
         assert any("transformer-attention" in p for p in m.reading_insights)
         assert any("Attention" in p for p in m.reading_papers)
 
+    def test_full_path_concept_id_also_matches_bare_slug(self, synthetic_vault):
+        c = Concept(
+            id="llm-foundations/architecture/transformer-attention",
+            name="Transformer 与注意力机制",
+            domain_path="10_Foundations/llm-foundations",
+            prerequisites=(),
+        )
+        m = find_related_materials(c, synthetic_vault)
+        assert "learning/10_Foundations/llm-foundations/transformer-attention.md" in m.vault_insights
+
     def test_empty_when_no_matches(self, synthetic_vault):
         c = Concept(id="quantum-noodle", name="Quantum Noodle", domain_path="x/y", prerequisites=())
         m = find_related_materials(c, synthetic_vault)

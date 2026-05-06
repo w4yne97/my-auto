@@ -9,6 +9,8 @@ class Concept:
     name: str                            # e.g. "Transformer Attention Mechanism"
     domain_path: str                     # e.g. "10_Foundations/llm-foundations"
     prerequisites: tuple[str, ...]       # IDs of prerequisite concepts
+    priority: int = 0                    # planning weight from domain-tree.yaml
+    target_depth: str = "L1"             # default target if runtime state is absent
 
 
 @dataclass(frozen=True)
@@ -20,6 +22,8 @@ class ConceptState:
     confidence: float                    # 0.0 – 1.0
     last_studied: str | None             # ISO date (YYYY-MM-DD) or None
     sources: tuple[str, ...] = ()        # paper URLs / vault paths
+    priority: int = 0                    # runtime priority override
+    status: str = "active"               # active / paused / archived
 
 
 @dataclass(frozen=True)

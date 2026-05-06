@@ -31,13 +31,25 @@ print(recommend_today_session())
 PY
 ```
 
+Inspect the dynamic planner directly:
+
+```bash
+.venv/bin/python - <<'PY'
+from auto.learning.state import load_domain_tree, load_knowledge_map, load_learning_route
+from auto.learning.planner import plan_next_concepts
+
+for candidate in plan_next_concepts(load_domain_tree(), load_knowledge_map(), route=load_learning_route()):
+    print(candidate.concept.id, candidate.score, candidate.gap, candidate.priority)
+PY
+```
+
 Run the learning test slice:
 
 ```bash
 .venv/bin/pytest tests/learning -m 'not integration'
 ```
 
-Most user-facing learning workflows are agent-mediated: Claude Code or Codex reads the state files, follows the skill instructions, and writes schema-preserving updates.
+Most user-facing learning workflows are agent-mediated: Claude Code or Codex reads the state files, follows the skill instructions, and writes schema-preserving updates. The source of truth is split intentionally: `domain-tree.yaml` is the static graph, `knowledge-map.yaml` is live mastery state, and `learning-route.yaml` is only cached guidance for continuity/display.
 
 ## Claude Code Usage
 

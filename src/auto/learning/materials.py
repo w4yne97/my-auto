@@ -37,10 +37,11 @@ def find_related_materials(
 ) -> Materials:
     """Find related notes for a concept in the merged vault.
 
-    Search terms: concept.id + concept.name tokens. Returns paths relative to
+    Search terms: concept full id, bare slug, and concept name. Returns paths relative to
     vault_root (e.g. "learning/10_Foundations/llm-foundations/transformer-attention.md").
     """
-    query = (concept.id, concept.name)
+    bare_slug = concept.id.rsplit("/", 1)[-1]
+    query = (concept.id, bare_slug, concept.name)
     return Materials(
         vault_insights=_search_dir(vault_root / "learning", query, limit_per_section),
         reading_insights=_search_dir(vault_root / "30_Insights", query, limit_per_section),

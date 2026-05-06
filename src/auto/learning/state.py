@@ -23,6 +23,7 @@ import yaml
 from auto.core.storage import module_state_dir, module_config_file
 
 from auto.learning.models import Concept, ConceptState, RouteEntry, Progress
+from auto.learning.validation import validate_domain_tree_config
 
 _MODULE_NAME = "learning"
 
@@ -62,6 +63,11 @@ def load_domain_tree() -> dict[str, Concept]:
     """
     path = module_config_file(_MODULE_NAME, "domain-tree.yaml")
     data = yaml.safe_load(path.read_text()) or {}
+    issues = validate_domain_tree_config(data)
+    errors = [issue for issue in issues if issue.severity == "error"]
+    if errors:
+        details = "; ".join(issue.message for issue in errors)
+        raise ValueError(f"Invalid learning domain-tree.yaml: {details}")
 
     # First pass: build bare_id → full_path index for prereq resolution.
     bare_to_full = _build_bare_to_full_index(data)
@@ -89,6 +95,8 @@ def load_domain_tree() -> dict[str, Concept]:
                     name=c.get("title_zh", bare),
                     domain_path=domain_path,
                     prerequisites=resolved_prereqs,
+                    priority=int(c.get("priority") or 0),
+                    target_depth=c.get("target_depth", "L1"),
                 )
     return out
 
@@ -126,6 +134,8 @@ def load_knowledge_map() -> dict[str, ConceptState]:
             confidence=float(s.get("confidence", 0.0)),
             last_studied=last_studied,
             sources=merged_sources,
+            priority=int(s.get("priority") or 0),
+            status=s.get("status", "active"),
         )
     return out
 
