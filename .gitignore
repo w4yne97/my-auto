@@ -22,9 +22,11 @@ htmlcov/
 # IDE
 .vscode/
 .idea/
+.DS_Store
 
 # Claude Code local state (skills should be tracked, local config should not)
 .claude/settings.local.json
+.agents/
 
 # User's local test/scratch files
 *.local.yaml
