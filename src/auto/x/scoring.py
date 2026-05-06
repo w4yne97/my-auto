@@ -53,9 +53,20 @@ def score_tweet(tweet: Tweet, config: KeywordConfig) -> ScoredTweet | None:
     Otherwise score = sum(rule.weight * match_count) * author_boost,
     where match_count is the sum of substring occurrences across all aliases
     of a canonical (case-insensitive, exact-substring).
-    `matched_canonicals` is sorted by descending contributed weight."""
+    `matched_canonicals` is sorted by descending contributed weight.
+
+    If no keyword rules are configured, include every non-muted tweet in a
+    default `timeline` cluster. This supports broad daily timeline digests."""
     if tweet.author_handle in config.muted_authors:
         return None
+
+    boost = config.boosted_authors.get(tweet.author_handle, 1.0)
+    if not config.keywords:
+        return ScoredTweet(
+            tweet=tweet,
+            score=1.0 * boost,
+            matched_canonicals=("timeline",),
+        )
 
     text_lc = tweet.text.lower()
     contributions: list[tuple[str, float]] = []
@@ -67,7 +78,6 @@ def score_tweet(tweet: Tweet, config: KeywordConfig) -> ScoredTweet | None:
     if not contributions:
         return None
 
-    boost = config.boosted_authors.get(tweet.author_handle, 1.0)
     raw_score = sum(c for _, c in contributions) * boost
 
     contributions.sort(key=lambda kv: kv[1], reverse=True)

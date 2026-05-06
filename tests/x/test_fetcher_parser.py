@@ -7,7 +7,13 @@ from pathlib import Path
 
 import pytest
 
-from auto.x.fetcher import FetcherError, _extract_graphql_response, _is_logged_in, _parse_tweet_node
+from auto.x.fetcher import (
+    FetcherError,
+    _click_following_tab,
+    _extract_graphql_response,
+    _is_logged_in,
+    _parse_tweet_node,
+)
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 
@@ -74,3 +80,37 @@ def test_is_logged_in_url_detection():
     assert _is_logged_in("https://x.com/home?something=1") is True
     assert _is_logged_in("https://x.com/login") is False
     assert _is_logged_in("https://x.com/i/flow/login") is False
+
+
+def test_click_following_tab_waits_for_tab_before_clicking():
+    class FakeTab:
+        def __init__(self):
+            self.wait_timeout = None
+            self.click_timeout = None
+
+        def wait_for(self, *, timeout):
+            self.wait_timeout = timeout
+
+        def click(self, *, timeout):
+            self.click_timeout = timeout
+
+    class FakePage:
+        def __init__(self):
+            self.tab = FakeTab()
+            self.role_calls = []
+            self.settle_timeout = None
+
+        def get_by_role(self, role, name):
+            self.role_calls.append((role, name))
+            return self.tab
+
+        def wait_for_timeout(self, timeout):
+            self.settle_timeout = timeout
+
+    page = FakePage()
+    _click_following_tab(page, timeout_ms=30_000, settle_ms=5_000)
+
+    assert page.role_calls == [("tab", "Following")]
+    assert page.tab.wait_timeout == 30_000
+    assert page.tab.click_timeout == 5_000
+    assert page.settle_timeout == 5_000

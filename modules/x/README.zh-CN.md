@@ -7,6 +7,8 @@
 ## 目录内容
 
 - `config/keywords.yaml` - 关键词规则、权重、静音作者和加权作者。
+  设置 `keywords: []` 时，不按关键词过滤，抓到的时间线会全部进入单个
+  `timeline` 聚类。
 
 运行时状态保存在仓库外，并遵循 `XDG_DATA_HOME`：
 

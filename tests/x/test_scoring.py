@@ -69,6 +69,20 @@ class TestLoadKeywordConfig:
         with pytest.raises(yaml.YAMLError):
             load_keyword_config(yaml_file)
 
+    def test_load_all_timeline_mode_with_empty_keywords(self, tmp_path):
+        yaml_content = {
+            "schema_version": 1,
+            "keywords": [],
+            "muted_authors": [],
+            "boosted_authors": {},
+        }
+        yaml_file = tmp_path / "keywords.yaml"
+        yaml_file.write_text(yaml.dump(yaml_content))
+
+        cfg = load_keyword_config(yaml_file)
+
+        assert cfg.keywords == ()
+
 
 class TestScoreTweet:
     def test_score_single_keyword(self):
@@ -131,3 +145,13 @@ class TestScoreTweet:
 
         assert result is not None
         assert result.matched_canonicals == ("long-context", "agent")
+
+    def test_empty_keywords_include_all_tweets_in_timeline_cluster(self):
+        cfg = make_keyword_config(rules=())
+        tweet = make_tweet(text="Any ordinary timeline post")
+
+        result = score_tweet(tweet, cfg)
+
+        assert result is not None
+        assert result.score == pytest.approx(1.0)
+        assert result.matched_canonicals == ("timeline",)

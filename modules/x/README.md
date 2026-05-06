@@ -7,6 +7,8 @@ User-editable config for `auto.x`. Python code lives at `src/auto/x/`.
 ## Contents
 
 - `config/keywords.yaml` - keyword rules, weights, muted authors, and boosted authors.
+  Set `keywords: []` to include the full fetched timeline in a single
+  `timeline` cluster instead of filtering by keywords.
 
 Runtime state is outside the repository and honors `XDG_DATA_HOME`:
 

@@ -161,19 +161,12 @@ def fetch_following_timeline(
                             f"redirected to {page.url} (cookies likely expired; re-export)",
                         )
 
-                    # Wait for the SPA to bootstrap and render the tab bar.
-                    # `domcontentloaded` only signals HTML parsed — the React
-                    # tree still needs ~3s to mount.
-                    page.wait_for_timeout(3000)
-
-                    # Try to switch to "Following" tab. CSS / role labels can drift;
-                    # if absent (already on Following or DOM changed), continue —
-                    # parse-side errors will surface separately.
+                    # Try to switch to "Following" tab. X's React shell can
+                    # take tens of seconds to mount after DOMContentLoaded; if
+                    # we click too early, we stay on For You and ignore its
+                    # HomeTimeline payloads below.
                     try:
-                        page.get_by_role("tab", name="Following").click(timeout=5000)
-                        # After the click, give the SPA time to fire the
-                        # HomeLatestTimeline GraphQL request.
-                        page.wait_for_timeout(3000)
+                        _click_following_tab(page)
                     except PlaywrightTimeoutError:
                         pass
 
@@ -222,6 +215,19 @@ def _is_logged_in(url: str) -> bool:
     """Logged-in landing URL is /home (with arbitrary query string).
     Login URLs include /login or /i/flow/login."""
     return url.startswith("https://x.com/home") and "/login" not in url
+
+
+def _click_following_tab(
+    page: Any,
+    *,
+    timeout_ms: int = 30_000,
+    settle_ms: int = 5_000,
+) -> None:
+    """Wait for X's Following tab to render, click it, then let the feed load."""
+    following_tab = page.get_by_role("tab", name="Following")
+    following_tab.wait_for(timeout=timeout_ms)
+    following_tab.click(timeout=5_000)
+    page.wait_for_timeout(settle_ms)
 
 
 def _extract_graphql_response(payload: Any) -> list[dict]:
