@@ -133,12 +133,12 @@ domains:
           - id: policy-gradient-theorem
             title_zh: "策略梯度定理"
             target_depth: L2
-            priority: 4
+            priority: 5
             description: "所有 policy-based RL 方法的数学根基"
           - id: reinforce-algorithm
             title_zh: "REINFORCE 算法"
             target_depth: L2
-            priority: 4
+            priority: 5
             prerequisites: ["policy-gradient-theorem"]
             description: "最基础的 policy gradient 方法，含 baseline 和 RLOO 变体"
           - id: rlhf-pipeline
@@ -158,7 +158,7 @@ domains:
           - id: ppo-for-llm
             title_zh: "PPO 在 LLM 中的应用"
             target_depth: L2
-            priority: 4
+            priority: 5
             prerequisites: ["reinforce-algorithm", "rlhf-pipeline"]
           - id: dpo-and-variants
             title_zh: "DPO 及变体"
@@ -175,6 +175,18 @@ domains:
             target_depth: L3
             priority: 5
             prerequisites: ["ppo-for-llm", "reinforce-algorithm"]
+          - id: dapo
+            title_zh: "DAPO (Decoupled Clip and Dynamic Sampling Policy Optimization)"
+            target_depth: L3
+            priority: 5
+            prerequisites: ["grpo", "process-reward-models"]
+            description: "长 CoT RL 的开源可复现训练系统与算法改进，关注 Clip-Higher、Dynamic Sampling、Token-level PG Loss、Overlong Reward Shaping"
+          - id: gspo
+            title_zh: "GSPO (Group Sequence Policy Optimization)"
+            target_depth: L3
+            priority: 5
+            prerequisites: ["grpo", "dapo"]
+            description: "从 token-level importance ratio 转向 sequence-level clipping/rewarding/optimization 的 LLM RL 算法，重点关注 MoE RL 稳定性"
           - id: online-vs-offline-rl
             title_zh: "Online vs Offline RL"
             target_depth: L2
@@ -310,8 +322,9 @@ domains:
             prerequisites: ["grpo", "execution-feedback-reward"]
           - id: dapo-long-context
             title_zh: "DAPO 长上下文稳定性"
-            target_depth: L2
-            priority: 4
+            target_depth: L3
+            priority: 5
+            prerequisites: ["dapo"]
           - id: entropo-diversity
             title_zh: "EntroPO 熵增强多样性"
             target_depth: L1

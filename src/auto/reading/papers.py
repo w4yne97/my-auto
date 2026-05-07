@@ -120,15 +120,17 @@ def scan_insights_since(cli: ObsidianCLI, since: date) -> list[dict]:
     return results
 
 
-def build_dedup_set(cli: ObsidianCLI) -> set[str]:
-    """Build set of arxiv_ids for deduplication.
+def build_dedup_set_from_vault_path(vault_path: str | Path | None) -> set[str]:
+    """Build set of arxiv_ids for deduplication from a vault filesystem path.
 
     Uses filesystem-based frontmatter parsing instead of per-file CLI calls
     to avoid spawning 200+ Obsidian processes (which causes window-flood
     and IPC timeout on macOS).
     """
-    vault_path = Path(cli.vault_path)
-    papers_dir = vault_path / "20_Papers"
+    if not vault_path:
+        return set()
+    vault_root = Path(vault_path).expanduser()
+    papers_dir = vault_root / "20_Papers"
     if not papers_dir.exists():
         # Legitimate "fresh vault, no papers yet" case — upstream
         # ObsidianCLI._resolve_vault_path now raises VaultNotFoundError if the
@@ -155,6 +157,11 @@ def build_dedup_set(cli: ObsidianCLI) -> set[str]:
                 ids.add(str(arxiv_id))
     logger.info("Dedup set: %d existing papers", len(ids))
     return ids
+
+
+def build_dedup_set(cli: ObsidianCLI) -> set[str]:
+    """Backward-compatible wrapper: build dedup set from an ObsidianCLI."""
+    return build_dedup_set_from_vault_path(cli.vault_path)
 
 
 def write_paper_note(

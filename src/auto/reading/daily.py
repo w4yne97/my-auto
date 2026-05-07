@@ -12,8 +12,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from auto.core.vault import create_cli
-from auto.reading.papers import build_dedup_set, load_config
+from auto.core.vault import create_cli  # Backward-compatible monkeypatch hook.
+from auto.reading.papers import build_dedup_set_from_vault_path, load_config
 from auto.reading.scoring import score_papers
 from auto.reading.sources.alphaxiv import AlphaXivError, fetch_trending
 from auto.reading.sources.arxiv_api import search_arxiv
@@ -22,6 +22,11 @@ if TYPE_CHECKING:
     from auto.reading.models import ScoredPaper
 
 logger = logging.getLogger(__name__)
+
+
+def build_dedup_set(vault_path: str | Path | None) -> set[str]:
+    """Compatibility wrapper around filesystem-only vault dedup."""
+    return build_dedup_set_from_vault_path(vault_path)
 
 
 class DailyError(Exception):
@@ -55,7 +60,7 @@ def collect_top_papers(
     DailyError on config failure.
 
     The function uses module-level imports so monkeypatch can replace
-    fetch_trending / search_arxiv / build_dedup_set / create_cli for testing.
+    fetch_trending / search_arxiv / build_dedup_set for testing.
     """
     config_path = Path(config_path)
     if not config_path.exists():
@@ -70,8 +75,10 @@ def collect_top_papers(
     weights = config.get("scoring_weights", {}) or {}
     excluded = [kw.lower() for kw in config.get("excluded_keywords", []) or []]
 
-    cli = create_cli(vault_name)
-    dedup_ids = build_dedup_set(cli)
+    # Dedup is filesystem-only: do NOT require Obsidian CLI to be available.
+    # This keeps scan_today usable in sandboxed environments where spawning
+    # Obsidian or accessing its IPC is not possible.
+    dedup_ids = build_dedup_set(config.get("vault_path"))
     logger.info("Dedup set: %d existing papers", len(dedup_ids))
 
     papers = []
