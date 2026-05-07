@@ -32,6 +32,7 @@ htmlcov/
 *.local.yaml
 *.local.json
 scratch/
+shares/
 
 # start-my-day platform additions
 *.zip
