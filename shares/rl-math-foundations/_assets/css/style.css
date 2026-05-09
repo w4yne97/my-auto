@@ -84,3 +84,7 @@ h3 { font-size: 1.2rem; }
 }
 
 /* TODO: per-component-specific styles will be appended by Tasks 7~11 */
+
+/* gridworld.js */
+[data-component="gridworld"] svg { display: block; margin: 0 auto; }
+[data-component="gridworld"] svg .cell:hover { stroke: #2563eb; stroke-width: 2; }

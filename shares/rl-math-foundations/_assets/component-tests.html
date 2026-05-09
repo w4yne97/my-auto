@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>RL Math Foundations — Component Tests</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="vendor/katex/katex.min.css">
+<style>
+  .test-section { margin: 2rem 0; padding: 1rem; border: 1px dashed #ccc; }
+  .test-section h2 { margin-top: 0; }
+  .test-section .verify { font-style: italic; color: #666; margin-bottom: 1rem; }
+</style>
+</head>
+<body>
+<div class="container">
+<h1>Component Tests</h1>
+<p>Visual + console-assert harness for the 5 reusable components. Open DevTools to see asserts.</p>
+
+<!-- Each component will append its own <section class="test-section"> below as Tasks 7-11 are implemented. -->
+
+<section class="test-section" id="test-gridworld">
+  <h2>gridworld.js</h2>
+  <div class="verify">Expected: 5×5 grid; cell (3,2) is green target; (1,1)(2,1)(2,2)(1,3)(3,3) are red forbidden; agent shown at (0,0); arrows on every cell; trajectory polyline visible.</div>
+
+  <div data-component="gridworld" id="gw-demo" data-config='{
+    "rows": 5, "cols": 5,
+    "target": [3, 2],
+    "forbidden": [[1,1], [2,1], [2,2], [1,3], [3,3]],
+    "agent": [0, 0],
+    "policy": [
+      ["→","→","↓","←","←"],
+      ["→","→","↓","←","←"],
+      ["→","→","↓","←","←"],
+      ["→","→","↓","←","←"],
+      ["→","→","↑","←","←"]
+    ],
+    "trajectory": [[0,0], [0,1], [1,1], [2,1], [3,1], [3,2]]
+  }'></div>
+
+  <script>
+    window.addEventListener('load', () => {
+      console.assert(
+        document.querySelector('#gw-demo svg'),
+        'gridworld: SVG should be mounted'
+      );
+      console.assert(
+        document.querySelectorAll('#gw-demo svg rect.cell').length === 25,
+        'gridworld: should render 25 cells (5x5)'
+      );
+    });
+  </script>
+</section>
+
+</div>
+
+<script src="vendor/katex/katex.min.js"></script>
+<script src="vendor/katex/contrib/auto-render.min.js"></script>
+
+<script src="js/gridworld.js"></script>
+
+<script>
+  // After components load, auto-mount any [data-component]
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') {
+        handler.mount(el);
+      } else {
+        console.warn(`No mount handler for [data-component="${name}"]`);
+      }
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+  });
+</script>
+</body>
+</html>
