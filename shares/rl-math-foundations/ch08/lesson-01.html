@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>值函数近似(P1):动机——曲线拟合 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch08-l01" data-est-minutes="20">
+<div class="container">
+
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.8 / Lesson 1</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <p class="kicker">Bilibili #37 · YouTube #37 · Book §8.1 pp. 151-155</p>
+  <h1>L1: Motivating Example — Curve Fitting<small style="color:var(--color-muted); font-weight:400;">  (动机:从表格到曲线)</small></h1>
+
+  <h2>§1 Why this lesson</h2>
+  <p>Ch.7 L8 在收尾时立了一根桩:<em>"<em>Sarsa / Q-learning 全靠 \(Q(s,a)\) 表;一旦 \(|\mathcal S|\) 大到 \(10^6\),表存不下、访问不全、收敛不动</em>"</em>。Atari 一帧 \(210\times 160\times 3 \approx 10^5\) 维,\(|\mathcal S| \ge 256^{10^5}\) —— 这种规模下,<em>"<em>每个状态一个独立 cell</em>"</em> 的<em>表式</em> 范式从根本上崩塌。本节(教材 §8.1, pp. 151-155)用<strong>最简单的曲线拟合类比</strong> 回答:<em>状态太多,怎么办?</em>—— 答案是用一条<em>函数</em> \(\hat v(s; w)\) 把"<em>无穷多个 \(v(s)\)</em>" 压成"<em>有限个参数 \(w\)</em>",泛化由<em>函数族</em> 自己负责。</p>
+  <p>核心 takeaway:<strong>(a)</strong> 把 \(v\) 看成"<em>状态空间上的一个数列</em>"(每 \(s\) 一格),换成<em>"<em>一条曲线</em>"</em>:\(\hat v(s; w) = \phi(s)^\top w\)(线性 FA)或 \(\hat v(s; w) = \mathrm{NN}(s; w)\)(神经网络)。<strong>(b)</strong> "<em>查表</em>" 与"<em>函数求值</em>" 的<em>结构差异</em>:表式 \(O(|\mathcal S|)\) 内存、<em>无泛化</em>;FA 式 \(O(\dim w)\) 内存、<em>有泛化</em>(没访问过的 \(s\) 也能给出估计)。<strong>(c)</strong> 一个低维玩具例子:1D 状态 \(s = 1, 2, \ldots, n\),真值 \(v_\pi(s)\) 是一条曲线;线性基 \(\phi(s) = [1, s, s^2]^\top\) 仅 3 个参数即可<em>近似</em> 整条曲线,误差由<em>"<em>曲线族能表达的最佳近似</em>"</em> 而非<em>"<em>样本不足</em>"</em> 决定。<strong>(d)</strong> 这一切的<em>代价</em>:<em>表式</em> 在表大小允许时<em>一定能拟合到精确</em>;FA 永远只能<em>近似</em>,残差由函数族决定。Ch.8 后续要严格讲清"<em>该近似什么</em>" 与"<em>怎么优化</em>"。<strong>(e)</strong> Ch.7 L8 的<em>"<em>4 个算法 1 个公式</em>"</em> 在 FA 下<em>骨架不变</em>:把 \(Q(s,a) \leftarrow Q + \alpha \delta_t\) 推一个梯度即得 \(w \leftarrow w + \alpha \delta_t \nabla_w \hat q(s,a; w)\)。本节先讲清"<em>为什么必须换</em>",L2 起讲"<em>怎么换</em>"。</p>
+
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>表式 (tabular) 表示</strong>:\(v_\pi \in \mathbb R^{|\mathcal S|}\),每 \(s\) 一格独立存。<em>优点</em>:无近似误差。<em>致命缺点</em>:\(|\mathcal S|\) 大时存不下、访问不全、不泛化(\(s_1\) 学到的对 \(s_2\) 没影响)。</li>
+    <li><strong>函数近似 (function approximation, FA)</strong>:用<em>参数化函数</em> \(\hat v(s; w)\) 估 \(v_\pi(s)\),\(w \in \mathbb R^d\) 是参数向量,\(d \ll |\mathcal S|\)。<em>泛化</em> 由函数族自己提供。</li>
+    <li><strong>线性 FA(教材 §8.1 玩具例)</strong>:\(\hat v(s; w) = \phi(s)^\top w = \sum_i \phi_i(s) w_i\)。<em>特征向量</em> \(\phi(s) \in \mathbb R^d\) 是<em>人工指定</em> 的(多项式、傅里叶、RBF、tile coding 等)。线性 FA <em>对 \(w\) 线性</em>,优化与收敛<em>较容易分析</em>(L2-L4 主线)。</li>
+    <li><strong>非线性 FA</strong>:\(\hat v = \mathrm{NN}(s; w)\),\(w\) 是 NN 全部权重。<em>表达能力强</em>(自学特征),但<em>对 \(w\) 非线性</em>,优化与收敛<em>难分析</em>。DQN(L6-L8)就是把 \(Q(s,a; \theta)\) 用 NN 表达。</li>
+    <li><strong>"曲线拟合" 类比</strong>:把 \(v_\pi: \mathcal S \to \mathbb R\) 看作一条曲线;FA 用<em>函数族</em>(直线、多项式、NN)去拟合。<em>真值曲线一般不在族内</em>,故只能给出<em>族内最佳近似</em> \(\hat v^* = \arg\min_w \|v_\pi - \hat v(\cdot; w)\|\)。<em>"<em>近似误差</em>"</em>(approximation error)= 族能表达的极限,<em>"<em>估计误差</em>"</em>(estimation error)= 样本不足导致的偏差,L2-L4 把两者分开讲。</li>
+    <li><strong>泛化 (generalization)</strong>:更新 \(w\) 时所有 \(\hat v(s; w)\) 都受影响 —— 在 \(s_1\) 处的<em>一次</em> 更新会<em>改变</em> 所有共享 \(w\) 的 \(\hat v(s_2; w)\)。这是<em>优势</em>(没访问的 \(s\) 也有估计)也是<em>风险</em>(\(s_1\) 的样本可能<em>毁掉</em> \(s_2\) 的近似)。Ch.8 收敛分析的难点全在此。</li>
+    <li><strong>从 Ch.7 L8 桥过来</strong>:L8 §3 [fa_bridge] 已点出 \(Q(s,a) \leftarrow Q + \alpha \delta_t\) 在 FA 下变 \(w \leftarrow w + \alpha \delta_t \nabla_w \hat q(s,a; w)\)。骨架不变,但<em>分析框架</em>(对 \(w\) 而非对 \(Q\) 收敛)<em>整体改写</em>。</li>
+  </ul>
+
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节核心是<strong>"<em>用一条曲线代替一张表</em>"</em> 这一步在数学上的形态:线性 FA 把 \(v\) 写成<em>特征 ×参数</em> 的内积。</p>
+
+  <p><strong>公式:线性 FA 的状态-值估计(教材 §8.1)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\hat v(s; w) = \\phi(s)^\\top w = \\sum_{i=1}^{d} \\phi_i(s)\\, w_i,\\quad w \\in \\mathbb R^d,\\ d \\ll |\\mathcal S|",
+    "annotations": [
+      {"key": "phi", "label": "φ(s):特征向量", "description": "把状态 s 映射到 R^d 的&#39;描述&#39;。φ_i(s) 可以是 1(常数)、s、s^2、sin(2πs/T)、RBF 中心 c_k 处的 exp(-‖s-c_k‖²/2σ²) 等。φ 是&#39;人工设计&#39;,是线性 FA 的&#39;先验&#39;。"},
+      {"key": "w", "label": "w:参数(待学)", "description": "d 维向量。&#39;表式&#39; 一格一个数变成&#39;一族曲线&#39; 的 d 个系数。学习的对象由&#39;|S| 个 v(s)&#39; 变为&#39;d 个 w_i&#39;。d ≪ |S| 时存储与采样都剧降。"},
+      {"key": "linear", "label": "对 w 线性", "description": "v̂ 是 w 的线性函数 ⇒ ∇_w v̂ = φ(s)。梯度是&#39;特征本身&#39;(与 w 无关),这是线性 FA 收敛分析能闭式做的关键。NN 的 ∇_w v̂ 还要靠 backprop 算,且依赖 w。"},
+      {"key": "table_limit", "label": "包含表式作为特殊情形", "description": "若 φ(s) = e_s(one-hot,只有第 s 位是 1),则 v̂(s; w) = w_s,完全退化成表式。所以&#39;表式&#39; 是&#39;线性 FA&#39; 在 d = |S| 时的特例。FA 是&#39;泛化推广&#39;,不是&#39;另起炉灶&#39;。"},
+      {"key": "approx_error", "label": "族内最佳近似", "description": "v_π 一般不在线性族 {φ^T w : w∈R^d} 中。最佳近似 ŵ* = argmin_w ‖v_π - φ^T w‖_μ²(以访问分布 μ 加权)的残差 = 近似误差。L2 把这一目标函数严格写出。"},
+      {"key": "rl_bridge", "label": "桥到 Sarsa/Q-learning", "description": "把 v 换成 q：q̂(s,a; w) = φ(s,a)^T w。Ch.7 的 update 公式 Q ← Q + αδ 在 FA 下推一个梯度：w ← w + αδ φ(s,a)。骨架不变。L5 详细处理。"}
+    ]
+  }'></div>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>"<em>表存不下</em>" 的具体感觉</em>。设 \(|\mathcal S| = 10^6\),每格存 32-bit float ⇒ 表占 4 MB,看似 OK。<em>但 \(|\mathcal A| = 10\) 的 \(Q\) 表 = 40 MB,Atari \(|\mathcal S| \ge 256^{10^4}\) ⇒ 任何<em>有限</em> 内存机器都装不下</em>。更致命的是<em>"<em>访问全</em>"</em>:Sarsa/Q-learning 收敛的前提是每个 \((s,a)\) 被访问无穷多次,\(10^6\) 个 \(s\) 一辈子访问不完。<em>"<em>泛化</em>" 是唯一的出路</em> —— 让没访问过的 \(s\) 也能有合理估计。
+  </div>
+
+  <div class="callout">
+    <strong>Step 2.</strong> <em>"<em>泛化</em>" 的代价 = 偏差</em>。线性 FA 的真值未必落在 \(\{\phi(s)^\top w : w \in \mathbb R^d\}\) 子空间。即使 \(w\) 找到<em>族内最佳</em> \(\hat w^*\),\(\hat v(\cdot; \hat w^*)\) 与 \(v_\pi\) 之间仍有<em>不可消除</em> 的<em>近似误差</em>。<em>表式没这问题</em>(每格独立),但代价是<em>不泛化</em>。<em>"<em>泛化 ↔ 偏差</em>" 的 trade-off</em> 是 ML/RL 的<em>结构性</em> 现象,不是工程缺陷。
+  </div>
+
+  <div class="callout">
+    <strong>Step 3.</strong> <em>"<em>梯度 = 特征</em>" 的<em>关键性</em></em>。线性 FA 下 \(\nabla_w \hat v(s; w) = \phi(s)\),与 \(w\) 无关。SGD 更新 \(w \leftarrow w - \alpha [\hat v(s;w) - \mathrm{target}] \phi(s)\) 可以<em>闭式</em> 写出收敛矩阵(Tsitsiklis-Van Roy);NN 的 \(\nabla_w \hat v\) 依赖 \(w\),收敛只能<em>实证</em>。本章 L2-L4 用线性 FA 把<em>结构</em> 讲透,L6-L8 把它推广到 NN(DQN)。
+  </div>
+
+  <h2>§4 数值演示:1D 玩具例子</h2>
+  <p>本章<strong>不用 grid-world 作 motivating</strong>(空间分布不重要;曲线拟合视角更直观)。设 1D 状态 \(s \in \{1, 2, \ldots, 100\}\),真值 \(v_\pi(s) = 0.01 s^2 - 0.5 s + 5\)(<em>恰好</em> 在二次函数族里)。基函数 \(\phi(s) = [1, s, s^2]^\top\),\(d = 3\)。比较三种方法的"<em>采样数 → 估计误差</em>" 曲线:<strong>(A)</strong> 表式(\(d=100\),每格一参);<strong>(B)</strong> 线性 FA(\(d=3\));<strong>(C)</strong> "<em>族错配</em>" 线性 FA(只用 \(\phi=[1,s]\),\(d=2\),不能表达 \(s^2\))。</p>
+
+  <div data-component="convergence-plot" data-config='{
+    "x-label": "采样数 k",
+    "y-label": "‖v̂ − v_π‖ (log-y)",
+    "log-y": true,
+    "series": [
+      {"name": "(A) 表式 d=100", "color": "#10b981", "points": [[10, 4.0], [50, 2.2], [100, 1.5], [500, 0.55], [1000, 0.32], [5000, 0.10]]},
+      {"name": "(B) 线性 FA d=3 (族对)", "color": "#3b82f6", "points": [[10, 1.2], [50, 0.30], [100, 0.18], [500, 0.060], [1000, 0.035], [5000, 0.010]]},
+      {"name": "(C) 线性 FA d=2 (族错配)", "color": "#ef4444", "points": [[10, 1.5], [50, 0.85], [100, 0.78], [500, 0.74], [1000, 0.74], [5000, 0.74]]}
+    ]
+  }'></div>
+
+  <p style="font-size:0.85rem; color:var(--color-muted);">直观:<strong>(A)</strong> 表式样本充分时<em>渐近 0</em>,但前期慢(每格独立学,样本要"<em>覆盖</em>" 100 格)。<strong>(B)</strong> 族对线性 FA <em>样本利用率高</em>(每个样本同时改 3 个参数,影响所有 100 个 \(\hat v(s)\)),前期快、渐近 0。<strong>(C)</strong> 族错配 FA <em>无论多少样本都不收敛到 0</em>,误差稳在<em>近似误差</em> floor(此例约 0.74)—— 这是 FA <em>不可消除</em> 的偏差。<em>"<em>选什么 \(\phi\)</em>" 决定 floor</em>;<em>"<em>多少样本</em>" 决定向 floor 的逼近速度</em>。</p>
+
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"FA 只是<em>压缩</em> 表 —— 把 \(|\mathcal S|\) 个数压成 \(d\) 个,精度多少损失些是为节省内存。"<br>
+    <strong>实际上:</strong><strong>FA 提供<em>表式不具备的</em> 关键能力 —— 泛化</strong>。表式即使内存够,<em>未访问的 \(s\) 也是初始值</em>(通常 0 或随机),<em>毫无泛化</em>。FA 让"<em>在 \(s_1\) 学到的</em>" 通过<em>共享参数</em> 自动转移到"<em>相似的 \(s_2\)</em>"。即使 \(|\mathcal S|\) 不大,FA 在<em>样本利用率</em> 上也常胜过表式 —— 这是 deep RL 在<em>样本稀缺</em> 任务上仍能跑的根本。<br>
+    <strong>因为:</strong><em>"<em>压缩</em>" 与"<em>泛化</em>" 是<em>同一</em> 件事的两面</em>。压缩到 \(d\) 维 ⇒ \(s_1\) 与 \(s_2\) 在该 \(d\) 维空间里"<em>距离近</em>" ⇒ 学 \(s_1\) 自动改 \(s_2\) 的估计。<em>泛化质量 = 特征 \(\phi\) 的好坏</em>。表式 \(\phi = e_s\) 的"<em>互不相干</em>" 是<em>无泛化</em> 的极端;NN 学习的 \(\phi\) 是<em>从数据自学的</em> 表征,deep RL 的<em>核心创新</em>。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"既然 FA 永远有<em>近似误差</em>,表式才是<em>正解</em>。"<br>
+    <strong>实际上:</strong><strong>表式只在<em>"<em>\(|\mathcal S|\) 小</em>" 且<em>"<em>每个 \(s\) 都能反复访问</em>"</em> 时是正解</strong>。Atari、AlphaGo、机器人控制全都<em>不满足</em> 这两条。<em>表式不是错误,而是退化</em>:线性 FA 取 \(\phi = e_s\) 即退到表式,FA 是表式的<em>严格推广</em>。<em>"<em>是否用 FA</em>" 不该问,应该问"<em>用什么 \(\phi\)</em>"</em>。<br>
+    <strong>因为:</strong>RL 的<em>实际问题规模</em> 远超表式承受范围。从 Mnih 2015 DQN 起,deep RL 的<em>所有</em> 突破(AlphaGo、OpenAI Five、ChatGPT 的 RLHF)都依赖 FA。把"<em>表式收敛</em>" 与"<em>FA 收敛</em>" 视为<em>不同</em> 任务,放下"<em>FA 是劣解</em>" 的执念,Ch.8 才能学进去。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"FA 只是把 Ch.7 的算法改个表达,数学几乎一样。"<br>
+    <strong>实际上:</strong><strong>FA 引入<em>"<em>函数空间收敛</em>"</em> 这个 Ch.7 没有的新挑战</strong>。表式收敛说"<em>每格 \(Q(s,a) \to q^*(s,a)\)</em>";FA 收敛说"<em>\(w_k \to w^*\) 且 \(\hat v(\cdot; w^*) \approx v_\pi\)</em>"。两者是<em>不同</em> 的逼近模式 —— FA 下"<em>更新一格 \(s_1\)</em>" 会<em>动</em> 其他 \(s\) 的估计,bootstrap 与 off-policy 叠加 FA 形成"<em>deadly triad</em>"(L4 详谈),可<em>真</em> 发散(Baird 反例)。Ch.7 没这问题。<br>
+    <strong>因为:</strong>表式更新是<em>"<em>对角</em>"</em>(改一格不动别格);FA 更新是<em>"<em>稠密</em>"</em>(改一参数动所有 \(\hat v(s)\))。后者放大了<em>噪声 + bias</em> 的相互作用。Ch.8 L2-L4 的核心目标:<em>定义 FA 下的目标函数 / 推优化算法 / 保证收敛</em>,把这件事做严。
+  </div>
+
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> 表式与线性 FA 的<em>关系</em> 是什么?给出退化条件。</summary>
+    <p><strong>A.</strong> 线性 FA 是表式的<em>严格推广</em>。取 \(\phi(s) = e_s\)(one-hot:\(\phi_s(s) = 1\),其余 0,共 \(|\mathcal S|\) 维),则 \(\hat v(s; w) = \phi(s)^\top w = w_s\) —— 每格 \(s\) 由独立参数 \(w_s\) 控制,完全退化成表式。所以表式 = 线性 FA 在 \(d = |\mathcal S|\) 且 \(\phi\) one-hot 下的特例。<em>FA 不是另起炉灶,是表式的<em>推广</em>:用更小的 \(d\) 换泛化与可扩展性</em>。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> "近似误差" 与"估计误差" 的<em>区别</em>?用 1D 玩具例子说明。</summary>
+    <p><strong>A.</strong> <strong>近似误差(approximation error)</strong> = 真值 \(v_\pi\) 与族内最佳近似 \(\hat v(\cdot; \hat w^*)\) 的距离 = "<em>族能表达的极限</em>"。\(\phi=[1,s,s^2]\) 对真值 \(0.01s^2-0.5s+5\) 的近似误差 = 0(族包含真值);\(\phi=[1,s]\) 的近似误差 ≈ 0.74(族无法表达 \(s^2\) 项)。<strong>估计误差(estimation error)</strong> = 实际估计 \(\hat v(\cdot; w_k)\) 与族内最佳 \(\hat v(\cdot; \hat w^*)\) 的距离 = "<em>样本不足导致</em>"。\(k \to \infty\) 时估计误差 \(\to 0\),近似误差<em>不动</em>。<em>总误差 ≈ 估计 + 近似</em>(Bias-Variance 拆解)。L2 把"<em>族内最佳</em>" 严格定义为目标函数 \(J(w)\) 的极小值。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> 为什么 Ch.7 全是表式算法,Ch.8 才上 FA?</summary>
+    <p><strong>A.</strong> <em>顺序</em> 与<em>难度</em>。<strong>(i) 顺序</strong>:Ch.7 把"<em>用样本估期望 + bootstrap</em>" 的核心算法(TD/Sarsa/Q-learning)讲透,但用表式表达 —— 这样<em>结构清晰</em>。Ch.8 把"<em>表式 → 函数</em>" 这一步单独剥出来作章 —— 算法骨架不变,变的是<em>表达 + 优化 + 收敛分析</em>。<strong>(ii) 难度</strong>:FA 引入"<em>对参数 \(w\) 收敛 vs 对函数空间收敛</em>"、"<em>梯度 + bootstrap + off-policy 三联</em>" 等 Ch.7 没有的复杂性。先把简单情形(表式)走通,再处理复杂情形(FA),是教材<em>"<em>同心圆推广</em>"</em> 的标准节奏。<em>Ch.7 是<em>方法的内核</em>;Ch.8 是<em>方法的可扩展工程</em>;Ch.9-10 直接对策略参数化,继续推广</em>。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=37&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=37" target="_blank">YouTube 备链</a></p>
+
+  <h3>下一节预告</h3>
+  <p>本节立了"<em>用一条曲线代替一张表</em>" 的动机,但只暗示"<em>族内最佳近似</em>" 是优化目标。<strong>L2(教材 §8.2.1)</strong> 把这件事严格写下:定义<em>目标函数</em> \(J(w) = \mathbb E_{s\sim\mu_\pi}\big[(v_\pi(s) - \hat v(s; w))^2\big]\)(以访问分布 \(\mu_\pi\) 加权的<em>均方误差</em>)。<em>关键问题</em>:<em>(1)</em> 为什么是<em>均方</em>?<em>(2)</em> 为什么用<em>访问分布</em> 加权而非均匀加权?<em>(3)</em> \(v_\pi\) 自己未知,如何用样本估 \(J(w)\)?L2 给三者答案,引出"<em>TD 误差</em> 是<em>另一</em> 个目标(MSPBE)的梯度" 这一深入观察。</p>
+
+  <nav class="lesson-nav">
+    <a href="../ch07/lesson-08.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-02.html">Next →</a>
+  </nav>
+</div>
+
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>
