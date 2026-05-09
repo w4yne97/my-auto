@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>基本概念(P1):状态、动作与策略 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch01-l01" data-est-minutes="20">
+<div class="container">
+
+  <!-- Top nav -->
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.1 / Lesson 1</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <!-- Header -->
+  <p class="kicker">Bilibili P2 · YouTube P2 · Book §1.1-1.4 pp. 1-5</p>
+  <h1>L1: Basic Concepts (P1 - State, action, policy, ...)<small style="color:var(--color-muted); font-weight:400;">  (基本概念(P1):状态、动作与策略)</small></h1>
+
+  <!-- §1 Why this lesson -->
+  <h2>§1 Why this lesson</h2>
+  <p>你应该玩过类似"走迷宫"的游戏:屏幕上有一个小人,你按方向键让它绕开障碍、走到终点。这其实就是强化学习最经典的设定 —— grid world。但凡你打过 RPG、玩过扫地机器人、或者看过一眼自动驾驶 demo,直觉上你已经懂了一大半。</p>
+  <p>问题是,直觉只能让你说"小人往右走是因为右边是终点",却没办法让一台机器自动学会这件事。要让算法去优化行为,我们必须先把"小人在哪里 / 它能怎么做 / 它怎么决定" 这三件事用数学语言精确地写下来 —— 这正是本节要做的事情。本节对应教材 §1.1–1.4(pp. 1–5):一节课同时把 <strong>state</strong>、<strong>action</strong>、<strong>state transition</strong>、<strong>policy</strong> 这四个 RL 词汇钉在 grid world 上。掌握它们之后,后面所有公式(回报、价值函数、贝尔曼方程)才有舞台可以站。</p>
+
+  <!-- §2 核心定义 -->
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>状态 (state)</strong>:agent 此刻"是谁、在哪里"的信息描述。在 grid world 里,就是它当前占据的那一格。所有可能的状态构成 <strong>状态空间 (state space)</strong>,记作 \(\mathcal{S} = \{s_1, s_2, \dots, s_n\}\)。教材原例的 3×3 网格里,\(\mathcal{S} = \{s_1, \dots, s_9\}\)。</li>
+    <li><strong>动作 (action)</strong>:agent 在某个状态下能做的一个选择。grid world 的标准动作集是 5 个:上、右、下、左、原地不动,记作 \(a_1, a_2, a_3, a_4, a_5\)。所有可能动作构成 <strong>动作空间 (action space)</strong> \(\mathcal{A}\)。注意:不同状态原则上可以有不同的动作空间(如靠墙的格子向墙走会被弹回);本书为简洁起见,统一假设 \(\mathcal{A}(s_i) = \mathcal{A}\) 对所有 \(i\) 成立。</li>
+    <li><strong>状态转移 (state transition)</strong>:agent 在状态 \(s\) 下执行动作 \(a\),环境把它送到下一个状态 \(s&#39;\) 的过程。直觉:"我做了这件事,世界变成什么样"。一般写成条件概率 \(p(s&#39;\mid s, a)\):在 \(s\) 做 \(a\) 后到达 \(s&#39;\) 的概率。</li>
+    <li><strong>策略 (policy)</strong>:agent 的"行动手册" —— 告诉它在每个状态下,下一步该按什么概率挑哪个动作。数学上,策略是一个条件概率分布 \(\pi(a \mid s)\)。<em>关键认知</em>:策略不是"一个动作",而是"每个状态对应一个动作分布"。这是为什么 §4 我们要用 <strong>distribution-bar</strong> 把它画出来。</li>
+    <li><strong>确定性策略 (deterministic policy) vs 随机策略 (stochastic policy)</strong>:前者每个状态把全部概率压在某一个动作上(比如 \(\pi(a_2\mid s_1)=1\),其他都为 0),画在网格里就是一根箭头;后者会在多个动作上分配概率,适合表达"探索"或"不确定性"。</li>
+  </ul>
+
+  <!-- §3 关键公式 + 推导 -->
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节没有大型推导,但有<strong>两条必须会读的公式</strong> —— 它们是后面所有内容的"语法基础"。</p>
+
+  <p><strong>公式 1:状态转移概率(教材 §1.3, p. 4)</strong></p>
+  <p>用条件概率刻画"在 \(s\) 做 \(a\),下一状态是 \(s&#39;\)"这件事:</p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "p(s&#39; \\mid s, a) \\in [0, 1], \\quad \\sum_{s&#39; \\in \\mathcal{S}} p(s&#39; \\mid s, a) = 1",
+    "annotations": [
+      {"key": "p(s&#39;|s,a)", "label": "p(s&#39;|s,a)", "description": "在状态 s 下执行动作 a 后,环境把 agent 送到 s&#39; 的概率。本书 grid world 例子里它是确定的(只有 0 和 1)。"},
+      {"key": "sum=1", "label": "Σ_{s&#39;} = 1", "description": "对所有可能的下一状态求和必须为 1 —— 因为 agent 总要落在某个 state 里(归一化条件)。"},
+      {"key": "deterministic", "label": "确定性 vs 随机", "description": "若某个 s&#39; 的概率为 1、其他全为 0,则状态转移是确定的;若有风等扰动,则是随机的(教材 p. 4 末尾)。"}
+    ]
+  }'></div>
+  <div class="callout">
+    <strong>Step 1.</strong> <em>为什么要写成概率而不是函数 \(s&#39; = f(s, a)\):</em> 因为现实世界有风、有打滑、有传感器噪声 —— 同样的动作未必给同样的结果。即使本节例子是确定性的(\(p(s_2\mid s_1, a_2) = 1\)),也用概率框架写,这样后面引入随机性时<strong>不用换记号</strong>。<br>
+    <strong>Step 2.</strong> <em>归一化条件 \(\sum_{s&#39;} p(s&#39;\mid s, a) = 1\) 的意义:</em> 它保证每次动作必有结果,不会"凭空消失"。这是后面所有期望计算(回报、价值)的前提。
+  </div>
+
+  <p><strong>公式 2:策略 \(\pi(a \mid s)\)(教材 §1.4, p. 5)</strong></p>
+  <p>策略也是一个条件概率分布 —— 不是给"环境"用的,而是给 agent 自己用的:</p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\pi(a \\mid s) \\in [0, 1], \\quad \\sum_{a \\in \\mathcal{A}} \\pi(a \\mid s) = 1, \\quad \\forall s \\in \\mathcal{S}",
+    "annotations": [
+      {"key": "pi(a|s)", "label": "π(a|s)", "description": "在状态 s 下选择动作 a 的概率。这是 agent 的&#39;决策规则&#39;,也是我们后面要优化的对象。"},
+      {"key": "sum_a=1", "label": "Σ_a = 1", "description": "在每个状态 s,对所有动作的概率之和为 1(每次都要选一个动作出来)。"},
+      {"key": "forall s", "label": "∀ s ∈ 𝒮", "description": "策略必须对&#39;每一个&#39;状态都有定义 —— 不能只告诉 agent &#39;在这个格子怎么走&#39;,还得告诉它别的格子怎么走。"}
+    ]
+  }'></div>
+  <div class="callout">
+    <strong>Step 1.</strong> <em>注意 \(p\) 与 \(\pi\) 的方向:</em> \(p(s&#39;\mid s, a)\) 是<strong>环境</strong>的属性(给定 \(s, a\) 后世界怎么变),\(\pi(a \mid s)\) 是 <strong>agent</strong> 的属性(给定 \(s\) 后我怎么动)。两个概率分布合在一起,才能驱动一个完整的 trajectory。<br>
+    <strong>Step 2.</strong> <em>"对每个 s 都要有 π":</em> 这一点容易被忽略 —— 哪怕某些状态在初始策略下"永远到不了",定义上策略也必须给出它们的动作分布,否则后面写贝尔曼方程时就漏了项。
+  </div>
+
+  <!-- §4 Grid-world 例子 -->
+  <h2>§4 Grid-world 实例化</h2>
+  <p>用本书贯穿全程的网格世界把上面的符号"具体化"。原书在 §1.2 用的是 3×3 网格(9 个 state);从 ch02 开始,作者切换到 5×5 用来演示更复杂的策略 —— 我们在所有 lesson 里统一使用 5×5 版本,以便概念在后续 50 节课里完全对齐。</p>
+  <p><strong>设定:</strong> 5 行 5 列网格,目标格 target = \((3, 2)\)(行 3、列 2,从 0 开始数),禁区 forbidden = \(\{(1,1), (2,1), (2,2), (1,3), (3,3)\}\)。下面这张图同时展示了一个确定性策略(每格一根箭头)以及从 \((0,0)\) 出发到达 target 的一条 trajectory:</p>
+  <div data-component="gridworld" id="gw-ch01-l01" data-config='{
+    "rows": 5, "cols": 5,
+    "target": [3, 2],
+    "forbidden": [[1,1],[2,1],[2,2],[1,3],[3,3]],
+    "agent": [0, 0],
+    "policy": [
+      ["→","↓","↓","↓","↓"],
+      ["→","→","↓","↓","↓"],
+      ["→","→","→","→","↓"],
+      ["→","→","→","↓","←"],
+      ["→","→","↑","←","←"]
+    ],
+    "trajectory": [[0,0],[1,0],[2,0],[3,0],[3,1],[3,2]]
+  }'></div>
+
+  <p><strong>把符号填进来:</strong></p>
+  <ul>
+    <li>状态空间 \(\mathcal{S} = \{s_{(0,0)}, s_{(0,1)}, \dots, s_{(4,4)}\}\),共 25 个状态(本书有时用 \(s_1, \dots, s_{25}\) 这种一维编号,本质相同)。</li>
+    <li>动作空间 \(\mathcal{A} = \{a_1, a_2, a_3, a_4, a_5\}\) = \(\{\uparrow, \rightarrow, \downarrow, \leftarrow, \text{停留}\}\)。</li>
+    <li>状态转移示例:在 \(s_{(0,0)}\) 上做 \(a_1\)(向上)会撞墙,被弹回原格,因此 \(p(s_{(0,0)} \mid s_{(0,0)}, a_1) = 1\)。在 \(s_{(0,0)}\) 上做 \(a_3\)(向下)走到 \((1,0)\),因此 \(p(s_{(1,0)} \mid s_{(0,0)}, a_3) = 1\)。其他下一状态概率均为 0。</li>
+    <li>策略示例:上图所示是一个<strong>确定性</strong>策略,在 \(s_{(0,0)}\) 下 \(\pi(a_3 \mid s_{(0,0)}) = 1\)(向下走),其他动作概率为 0。</li>
+  </ul>
+
+  <p><strong>策略是分布,不是箭头</strong> —— 用三种典型策略的"动作分布"来直观看:</p>
+  <div data-component="distribution-bar" id="dbar-ch01-l01" data-config='{
+    "actions": ["↑","→","↓","←","stay"],
+    "distributions": [
+      {"label": "deterministic (确定性: 全压在 ↓)", "values": [0, 0, 1, 0, 0]},
+      {"label": "ε-greedy ε=0.2 (主选 ↓, 其他四个动作平均分剩下的 0.2)", "values": [0.05, 0.05, 0.8, 0.05, 0.05]},
+      {"label": "uniform (均匀随机, 完全不知道该走哪)", "values": [0.2, 0.2, 0.2, 0.2, 0.2]}
+    ]
+  }'></div>
+  <p>三行的高度都满足 \(\sum_a \pi(a\mid s) = 1\)。第一行就是上面 grid 图里那根"↓"箭头的"全概率版本"。第二行 ε-greedy 是后面强化学习算法里"探索 vs 利用"的标准做法 —— 大概率选当前最优动作、小概率随机探索别的。第三行是 agent 啥也不知道时(比如算法刚启动)的初始策略。后面所有 lesson 里出现的策略,都可以用这种"对每个状态画一条分布"的方式去想。</p>
+
+  <!-- §5 常见误解 -->
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong> "策略 = 一串动作 = a_2, a_3, a_3, ...(就像下棋的招法)。"<br>
+    <strong>实际上:</strong> 策略是一个<strong>函数</strong>,把状态映射到动作的概率分布;它不是按时间排好的动作序列。<br>
+    <strong>因为:</strong> 真实环境有随机性 —— 同样从 \(s_{(0,0)}\) 出发,某次往下走可能因风被吹偏,你需要在新的状态下重新查"手册",而不是死板执行下一个动作。所以策略必须以 state 为输入。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong> "状态转移 \(p(s&#39;\mid s, a)\) 和策略 \(\pi(a\mid s)\) 是一回事 —— 反正都是条件概率。"<br>
+    <strong>实际上:</strong> 它们的<strong>所有权</strong>不一样:\(p\) 是<em>环境</em>的属性(你改不了),\(\pi\) 是 <em>agent</em> 的属性(你能优化)。强化学习要做的就是固定 \(p\)、调 \(\pi\)。<br>
+    <strong>因为:</strong> 如果你能改 \(p\),那叫"作弊",或者说在改世界本身;RL 研究的设定是世界给定、智能体学习。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong> "禁区(forbidden)就等于墙,撞上去会反弹。"<br>
+    <strong>实际上:</strong> 在本书的标准设定里,禁区<strong>是可达的</strong>,只是进去会被惩罚(后面引入 reward 时再细说)。墙才是真的不可达,撞墙会被弹回原格。<br>
+    <strong>因为:</strong> 这样设定更接近真实场景 —— 比如自动驾驶里,"压实线"是可以做但要扣分的违规动作,而"撞墙"是物理上做不到。教材 §1.3 给出了这个区分。
+  </div>
+
+  <!-- §6 自检 + 视频 + teaser -->
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> 5×5 网格里,如果策略是 ε-greedy(ε = 0.2)、主动作是"向右",问 \(\pi(a_2 \mid s)\) 等于多少?</summary>
+    <p><strong>A.</strong> \(\pi(a_2 \mid s) = 1 - \varepsilon + \varepsilon/|\mathcal{A}| = 0.8 + 0.2/5 = 0.84\)。剩下 4 个动作每个分到 \(\varepsilon/|\mathcal{A}| = 0.04\)。验证:\(0.84 + 4 \times 0.04 = 1\) ✓。<em>为什么不是简单的 0.8:</em> ε-greedy 在"探索分支"里也包含了主动作本身;严格定义下,所有动作都有 \(\varepsilon/|\mathcal{A}|\) 的"探索概率",再额外给最优动作 \(1 - \varepsilon\) 的"利用概率"。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> agent 站在 \(s_{(0,4)}\)(右上角),做动作 \(a_2\)(向右)。\(p(s&#39; \mid s_{(0,4)}, a_2)\) 长什么样?</summary>
+    <p><strong>A.</strong> \(p(s_{(0,4)} \mid s_{(0,4)}, a_2) = 1\),其他所有 \(s&#39;\) 的概率为 0。因为 \((0,4)\) 已经是最右一列,向右会撞墙、被弹回原格。这就是一个"自环"形式的状态转移。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> 为什么定义 policy 时要求"对每一个 \(s \in \mathcal{S}\) 都有 \(\pi(\cdot\mid s)\) 是合法分布",哪怕这个状态在当前路线上根本走不到?</summary>
+    <p><strong>A.</strong> 因为后续(ch02 起)所有的价值函数和贝尔曼方程都是<em>对全状态</em>求期望、求和。如果某个 \(s\) 没定义 \(\pi(\cdot\mid s)\),公式里的 \(\sum_a \pi(a\mid s) v(s&#39;)\) 这种项就缺了贡献,递归会断。理论上的"全定义"是为了让公式封闭;实际算法里,那些走不到的 state 的策略可以是任意合法分布,不影响最终最优解。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <p style="font-size:0.85rem;color:var(--color-muted);">视频:首选 Bilibili 直播(下方 iframe);若 iframe 不显示,用 YouTube 链接打开。BVID 当前是占位,实际 BVID 等首次部署时填。</p>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=2&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=2" target="_blank"><strong>▶ YouTube 备链(建议优先点这个)</strong></a></p>
+
+  <h3>下一节预告</h3>
+  <p>这一节我们告诉了 agent <strong>"在哪里、能做什么、怎么决定做什么"</strong>。但还没告诉它 <strong>"做对了奖励多少 / 做错了惩罚多少"</strong>。下一节(L2,Book §1.5)将引入 <strong>reward</strong> 和 <strong>return</strong>:reward 是单步反馈,return 是把一整条 trajectory 上的 reward 折现累加 —— 这两个量是"策略好坏"的<em>唯一</em>衡量标准,也是后面所有价值函数的种子。</p>
+
+  <!-- Bottom nav -->
+  <nav class="lesson-nav">
+    <a href="../index.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-02.html">Next →</a>
+  </nav>
+</div>
+
+<!-- Components -->
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>
