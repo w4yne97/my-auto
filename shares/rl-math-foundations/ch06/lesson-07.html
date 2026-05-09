@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>随机近似与 SGD(P7):SGD 收敛性对比与全章总结 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch06-l07" data-est-minutes="20">
+<div class="container">
+
+  <!-- Top nav -->
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.6 / Lesson 7</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <!-- Header -->
+  <p class="kicker">Bilibili #28 · YouTube #28 · Book §6.4.5-6.6 pp. 121-124</p>
+  <h1>L7: SGD Convergence Theorem &amp; Chapter Summary<small style="color:var(--color-muted); font-weight:400;">  (SGD 收敛性证明与全章总结)</small></h1>
+
+  <!-- §1 Why this lesson -->
+  <h2>§1 Why this lesson</h2>
+  <p>L1-L6 把 RM 与 SGD 的<em>形态、收敛证明、动力学、变种</em> 全讲完。本节(教材 §6.4.5-6.6,pp. 121-124)做<strong>三件事</strong>:<strong>(1) Theorem 6.4 SGD 收敛性的<em>严证</em></strong>(教材 Box 6.1)—— 用 Box 6.1 把 SGD 归约到 RM,直接套 Theorem 6.1,<em>不到一页</em> 完成;<strong>(2) Ch.6 全章梳理</strong> —— 从 (1/n) 均值递推到 RM 抽象到 SGD 特例,<em>四个最重要的取舍</em>;<strong>(3) Ch.7 TD 学习预告</strong> —— RM 框架将直接套用在 Bellman 算子的固定点上,生出第一族真正能在线运行的 RL 算法。</p>
+  <p>核心 takeaway(<em>不是</em> 复述全章六节,而是抓<em>4 个最关键的</em>):<strong>[T1] RM 是"<em>用样本估期望</em>" 这件事的统一骨架</strong>:\(w_{k+1} = w_k - \alpha_k \tilde g_k\) 一行公式覆盖均值估计、SGD、TD、Q-learning、policy gradient ——<em>差别只在 \(\tilde g\) 怎么从数据采</em>。<strong>[T2] 步长两条件 \(\sum\alpha=\infty\) 与 \(\sum\alpha^2<\infty\) 是<em>张力</em></strong>:\(\sum\alpha=\infty\) 防"<em>太早停</em>",\(\sum\alpha^2<\infty\) 防"<em>停不下来</em>"。两者必须<em>同时</em>。\(\alpha_k = c/k\) 是经典默认,常 \(\alpha\) 不严格收敛但能跟踪非平稳 target(deep RL 默认)。<strong>[T3] SGD ⊂ RM,Theorem 6.4 几乎免费</strong>:把 SGD 写成 RM 形态(Box 6.1)即得收敛。这套<em>"<em>归约 + 套定理</em>" 思路</em> 在 Ch.7-Ch.10 反复出现,Q-learning 收敛证明就是把它套到 Bellman 算子上。<strong>[T4] BGD/SGD/MBGD 是同一族</strong>:m=1 SGD,m=n BGD,中间 MBGD。"<em>样本预算</em> vs <em>更新频率</em> vs <em>方差</em> vs <em>泛化</em>" 四维 trade-off 由 m 调控,深度 RL 黄金区间 \(m \in [32, 256]\)。<strong>[Ch.7 桥接]</strong> RM 给"<em>迭代 + 采样估期望</em>" 的工具;Ch.7 TD 直接把这套用到 Bellman 算子的固定点 \(v_\pi\):\(g(v) = v - T_\pi v\),\(\tilde g(v_t, s_t, s_{t+1}, r_{t+1}) = V(s_t) - [r_{t+1} + \gamma V(s_{t+1})]\),套 RM 即得 TD(0)。SARSA、Q-learning 是 TD(0) 在 \(q\)-value 上的同构变种。这是 RL 算法演化"<em>从 model-based 到 model-free + incremental</em>" 的<em>第一颗果实</em>。</p>
+
+  <!-- §2 核心定义 -->
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>Theorem 6.4 (SGD 收敛性,教材 §6.4.5,p. 121)</strong>:在 (a) \(0 < c_1 \le \nabla_w^2 f(w, X) \le c_2\)(\(f\) 强凸 + 光滑)、(b) \(\sum \alpha_k = \infty,\sum \alpha_k^2 < \infty\)、(c) \(\{x_k\}\) i.i.d. 下,SGD \(w_{k+1} = w_k - \alpha_k \nabla_w f(w_k, x_k) \xrightarrow{a.s.} w^* = \arg\min \mathbb E[f(w, X)]\)。</li>
+    <li><strong>证明大纲(教材 Box 6.1,p. 122)</strong>:<strong>(i)</strong> 写 \(g(w) \doteq \nabla_w J(w) = \mathbb E[\nabla_w f(w, X)]\),\(\tilde g_k = \nabla_w f(w_k, x_k) = g(w_k) + \eta_k\)。<strong>(ii)</strong> 验 RM 三条件:\(\nabla g = \nabla^2 J = \mathbb E[\nabla^2 f] \in [c_1, c_2]\) ✓;\(\sum\alpha = \infty,\sum\alpha^2 < \infty\) ✓;\(\mathbb E[\eta_k|\mathcal H_k] = 0\)(i.i.d.)、\(\mathbb E[\eta^2|\mathcal H] < \infty\)(\(\nabla f\) 有界)✓。<strong>(iii)</strong> 套 Theorem 6.1。</li>
+    <li><strong>Ch.6 takeaway [T1] —— RM 是统一骨架</strong>:所有"<em>用样本估期望</em>" 的迭代算法都是 \(w_{k+1} = w_k - \alpha_k \tilde g_k\) 一行公式的特例。<em>差别在 \(\tilde g\) 的采样方式</em>:均值估计 \(\tilde g = w - x\);SGD \(\tilde g = \nabla_w f(w, x)\);TD \(\tilde g = V(s) - [r + \gamma V(s&#39;)]\);Q-learning \(\tilde g = Q(s,a) - [r + \gamma \max_{a&#39;} Q(s&#39;, a&#39;)]\);policy gradient \(\tilde g = -\nabla_\theta \log \pi_\theta(a|s) \cdot \tilde q(s, a)\)。</li>
+    <li><strong>Ch.6 takeaway [T2] —— 步长两条件的张力</strong>:\(\sum\alpha = \infty\) 与 \(\sum\alpha^2 < \infty\) 必须同时成立。\(\alpha_k = c/k^\beta\) 满足两条件 ⇔ \(\beta \in (0.5, 1]\)。常 \(\alpha\) 违反第二条件,严格不收敛,但<em>能跟踪非平稳 target</em>(RL 必备)—— 这是 deep RL 用 Adam lr=3e-4 而非衰减步长的根。</li>
+    <li><strong>Ch.6 takeaway [T3] —— "<em>归约 + 套定理</em>" 思路</strong>:把<em>新算法</em> 写成 RM 形态(找到 \(g\)、\(\tilde g\)、验三条件),即得收敛证明。Theorem 6.4 是模板,Ch.7 Q-learning 收敛、Ch.8 TD with FA 收敛(线性 case)、Ch.10 actor-critic 收敛都用这一思路。</li>
+    <li><strong>Ch.6 takeaway [T4] —— m 调控的多维权衡</strong>:m=1 SGD 单步便宜噪声大;m=n BGD 单步贵噪声 0;中间 MBGD 平衡。但"<em>泛化</em>" 这第四维让<em>小 batch SGD 在深度学习中胜过 BGD</em>(逃尖谷)。Deep RL 实操 m 多在 32-256。</li>
+    <li><strong>Ch.7 链条(教材 §6.6 第二条 Q&A)</strong>:RM 给"<em>迭代 + 采样估期望</em>",Ch.7 TD 直接套到 Bellman 固定点 \(v_\pi\)。<em>"<em>RL 算法都是 RM 在不同 \(\tilde g\) 上的具体化</em>"</em> —— 这是 Ch.6 在全书中作为<em>数学中心</em> 的真正含义。</li>
+  </ul>
+
+  <!-- §3 关键公式 + 推导 -->
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节核心是<strong>Theorem 6.4 严证大纲</strong> + <strong>"<em>RM 在不同 \(\tilde g\) 上的统一骨架</em>" 全章总图</strong>。</p>
+
+  <p><strong>公式 1:Theorem 6.4 与 Box 6.1 归约链(教材 §6.4.5)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\text{SGD: } w_{k+1} = w_k - \\alpha_k \\nabla_w f(w_k, x_k) \\xrightarrow[\\text{Box 6.1}]{\\text{归约}} \\text{RM: } w_{k+1} = w_k - \\alpha_k [g(w_k) + \\eta_k] \\xrightarrow[\\text{Theorem 6.1}]{\\text{套}} w_k \\to w^* \\text{ a.s.}",
+    "annotations": [
+      {"key": "step1_reduce", "label": "Step 1: 归约", "description": "把 ∇_w f(w_k, x_k) 写成 g(w_k) + η_k,其中 g(w) = E[∇_w f(w, X)] 是真梯度,η_k = ∇_w f(w_k, x_k) − g(w_k) 是&#39;单点梯度与真梯度的差&#39;。"},
+      {"key": "step2_verify", "label": "Step 2: 验三条件", "description": "(a) ∇g = E[∇²f] ∈ [c_1, c_2] ⇐ Theorem 6.4 (a);(b) Σα=∞, Σα²<∞ ⇐ Theorem 6.4 (b);(c) E[η|H]=0(i.i.d. + 独立) E[η²|H]<∞(|∇f|<∞)⇐ Theorem 6.4 (c)。"},
+      {"key": "step3_apply", "label": "Step 3: 套 Theorem 6.1", "description": "RM 三条件成立 ⇒ w_k → w* a.s.。整个证明 < 1 页 —— 这是抽象 RM 框架的&#39;复利收益&#39;。"},
+      {"key": "transferable", "label": "可移植性", "description": "同样的&#39;归约 + 套定理&#39; 套路在 Ch.7 TD/Q-learning、Ch.8 linear FA、Ch.10 actor-critic 反复出现。学懂 Box 6.1 这一页,后续算法证明都&#39;会读&#39;。"}
+    ]
+  }'></div>
+
+  <p><strong>公式 2:RM 骨架在不同算法的具体化(全书统一视图)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\boxed{w_{k+1} = w_k - \\alpha_k \\tilde g_k};\\ \\tilde g_k:\\ \\text{均值}=w-x,\\ \\text{SGD}=\\nabla_w f(w,x),\\ \\text{TD}=V(s)-[r+\\gamma V(s&#39;)],\\ \\text{Q-learn}=Q(s,a)-[r+\\gamma \\max Q(s&#39;,\\cdot)]",
+    "annotations": [
+      {"key": "skeleton", "label": "&#39;一行公式&#39; 统一", "description": "RM 骨架。所有 incremental learning 算法的最小形态。差异只在 g̃ 的来源 —— RL 算法多样性主要体现在&#39;g̃ 怎么采&#39;,不在&#39;update rule&#39;。"},
+      {"key": "mean_est", "label": "均值估计 (Ch.6 L1)", "description": "g̃ = w − x:用单样本&#39;距离当前估计的偏差&#39; 推动更新。最朴素形态。"},
+      {"key": "sgd_grad", "label": "SGD (Ch.6 L4)", "description": "g̃ = ∇_w f(w_k, x_k):用单样本梯度。需要&#39;能算 ∇f&#39;,即 f 必须可微。"},
+      {"key": "td", "label": "TD(0) (Ch.7)", "description": "g̃ = V(s_t) − [r_{t+1} + γ V(s_{t+1})]:&#39;TD error&#39;。本质是&#39;Bellman 算子固定点&#39; 的带噪估计。Ch.7 详谈。"},
+      {"key": "q_learn", "label": "Q-learning (Ch.7)", "description": "g̃ = Q(s,a) − [r + γ max_{a&#39;} Q(s&#39;, a&#39;)]:Bellman 最优算子的固定点估计。Off-policy 关键。"}
+    ]
+  }'></div>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>"<em>把<em>新算法</em> 写成 RM 形态</em>" 三步</em>。<strong>(i)</strong> 找<em>方程</em>:你的算法在解什么 \(g(w) = 0\)?(均值估计:\(g = w - \mathbb E[X]\);SGD:\(g = \nabla J\);TD:\(g = V - T_\pi V\)。)<strong>(ii)</strong> 找<em>带噪估计</em>:你能从数据里采到 \(\tilde g(w, \xi) = g(w) + \eta\)?(均值估计:\(\tilde g = w - x\);TD:\(\tilde g = V(s) - [r + \gamma V(s&#39;)]\)。)<strong>(iii)</strong> 验<em>三条件</em>:\(\nabla g\) 有界?\(\alpha_k\) 满足两条件?\(\eta\) 条件零均值方差有界?<em>三步通过 ⇒ 收敛</em>。这就是 Ch.7-Ch.10 算法收敛证明的<em>母骨架</em>。
+  </div>
+
+  <div class="callout">
+    <strong>Step 2.</strong> <em>"为什么 RM 第三条件是<em>条件期望</em>"(Ch.6 收尾再强调)</em>。\(\mathbb E[\eta_k|\mathcal H_k] = 0\) 而非 \(\mathbb E[\eta_k] = 0\)。<em>差别</em>:前者允许 \(\eta_k\) 依赖<em>当前 \(w_k\)</em>,只要在<em>给定 \(w_k\)</em> 下零均值;后者要求<em>无条件</em> 零均值,过强。RL 中 \((s_t, a_t, r_{t+1}, s_{t+1})\) 由当前策略生成 ⇒ 数据分布<em>依赖</em> 当前 \(w\),无条件期望不为零;但<em>给定 \(w\)</em>,环境分布 \(p(s&#39;,r|s,a)\) 由 MDP 固定 ⇒ 条件期望为零成立。<em>这是 RM 框架适配 RL 的<em>关键技术细节</em></em>,Theorem 6.3 的多变量推广进一步给 Q-learning 收敛。
+  </div>
+
+  <div class="callout">
+    <strong>Step 3.</strong> <em>Ch.6 的<em>第一性原理</em> 总结</em>。"<em>用样本估期望</em>" 这件事的<em>极简实现</em> 是:\(w_{k+1} = w_k - \alpha_k \tilde g_k\)。<em>能收敛</em> 的条件是:(a) 函数<em>结构</em>(单调 + Lipschitz);(b) 步长<em>调度</em>(两条件);(c) 噪声<em>性质</em>(条件零均值方差有界)。<em>三者缺一不可</em>。<em>这套理论让 1951 年的 RM 算法在 70 多年后的 deep RL 时代仍然是基础</em> —— 当前 deep RL 算法的所有"<em>新</em>" 部分都可以拆成"<em>RM 框架 + 工程优化</em>",<em>未变</em> 的是 RM 的数学骨架。
+  </div>
+
+  <!-- §4 全章四个 takeaway 视觉化 -->
+  <h2>§4 全章 4 个 takeaway 收束</h2>
+  <p>本章<strong>不用 grid-world</strong>。我们用<em>iteration-stepper</em> 把 4 个 takeaway 一帧帧讲清,作为 Ch.6 收尾的<em>认知图</em>。</p>
+
+  <div data-component="iteration-stepper" data-config='{
+    "steps": [
+      {
+        "label": "[T1] RM 是&#39;用样本估期望&#39; 的统一骨架",
+        "note": "w_{k+1} = w_k − α_k g̃_k —— 一行公式覆盖均值估计、SGD、TD(0)、Q-learning、SARSA、policy gradient。差异只在&#39;g̃ 怎么采&#39;。Ch.7+ 算法多样性几乎全在 g̃ 的不同选择上。这是 Ch.6 在全书中的&#39;数学中心&#39; 地位。"
+      },
+      {
+        "label": "[T2] 步长两条件是结构性张力",
+        "note": "Σα=∞ 防&#39;太早停&#39;(累积学习能力);Σα²<∞ 防&#39;停不下&#39;(后期噪声衰减)。α_k = c/k^β, β ∈ (0.5, 1] 是合法窗口,α_k = 1/k 经典。常 α 违反第二条件,严格不收敛,但能跟踪非平稳 target —— deep RL 默认。这把&#39;数学严格&#39; 与&#39;工程实操&#39; 的距离讲清楚。"
+      },
+      {
+        "label": "[T3] 归约 + 套定理 是收敛证明的母模板",
+        "note": "Box 6.1: 把 SGD 写成 RM 形态,验三条件,直接套 Theorem 6.1。整证 < 1 页。同样模板:Ch.7 Q-learning(套 Theorem 6.3 多变量版),Ch.8 linear FA(deadly triad 是&#39;条件 (a) 不严格成立&#39; 的反例),Ch.10 actor-critic。学一次,套十年。"
+      },
+      {
+        "label": "[T4] BGD/SGD/MBGD 是同一族",
+        "note": "m=1 SGD 单步便宜噪声大;m=n BGD 单步贵噪声 0;MBGD 中间。固定总样本下三者大致一致,但 GPU 并行让 MBGD 实操优。Deep learning / RL 黄金区间 m ∈ [32, 256]。&#39;泛化第四维&#39; 让小 batch 噪声反而&#39;选平谷&#39;,胜过 BGD —— 这是 RM 理论<em>解释不了</em> 但实证发现的特性。"
+      },
+      {
+        "label": "[Ch.7 桥接] RM 直接生出 TD",
+        "note": "Ch.7 把 RM 套到 Bellman 算子的固定点 v_π:g(v) = v − T_π v,g̃(s_t, s_{t+1}) = V(s_t) − [r_{t+1} + γ V(s_{t+1})](TD error)。代入 RM 即得 TD(0): V(s_t) ← V(s_t) − α_t · g̃。SARSA、Q-learning 是 TD(0) 在 q-value 上的同构变种。这是 RL 第一族&#39;真正能在线运行&#39; 的算法 —— 既不像 Ch.4 DP 要 model,也不像 Ch.5 MC 要等 episode 跑完。"
+      }
+    ]
+  }'></div>
+
+  <p><strong>Ch.6 vs Ch.5 vs Ch.7 收敛模式对比</strong>(同一均值估计任务,展示三章方法的<em>动力学差异</em>):</p>
+
+  <div data-component="convergence-plot" data-config='{
+    "x-label": "样本数 k(总成本)",
+    "y-label": "|estimate − truth| (log-y)",
+    "log-y": true,
+    "series": [
+      {"name": "Ch.5 MC: 等 episode 收完算 ̄x", "color": "#10b981", "points": [[10, 0.30], [100, 0.10], [1000, 0.032], [10000, 0.010]]},
+      {"name": "Ch.6 SGD α=1/k(在线)", "color": "#f59e0b", "points": [[10, 0.30], [100, 0.10], [1000, 0.032], [10000, 0.010]]},
+      {"name": "Ch.6 SGD 常 α=0.1(跟踪)", "color": "#3b82f6", "points": [[10, 0.40], [100, 0.30], [1000, 0.30], [10000, 0.30]]},
+      {"name": "Ch.7 TD-style(预告:bootstrap 减方差)", "color": "#a78bfa", "points": [[10, 0.18], [100, 0.045], [1000, 0.012], [10000, 0.003]]}
+    ]
+  }'></div>
+
+  <p style="font-size:0.85rem; color:var(--color-muted);"><em>解读</em>:Ch.5 MC 与 Ch.6 SGD α=1/k 在<em>纯均值估计</em> 上数值<em>恒等</em>(L1 (6.3) 已证)—— 两者只是<em>计算 schedule</em> 不同(MC 等 episode 收完;SGD 每来一个样本就更新)。Ch.6 常 α 不严格收敛,但能跟踪。Ch.7 TD 风格(用 bootstrap)在<em>有结构</em> 的问题(MDP \(V(s)\))上比 MC 收敛更快(方差降低 \(\sim 3\)×)—— 但<em>引入 bias</em>(L7 后 Ch.7 详谈 bias-variance trade-off)。<em>三章一脉相承</em>:Ch.5 给<em>样本均值</em> 的<em>非递推</em> 版本,Ch.6 给<em>递推 + 一般步长</em>,Ch.7 给<em>带 bootstrap 的递推</em>,深度 RL 把这套用 NN 参数化(Ch.8+)。</p>
+
+  <!-- §5 常见误解 -->
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"Ch.6 是<em>数学预备章</em>,可以跳过直接学 Ch.7 TD。"<br>
+    <strong>实际上:</strong><strong>跳过 Ch.6 会导致 Ch.7-Ch.10 收敛证明都<em>看不懂</em></strong>。Ch.7 Q-learning 收敛证明直接引用 Theorem 6.3(多变量 Dvoretzky)。Ch.8 linear FA 收敛(Tsitsiklis-Van Roy)是 Ch.6 RM 在向量空间 + 加权 norm 上的扩展。Ch.10 actor-critic 双时间尺度收敛(Borkar)是 Ch.6 RM 的两层并行版本。<em>Ch.6 不是<em>预备</em>,是<em>核心</em></em>。<br>
+    <strong>因为:</strong>RL 算法多样性<em>不在</em> "<em>不同的更新公式</em>",<em>在</em> "<em>不同的 \(\tilde g\) 来源</em>"。但所有"<em>更新公式</em>" 都共享 RM 框架,所有<em>收敛证明</em> 都共享 Theorem 6.1/6.3 模板。学完 Ch.6,后续每章只需问"<em>g 是什么?\(\tilde g\) 怎么采?三条件验证?</em>" 三步就能给出收敛分析。这是教材作者把 Ch.6 放在<em>全书 chapter map 中央</em>(Figure 6.1)的<em>结构原因</em>。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"deep RL 用 Adam / 常 lr,所以 Ch.6 RM 框架<em>不适用</em>。"<br>
+    <strong>实际上:</strong><strong>Adam 仍是 RM,只是 \(\alpha_k\) 改成<em>逐参数自适应</em></strong>。Adam 的更新是 \(w_{k+1} = w_k - \alpha_k m_k / \sqrt{v_k + \epsilon}\),其中 \(m_k\) 是梯度一阶矩(EMA),\(v_k\) 是二阶矩。整体仍是 \(w_{k+1} = w_k - \alpha&#39;_k \tilde g&#39;_k\) 形态,\(\alpha&#39;_k = \alpha_k / \sqrt{v_k + \epsilon}\) 是<em>有效</em> 步长,\(\tilde g&#39;_k = m_k\) 是<em>有效</em> 梯度估计。Adam 收敛证明(Reddi et al. 2018)走 RM 路线,只是<em>条件更复杂</em>(因 \(v_k\) 也是 stochastic)。<em>RM 是<em>母</em>,Adam 是<em>子</em></em>。<br>
+    <strong>因为:</strong>"<em>常 lr</em>" 在 deep RL 的真正含义是"<em>不衰减但有自适应</em>"。Adam 通过 \(v_k\) 给"<em>每个参数自动调步长</em>",在不同坐标上行为不同。这<em>不违反</em> RM,只是把"<em>标量 \(\alpha\)</em>" 推广到"<em>对角矩阵 \(\text{diag}(\alpha&#39;)\)</em>",收敛分析需要更精细但仍在 RM 框架内。Ch.8 deep RL 用 Adam 的工程实操,完全建立在 Ch.6 数学基础上。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"Ch.6 是<em>静态</em> 数学,与 RL 的<em>动态</em> 在线学习有距离。"<br>
+    <strong>实际上:</strong><strong>RM 从 1951 年起就是为<em>在线学习</em> 设计的</strong>。Robbins-Monro 原 paper 题目是"<em>A stochastic approximation method</em>",场景是"<em>每来一个样本调整一次估计</em>",正是 RL 的核心需求。第三条件的<em>条件期望</em> \(\mathbb E[\eta|\mathcal H]=0\) 允许"<em>样本依赖历史</em>",直接对应 RL 数据流(策略改变 ⇒ 数据分布改变)。Theorem 6.3 多变量版进一步处理"<em>多个状态各自 incremental</em>",对应 Q-learning。<em>RM 框架本质上是为<em>在线 / 序贯 / 非平稳</em> 学习设计</em>,与 RL 是<em>天作之合</em>,不是事后凑数。<br>
+    <strong>因为:</strong>"<em>统计学习</em>" 与"<em>RL</em>" 的边界很模糊 —— RL 是<em>带反馈循环的统计学习</em>。Robbins-Monro 1951 不知道有"<em>RL</em>" 一词,但他设计的框架直接覆盖了 RL 50 年后的需求,这是数学的<em>普适性</em> 在闪光。Ch.6 让我们看清:<em>RL 不是<em>新</em> 数学,是<em>RM 在 MDP 结构上的具体化</em></em>。
+  </div>
+
+  <!-- §6 自检 + 视频 + teaser -->
+  <h2>§6 自检 + 视频 + 下一章</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> 复述 Box 6.1 SGD 收敛证明的 3 步,只用一两句话。</summary>
+    <p><strong>A.</strong> <strong>(i)</strong> 把 SGD 改写成 RM:令 \(g(w) = \nabla J(w) = \mathbb E[\nabla_w f(w, X)]\),\(\tilde g_k = \nabla_w f(w_k, x_k) = g(w_k) + \eta_k\)(单点梯度 = 真梯度 + 零均值噪声)。<strong>(ii)</strong> 验 RM 三条件:\(\nabla g = \mathbb E[\nabla^2 f] \in [c_1, c_2]\)(由 Theorem 6.4 (a));\(\sum\alpha=\infty,\sum\alpha^2<\infty\)(由 (b));\(\mathbb E[\eta|\mathcal H]=0\)(由 i.i.d.)。<strong>(iii)</strong> 套 Theorem 6.1:\(w_k \to w^*\) a.s.。<em>核心</em>:把"<em>新</em>" 算法归约到"<em>已知收敛的母算法</em>",这是数学证明的<em>分而治之</em> 套路,后续 RL 算法收敛全靠这招。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> Ch.6 4 个 takeaway 中,<em>对 RL 实操影响最大</em> 的是哪个?为什么?</summary>
+    <p><strong>A.</strong> 见仁见智,我选<strong>[T2] 步长两条件的张力</strong>。理由:<em>每个 deep RL 算法都需选 lr</em>,而 [T2] 直接告诉我们"<em>衰减 lr → 严格收敛</em>" vs "<em>常 lr → 跟踪非平稳</em>" 的<em>结构性</em> 选择。Q-learning、DQN、PPO、SAC 都默认<em>常 lr + 自适应优化</em>(Adam),这是 [T2] 在<em>非平稳 RL 数据流</em> 下的实操选择。理解 [T2] 让你<em>明白 lr scheduler 何时需要(收敛任务)、何时不需要(在线任务)</em>。次选 [T3]"<em>归约 + 套定理</em>" —— 它是<em>读论文</em> 时最有价值的工具(看新算法的收敛证明,套这个模板就能找出"<em>新点</em>" 在哪)。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> Ch.6 的 \(g\) 与 Ch.7 TD 的"<em>Bellman 残差</em>" 怎么对应?</summary>
+    <p><strong>A.</strong> Ch.7 TD 解的是 Bellman 方程 \(v_\pi = r_\pi + \gamma P_\pi v_\pi\),即<em>固定点方程</em> \(v = T_\pi v\) 的根。改写成<em>根 finding</em>:\(g(v) \doteq v - T_\pi v = 0\)。<em>带噪估计</em>:在 \((s_t, r_{t+1}, s_{t+1})\) 这条<em>单步样本</em> 上,\(\tilde g(v, s_t, r_{t+1}, s_{t+1}) \doteq V(s_t) - [r_{t+1} + \gamma V(s_{t+1})] = g(V)|_{s_t} + \eta_t\)(因 \([r + \gamma V(s&#39;)]\) 是 \(T_\pi V\) 在 \(s\) 处的<em>带噪估计</em>)。代入 RM:\(V(s_t) \leftarrow V(s_t) - \alpha_t \tilde g_t = V(s_t) - \alpha_t[V(s_t) - r_{t+1} - \gamma V(s_{t+1})] = V(s_t) + \alpha_t \delta_t\)(\(\delta_t\) 是 TD error)—— 正是 TD(0) 更新公式。<em>所以 TD(0) ≡ RM 在 Bellman 算子的固定点上</em>,Ch.7 的故事就是把这个观察展开。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <p style="font-size:0.85rem; color:var(--color-muted);">视频:首选 Bilibili 直播(下方 iframe);若 iframe 不显示,用 YouTube 链接打开。BVID 当前是占位,实际 BVID 等首次部署时填。</p>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=28&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=28" target="_blank"><strong>▶ YouTube 备链(建议优先点这个)</strong></a></p>
+
+  <h3>下一章预告</h3>
+  <p>到这一节为止,<strong>Ch.6 完成</strong>:RM 给了我们"<em>迭代 + 采样估期望</em>" 的统一工具,SGD 是它的明星特例,BGD/MBGD/SGD 三联是 m 调控的同族。<em>但 Ch.6 没有给任何具体的 RL 算法</em> —— 它是<em>数学工具章</em>。<strong>Ch.7 Temporal-Difference Methods</strong> 把这套工具<em>直接套用</em> 在 RL 的核心结构 —— Bellman 方程的固定点 —— 上,生出第一族<em>真正能在线运行</em> 的 RL 算法:<strong>TD(0)</strong>(估 \(v_\pi\))、<strong>SARSA</strong>(估 \(q_\pi\) on-policy)、<strong>Q-learning</strong>(估 \(q^*\) off-policy)。<em>关键洞察</em>:Ch.5 MC 要"<em>等 episode 收完算 \(\hat G\)</em>",方差大;Ch.7 TD 用"<em>\(r + \gamma V(s&#39;)\) 当一步 bootstrap target</em>",每步就能更新,方差降但引入 bias。<em>"<em>方差 vs bias</em>" 这个 trade-off 是 Ch.7 全章主线</em>。Ch.7 还讲 \(n\)-step TD(MC 与 TD(0) 之间的连续光谱)与 TD(λ)(经典)。Q-learning 收敛证明直接套 Ch.6 Theorem 6.3 多变量 Dvoretzky 定理,<em>Ch.6 投资在 Ch.7 立刻收回</em>。</p>
+
+  <!-- Bottom nav -->
+  <nav class="lesson-nav">
+    <a href="lesson-06.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="../ch07/index.html">Next →</a>
+  </nav>
+</div>
+
+<!-- Components -->
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>
