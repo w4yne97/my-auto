@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <!-- {{LESSON_ID}} = e.g. ch01-l01 ; {{TITLE_ZH}} = lesson 中文标题 -->
+  <title>{{TITLE_ZH}} — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="{{LESSON_ID}}" data-est-minutes="{{EST_MINUTES}}">
+<div class="container">
+
+  <!-- Top nav -->
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.{{CH_NUMBER}} / Lesson {{LESSON_NUMBER}}</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <!-- Header -->
+  <p class="kicker">Bilibili P{{BILIBILI_P}} · YouTube P{{YOUTUBE_INDEX}} · Book §{{BOOK_SECTION}} pp. {{BOOK_PAGES}}</p>
+  <h1>L{{CH_NUMBER}}: {{TITLE_EN}}<small style="color:var(--color-muted); font-weight:400;">  ({{TITLE_ZH}})</small></h1>
+
+  <!-- §1 Why this lesson -->
+  <h2>§1 Why this lesson</h2>
+  <p><!-- 上一节遗留了什么问题 → 这一节登场。1-2 段。 --></p>
+
+  <!-- §2 核心定义 -->
+  <h2>§2 核心定义</h2>
+  <ul>
+    <!-- 每条:term + 一句话直觉。第一次出现的英文术语用 双标:中文 (English)。 -->
+    <li><strong>状态 (state)</strong>:agent 当前所处的情景描述。</li>
+  </ul>
+
+  <!-- §3 关键公式 + 推导 -->
+  <h2>§3 关键公式 + 推导</h2>
+  <p>本节核心公式:</p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "<LATEX_EQUATION>",
+    "annotations": [
+      {"key": "<key>", "label": "<label>", "description": "<中文解释>"}
+    ]
+  }'></div>
+  <p>推导步骤:</p>
+  <div class="callout">
+    <strong>Step 1.</strong> <em>为什么这一步:</em>...
+  </div>
+
+  <!-- §4 Grid-world 例子 -->
+  <h2>§4 Grid-world 例子</h2>
+  <p>用作者的 5×5 grid-world 来直观看:</p>
+  <div data-component="gridworld" id="gw-{{LESSON_ID}}" data-config='{
+    "rows": 5, "cols": 5,
+    "target": [3, 2],
+    "forbidden": [[1,1],[2,1],[2,2],[1,3],[3,3]]
+  }'></div>
+  <!-- Optional: iteration-stepper to drive the gridworld -->
+
+  <!-- §5 常见误解 -->
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong> ... <br>
+    <strong>实际上:</strong> ... <br>
+    <strong>因为:</strong> ...
+  </div>
+
+  <!-- §6 自检 + 视频 + teaser -->
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> 一道自检题</summary>
+    <p><strong>A.</strong> 答案。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <iframe src="//player.bilibili.com/player.html?bvid=<BVID>&p={{BILIBILI_P}}&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index={{YOUTUBE_INDEX}}" target="_blank">YouTube 备链</a></p>
+
+  <h3>下一节预告</h3>
+  <p>下一节我们将用刚刚学到的 X 来解决 Y 的问题。</p>
+
+  <!-- Bottom nav -->
+  <nav class="lesson-nav">
+    <a href="lesson-{{PREV_LESSON}}.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-{{NEXT_LESSON}}.html">Next →</a>
+  </nav>
+</div>
+
+<!-- Components -->
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>
