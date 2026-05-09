@@ -92,6 +92,11 @@
       不能通过"对角"动作(grid 没有对角)。L2 §4 audit 就栽过这个坑。
     - 如果某节用 grid 对比"安全长路 vs 罚分短路"产生 γ flip,关键不在罚分次数,
       而在于"到达 target 时刻不同" —— 前者让 G_0 主项的 γ 幂次不同,γ 一旋才会真翻
+    - Heatmap 与 displayed policy 必须自洽 OR 显式声明 schematic:
+      若给 5×5 网格画 v_π 热图,数值要么严格按 displayed policy 解贝尔曼方程
+      (forbidden 反射时把 -1 罚分纳入),要么在该节加 callout 说明
+      "本图为 schematic,数值按'忽略 forbidden 反射的 Manhattan 最短路径'估算,
+      严格 v_π 在 2×2 子例 / Ch.3 BOE 算法下逐格给出"。Ch.2 L2 §4 audit 栽过此坑。
   -->
   <h2>§4 Grid-world 例子</h2>
   <p>用作者的 5×5 grid-world 来直观看:</p>
