@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>蒙特卡罗学习(P4):探索起点 MC — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch05-l04" data-est-minutes="20">
+<div class="container">
+
+  <!-- Top nav -->
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.5 / Lesson 4</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <!-- Header -->
+  <p class="kicker">Bilibili #19 · YouTube #19 · Book §5.3 pp. 86-89</p>
+  <h1>L4: MC Exploring Starts<small style="color:var(--color-muted); font-weight:400;">  (探索起点 MC + first-visit / every-visit)</small></h1>
+
+  <!-- §1 Why this lesson -->
+  <h2>§1 Why this lesson</h2>
+  <p>L3 显示 MC Basic 能跑,但<em>样本效率太低</em> —— 每个 \((s, a)\) 都要 collect "充分多" episode,共 \(|\mathcal S| \times |\mathcal A| \times n\) 条。本节(教材 §5.3,pp. 86-89)处理这个痛点的两面:<strong>(i) 把"<em>n 条独立 episode</em>" 重新组织为"<em>1 条长 episode 上的多个子序列</em>"</strong>(initial-visit / first-visit / every-visit 策略,§5.3.1);<strong>(ii) 把"<em>每外步 collect 完所有 episode 才 update</em>" 改成"<em>每条 episode 都立刻 update</em>"</strong>(§5.3.2)。两者合体得到 <strong>MC Exploring Starts</strong>(Algorithm 5.2,p. 88) —— MC 算法族里第一个工程实用版。<em>但代价是依然依赖 exploring starts 假设</em>,这正是 L5 / L6 ε-greedy 要解决的问题。</p>
+  <p>关键洞察(教材 §5.3 + Algorithm 5.2):<strong>(a) 一条 episode 包含多个 (s, a) 子序列</strong>(p. 86)。例如 episode \(s_1 \xrightarrow{a_2} s_2 \xrightarrow{a_4} s_1 \xrightarrow{a_2} s_2 \xrightarrow{a_3} s_5 \xrightarrow{a_1} \dots\) 内部包含 \((s_1, a_2), (s_2, a_4), (s_1, a_2)再次, (s_2, a_3), (s_5, a_1), \dots\) 多个 visit;每次 visit 后续都是<em>合法的子 episode</em>,可拿来估对应 \(q\)。<strong>(b) initial-visit (MC Basic) → first-visit → every-visit 三档</strong>:initial-visit 只用 \((s_0, a_0)\) 估一个 q,浪费 episode 内部信息;first-visit 用每个 \((s, a)\) 的<em>第一次</em> visit;every-visit 用<em>每一次</em> visit。"<em>每升一档 sample efficiency 上升一档</em>"。<strong>(c) Update 时机</strong>(§5.3.2):MC Basic "等所有 episode" → MC ES "每条 episode 立即 update" —— 后者属于 GPI(Ch.4 §4.4)框架下"<em>PE 不必跑到精确</em>" 的特例,接近 Ch.4 L3 的 truncated PI 思路。<strong>(d) Exploring starts 假设的代价</strong>(p. 89)。算法<em>仍然</em> 要求"<em>从每个 (s, a) 起的 episode 充分多</em>",在物理交互(机器人)、产品交互(推荐)等场景<em>不可能满足</em>。这是 L5 ε-greedy 的入口 —— "<em>用 soft 策略 + 单条长 episode</em>" 来等价"<em>每个 (s, a) 都被探索</em>"。</p>
+
+  <!-- §2 核心定义 -->
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>Visit (访问)</strong>:一条 episode 中,每个 \((s_t, a_t)\) 出现的位置叫一次 visit。一条长 episode 可能含同一 \((s, a)\) 的<em>多次</em> visit。</li>
+    <li><strong>Initial-visit 策略 (MC Basic 默认)</strong>:只用 \((s_0, a_0)\) 那一个 visit 估 q,episode 中其他 visit 全部丢弃。<em>样本浪费严重</em>。</li>
+    <li><strong>First-visit 策略</strong>:每个 \((s, a)\) 用<em>第一次</em> 出现位置之后的 sub-episode 估 q。每条 episode 可估多个 (s, a),但同一 (s, a) 只用一次。</li>
+    <li><strong>Every-visit 策略</strong>:每个 \((s, a)\) 用<em>每一次</em> 出现位置之后的 sub-episode 估 q。<em>样本效率最高</em>,但同一 episode 内多次 visit 之间高度<em>相关</em>(后面 visit 是前面 visit 的 sub-trajectory) —— 不是严格 i.i.d.,但教材 p. 87 末段说"<em>correlation would not be strong if the two visits are far away from each other</em>"。</li>
+    <li><strong>Update 时机:Per-episode update(§5.3.2)</strong>:不等"<em>充分多 episode</em>",每条 episode 处理完<em>立即</em> update q 与 \(\pi\)。这是 GPI 的"<em>PE 不必精确</em>" 思路在 MC 上的实例,与 Ch.4 L3 truncated PI 同源。</li>
+    <li><strong>MC Exploring Starts (Algorithm 5.2,p. 88)</strong>:MC Basic + every-visit + per-episode update + 后向 return 计算 \(g \leftarrow \gamma g + r_{t+1}\)(从 episode 末尾倒推到开头,效率 \(O(T)\) 而非朴素 \(O(T^2)\))。</li>
+    <li><strong>Exploring Starts 条件 (p. 89)</strong>:每个 \((s, a)\) 都要<em>充分多次</em> 被选作 episode 起点。这是<em>强假设</em>,真实环境常不可满足 —— 机器人不能"传送" 到任意状态再执行任意动作。L5 ε-greedy 用 soft 策略<em>替换</em> 这个条件,而不是<em>假装</em> 满足。</li>
+  </ul>
+
+  <!-- §3 关键公式 + 推导 -->
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节核心是<strong>怎么把一条 episode 拆成多个 (s, a) 子序列</strong>(visit 结构)+ <strong>怎么后向高效算 return</strong>(reverse accumulation)。</p>
+
+  <p><strong>公式 1:一条 episode 的 visit 分解(教材 §5.3.1)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "s_1 \\xrightarrow{a_2} s_2 \\xrightarrow{a_4} s_1 \\xrightarrow{a_2} s_2 \\xrightarrow{a_3} s_5 \\xrightarrow{a_1} \\dots",
+    "annotations": [
+      {"key": "visits", "label": "5 次 visit", "description": "原 episode 含 (s_1,a_2), (s_2,a_4), (s_1,a_2), (s_2,a_3), (s_5,a_1) 五次 visit。注意 (s_1,a_2) 出现两次,(s_2,_) 也是同一 state 不同 action 各出现一次。"},
+      {"key": "first_visit", "label": "first-visit 策略", "description": "对 (s_1,a_2) 只用第一次出现(位置 0)之后的 sub-episode 估 q;对 (s_2,a_4) 只用位置 1 之后……每个 (s, a) 一次。"},
+      {"key": "every_visit", "label": "every-visit 策略", "description": "对 (s_1,a_2) 用位置 0 与位置 2 两次都估 q,第一次的 g = 完整 return,第二次的 g = 后续 sub-return。两次都加进 (s_1,a_2) 的样本池。"},
+      {"key": "subepisode", "label": "sub-episode 是合法 trajectory", "description": "教材 p. 87:&#39;The trajectory generated after the visit of a state-action pair can be viewed as a new episode&#39;。MDP 的 Markov 性保证 sub-episode 仍服从同一动力学 —— 这是 visit 复用的数学根。"}
+    ]
+  }'></div>
+
+  <p><strong>公式 2:后向 return 计算(Algorithm 5.2 内层循环)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "g \\leftarrow 0; \\quad \\text{for } t = T-1, T-2, \\dots, 0: \\quad g \\leftarrow \\gamma g + r_{t+1}",
+    "annotations": [
+      {"key": "reverse", "label": "倒推方向", "description": "从 episode 末端 r_T 起反向累加。优势:每步 O(1) 工作,总 O(T) 算完所有 (s_t, a_t) 的 g。朴素正向算每个 (s_t, a_t) 都要再扫一遍 episode,O(T²)。"},
+      {"key": "incremental", "label": "递推式", "description": "g_t = r_{t+1} + γg_{t+1}。这是 return 定义 g_t = r_{t+1} + γr_{t+2} + γ²r_{t+3} + ... 的紧凑写法。Bellman 方程的离散等价。"},
+      {"key": "memory", "label": "内存只一个标量", "description": "整个递推只维护标量 g,不需要存整条 trajectory 的 return 数组。在长 episode / 大状态空间下省内存。"},
+      {"key": "ch7_link", "label": "Ch.7 TD 预告", "description": "g ← γg + r_{t+1} 这个递推式可以&#39;截断在第一步&#39;:g_t ≈ r_{t+1} + γ\\hat v(s_{t+1})。这就是 TD(0)(Ch.7 L2)。MC 是&#39;走到底&#39;,TD 是&#39;走一步&#39;,中间是 n-step TD(Ch.7 L5)。"}
+    ]
+  }'></div>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>Algorithm 5.2 骨架(p. 88)</em>。<strong>For each episode</strong>:<em>(i)</em> select \((s_0, a_0)\) ensuring all (s, a) reachable(exploring starts 条件)。<em>(ii)</em> generate episode \(s_0, a_0, r_1, \dots, s_{T-1}, a_{T-1}, r_T\),长度 \(T\)。<em>(iii)</em> set \(g \gets 0\),倒推 \(t = T-1, \dots, 0\):\(g \gets \gamma g + r_{t+1}\),累加 Returns\((s_t, a_t) \mathrel{+}= g\),Num\((s_t, a_t) \mathrel{+}= 1\),\(q(s_t, a_t) = \text{Returns} / \text{Num}\),改 \(\pi\) 为 \(\arg\max_a q(s_t, a)\)。<em>关键</em>:每条 episode 处理完后<em>立刻</em> update q 与 \(\pi\),不等"<em>充分多</em>"。
+  </div>
+
+  <div class="callout">
+    <strong>Step 2.</strong> <em>"为什么 every-visit 是 sample efficient 上限"</em>(p. 87 末段)。一条<em>足够长</em> episode 在 soft 策略下能 visit 每个 \((s, a)\) <em>多次</em>。every-visit 把每次 visit 都用上,所以"<em>一条长 episode</em>" 就够估所有 q,不必"<em>多条独立 episode</em>"。这把"<em>多条独立 episode</em>" 的需求<em>近似</em> 替换为"<em>一条 soft 策略下的长 episode</em>" —— 这正是 L5 ε-greedy 的核心想法。<em>注意</em>:every-visit 的样本不是严格独立(同 episode 内 visit 间相关),但教材直接说"<em>correlation would not be strong if visits are far away</em>",实操中可接受。
+  </div>
+
+  <div class="callout">
+    <strong>Step 3.</strong> <em>"为什么仍依赖 exploring starts"</em>(p. 89)。即使 every-visit + per-episode update,Algorithm 5.2 仍写"<em>select a starting (s_0, a_0) and ensure all pairs can be possibly selected</em>"。原因:若 \(\pi\) 是<em>确定性</em> 贪心策略,从 \((s, a)\) 起一旦 \(\pi\) 不选 \(a\),后续 visit 永远不到这个 \((s, a)\) —— q 估计永远空白。Exploring starts <em>强行</em> 把 \((s, a)\) 当起点解决这点,但<em>真实环境 agent 没有"任意传送 + 任意首动作" 能力</em>。L5 用 soft 策略让 \(\pi(a \mid s) > 0\) 对所有 a,从而每个 (s, a) <em>自然</em> 被访问,不再需要 exploring starts。
+  </div>
+
+  <!-- §4 Grid-world + 算法步骤 -->
+  <h2>§4 Grid-world:Exploring Starts 的样子</h2>
+  <p>展示 exploring starts 假设的<em>具体含义</em>:从每个 \((s, a)\) 起跑独立 episode。下图展示<em>三个</em> 不同的 exploring start 起点 —— \((s = (0,0), a = →)\)、\((s = (2,4), a = ↓)\)、\((s = (4,3), a = ←)\) —— 用三条<em>独立轨迹</em> 演示。这三条都需要 agent 能"<em>传送</em>" 到指定起点,<em>这正是真实环境通常没有的能力</em>。</p>
+
+  <div data-component="gridworld" id="gw-ch05-l04-traj1" data-config='{
+    "rows": 5, "cols": 5,
+    "target": [3, 2],
+    "forbidden": [[1,1],[2,1],[2,2],[1,3],[3,3]],
+    "trajectory": [[0,0],[0,1],[0,2],[1,2],[2,2]]
+  }'></div>
+  <p style="font-size:0.85rem; color:var(--color-muted);"><em>Episode A</em>:exploring start = \((s = (0,0), a = →)\)。轨迹沿顶部进 (0,2),下到 forbidden (2,2) 受罚 -10。这条 episode 同时给 \((s_0, →), (s_1, ↓), (s_2, ↓)\) 三次 visit 用于 every-visit 估计。</p>
+
+  <div data-component="gridworld" id="gw-ch05-l04-traj2" data-config='{
+    "rows": 5, "cols": 5,
+    "target": [3, 2],
+    "forbidden": [[1,1],[2,1],[2,2],[1,3],[3,3]],
+    "trajectory": [[2,4],[3,4],[4,4],[4,3],[4,2],[3,2]]
+  }'></div>
+  <p style="font-size:0.85rem; color:var(--color-muted);"><em>Episode B</em>:exploring start = \((s = (2,4), a = ↓)\)。轨迹绕右下到 target (3,2)。给 5 次 visit 数据。</p>
+
+  <div data-component="gridworld" id="gw-ch05-l04-traj3" data-config='{
+    "rows": 5, "cols": 5,
+    "target": [3, 2],
+    "forbidden": [[1,1],[2,1],[2,2],[1,3],[3,3]],
+    "trajectory": [[4,3],[4,2],[3,2]]
+  }'></div>
+  <p style="font-size:0.85rem; color:var(--color-muted);"><em>Episode C</em>:exploring start = \((s = (4,3), a = ←)\)。轨迹两步到 target,给 2 次 visit。</p>
+
+  <p>用 iteration-stepper 展示 every-visit + 后向 return 累加的算法步骤:</p>
+
+  <div data-component="iteration-stepper" data-config='{
+    "steps": [
+      {
+        "label": "选 episode 起点 (s_0, a_0) 满足 exploring starts",
+        "note": "uniform 抽 (s_0, a_0) ∈ S × A(共 25 × 5 = 125 对)。这是&#39;任意首步&#39; 假设。机器人 / 推荐做不到,仿真器可以。"
+      },
+      {
+        "label": "生成 episode: s_0, a_0, r_1, s_1, ..., s_{T-1}, a_{T-1}, r_T",
+        "note": "跟当前 π 跑 T 步。教材没指定 T,但用 first-visit 时 T 不必很大;every-visit 配合 soft π 时建议 T 较大。"
+      },
+      {
+        "label": "倒推累加: g ← 0, t = T-1, ..., 0: g ← γg + r_{t+1}",
+        "note": "倒推效率 O(T)。每步同时:Returns(s_t, a_t) += g; Num(s_t, a_t) += 1;q(s_t, a_t) = Returns/Num。every-visit ⇒ (s_t, a_t) 可重复出现,每次都累加。"
+      },
+      {
+        "label": "Per-step policy update: π(s_t) = arg max_a q(s_t, a)",
+        "note": "对当前 episode 中 visit 过的每个 s_t,立刻把 π 改成 \\arg\\max_a q(s_t, a)。&#39;立即 update&#39; 比 MC Basic 的&#39;等充分多 episode&#39; 更激进 —— 这是 GPI &#39;PE 不必精确&#39; 思路在 MC 上的实例。"
+      },
+      {
+        "label": "下一条 episode: 重新 exploring start",
+        "note": "重新 uniform 抽 (s_0, a_0),用更新后的 π 生成新 episode。多次迭代后 π → π*。&#39;exploring starts + 多条独立 episode&#39; 让所有 (s, a) 都被覆盖,保证 \\hat q 收敛到 q_{π*}。"
+      }
+    ]
+  }'></div>
+
+  <!-- §5 常见误解 -->
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"every-visit 的样本不独立,所以应该用 first-visit。"<br>
+    <strong>实际上:</strong><strong>two strategies 都收敛,但 sample efficiency 不同</strong>(教材 p. 87 末段)。every-visit 把同一 episode 多次 visit 都用上,样本量更大,但<em>相邻</em> visit 高度相关。Sutton & Barto 经典证明 first-visit 是<em>无偏</em> 估计,every-visit 是<em>有偏但渐进无偏</em> 估计;实操中 every-visit 在<em>有限</em> 样本下方差更小、收敛更快。<em>选哪个看场景</em>:严格统计性质要 first-visit;追求 wall-clock 效率选 every-visit。本书 Algorithm 5.2 默认 every-visit,这是教材的工程偏好。<br>
+    <strong>因为:</strong>"<em>不严格独立</em>" 不等于"<em>不能用</em>"。Ch.7 TD 用单步样本(更不独立)却收敛极快;Ch.8 DQN 用 experience replay buffer(把相关样本打散重抽)缓解相关性。所以"<em>样本效率</em> vs <em>统计纯净</em>" 是 RL 算法设计反复出现的 trade-off。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"exploring starts 是个'技术细节',真实问题里随便选个起点就好。"<br>
+    <strong>实际上:</strong><strong>Exploring starts 是<em>强假设</em>,在大多数真实环境<em>不成立</em></strong>(教材 p. 89 直接强调)。机器人不能传送到任意 \((x, y, \theta)\) 再执行任意 \(a\);推荐系统不能"<em>给同一用户假装是任意状态</em>";自动驾驶不能"<em>任意状态启动</em>"。仿真器(Atari、MuJoCo)可以,所以 MC ES 在 RL benchmark 上能跑,但<em>不能直接迁到真实物理 / 产品环境</em>。这正是 L5 ε-greedy 的设计动机:用 soft 策略让 agent <em>自然</em> 探索每个 \((s, a)\),而不依赖"<em>任意起点</em>"。<br>
+    <strong>因为:</strong>RL 的"<em>探索 vs 利用</em>" 张力是<em>结构性</em> 的:agent 不知道哪些 \((s, a)\) 重要,要么"<em>外部强制覆盖</em>"(exploring starts)要么"<em>自然采样覆盖</em>"(soft policy 如 ε-greedy)。前者依赖环境配合,后者依赖策略设计。Ch.5 后两节走第二条路。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"per-episode update 让 q 估计很噪,应该等 N 条 episode 再 update。"<br>
+    <strong>实际上:</strong><strong>per-episode update 在 GPI 框架下<em>仍收敛</em></strong>(教材 §5.3.2 末段)。原因:GPI 不要求 PE 跑到精确,只要"<em>大致方向对</em>" 即可改 \(\pi\)(Ch.4 §4.4)。每条 episode 后改 \(\pi\) 就像 truncated PI 在 \(j_\text{truncate} = 1\) 极限的 sample 版 —— "<em>q 估计粗糙 + π 频繁改</em>" 比"<em>q 估计精确 + π 偶尔改</em>" 反而更快。<br>
+    <strong>因为:</strong>RL 的"<em>速度 vs 精度</em>" 总在权衡。MC Basic 站精度端,MC ES 站速度端。Ch.7 Q-learning 更激进 —— "<em>每个 step 都 update q 与 π</em>"(\(j = 1/T\),即 single-step truncated)。这是 GPI 的连续光谱在 MC/TD 上的具体实例。
+  </div>
+
+  <!-- §6 自检 + 视频 + teaser -->
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> 一条 episode \(s_1 \xrightarrow{a_2} s_2 \xrightarrow{a_4} s_1 \xrightarrow{a_2} s_2 \xrightarrow{a_3} s_5 \xrightarrow{a_1} \dots\)(教材 p. 86)。first-visit 与 every-visit 在 \((s_1, a_2)\) 估计上分别用了哪些子序列?</summary>
+    <p><strong>A.</strong> <strong>First-visit</strong>:\((s_1, a_2)\) 第一次出现在位置 0(整条 episode 的起点),所以 first-visit 用<em>整条 episode</em> 的 \(g_0\) 估 \(q(s_1, a_2)\) 一次。第二次出现(位置 2)被丢弃。<strong>Every-visit</strong>:位置 0 用整条 \(g_0\) 估一次,位置 2 用从位置 2 起的 sub-episode \(g_2\) 估一次。两次都加入 \((s_1, a_2)\) 样本池,\(\hat q = (g_0 + g_2) / 2\)。直觉:every-visit 多榨出 1 个样本,代价是 \(g_0\) 与 \(g_2\) 不独立(\(g_0 = r_1 + \gamma r_2 + \gamma^2 g_2\),线性相关)。但教材 p. 87 末段说"<em>相邻 visit 远时相关性弱</em>",可接受。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> Algorithm 5.2 的内层循环用了倒推 \(g \leftarrow \gamma g + r_{t+1}\)。如果改成正向"<em>对每个 t,扫一遍 episode 算 \(g_t = r_{t+1} + \gamma r_{t+2} + \dots + \gamma^{T-t-1} r_T\)</em>",复杂度变成多少?</summary>
+    <p><strong>A.</strong> <strong>正向是 \(O(T^2)\),倒推是 \(O(T)\)</strong>。正向:对每个 \(t \in \{0, 1, \dots, T-1\}\) 算 \(g_t\) 都要扫 \(O(T)\) 个未来 reward,共 \(O(T^2)\)。倒推:维护标量 \(g\),从 \(t = T-1\) 起每步 \(O(1)\),共 \(O(T)\)。差距在长 episode(\(T = 10000\) 级)时是<em>1 万倍</em> 的工程差距。这就是 Algorithm 5.2 选倒推的原因。Ch.7 TD 把"<em>整条 g 倒推</em>" 进一步退化成"<em>单步 g_t ≈ r_{t+1} + γ\(\hat v(s_{t+1})\)</em>",连倒推都不需要。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> Exploring starts 在哪些场景<em>能</em> 满足?哪些<em>不能</em>?</summary>
+    <p><strong>A.</strong> <strong>能</strong>:仿真器(Atari、MuJoCo、AlphaGo 自对弈)、棋类游戏(可以从任意盘面开始)、有完整 reset 接口的游戏。<strong>不能</strong>:物理机器人(不能瞬移到任意 \((x, y, \theta)\) 再执行任意 a)、推荐系统(用户状态由真实历史决定,不能伪造)、自动驾驶(不能任意路况开始)、医疗 RL(病人状态不可伪造)。<em>判定标准</em>:能不能"<em>任意 reset 到 (s, a) 起点</em>"。这是为什么 model-based 仿真 + sim-to-real 是工业 RL 的主流路线 —— 仿真器满足 exploring starts,真实环境不满足。Ch.5 L5 的 ε-greedy 提供另一条路:不依赖 exploring starts,而靠 soft 策略让自然采样覆盖。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <p style="font-size:0.85rem; color:var(--color-muted);">视频:首选 Bilibili 直播(下方 iframe);若 iframe 不显示,用 YouTube 链接打开。BVID 当前是占位,实际 BVID 等首次部署时填。</p>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=19&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=19" target="_blank"><strong>▶ YouTube 备链(建议优先点这个)</strong></a></p>
+
+  <h3>下一节预告</h3>
+  <p>本节 MC Exploring Starts <em>仍然</em> 假设 agent 能"<em>任意起点</em>" —— 真实环境的死结。下一节(L5)登场<strong>ε-greedy 策略</strong>:让 \(\pi(a \mid s) > 0\) 对所有 a(soft 策略),具体形式 \(\pi(a \mid s) = 1 - \frac{|\mathcal A| - 1}{|\mathcal A|}\varepsilon\) 给贪心动作,\(\frac{1}{|\mathcal A|}\varepsilon\) 给其他动作。这样<em>一条充分长 episode</em> 就能 visit 每个 \((s, a)\) 多次,无需 exploring starts。L5 重点是 ε-greedy 的<em>分布形态</em> —— 用 distribution-bar 画出 greedy / ε=0.1 / ε=0.5 / uniform 的概率谱,直观看"<em>从最贪到最探</em>" 的连续过渡。L6 把 ε-greedy 嵌入 MC 算法(Algorithm 5.3)+ 全章总结。</p>
+
+  <!-- Bottom nav -->
+  <nav class="lesson-nav">
+    <a href="lesson-03.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-05.html">Next →</a>
+  </nav>
+</div>
+
+<!-- Components -->
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>
