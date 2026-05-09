@@ -17,7 +17,7 @@
   </nav>
 
   <!-- Header -->
-  <p class="kicker">Bilibili P2 · YouTube P2 · Book §1.1-1.4 pp. 1-5</p>
+  <p class="kicker">Bilibili #2 · YouTube #2 · Book §1.1-1.4 pp. 1-5</p>
   <h1>L1: Basic Concepts (P1 - State, action, policy, ...)<small style="color:var(--color-muted); font-weight:400;">  (基本概念(P1):状态、动作与策略)</small></h1>
 
   <!-- §1 Why this lesson -->
@@ -28,7 +28,7 @@
   <!-- §2 核心定义 -->
   <h2>§2 核心定义(直觉先行)</h2>
   <ul>
-    <li><strong>状态 (state)</strong>:agent 此刻"是谁、在哪里"的信息描述。在 grid world 里,就是它当前占据的那一格。所有可能的状态构成 <strong>状态空间 (state space)</strong>,记作 \(\mathcal{S} = \{s_1, s_2, \dots, s_n\}\)。教材原例的 3×3 网格里,\(\mathcal{S} = \{s_1, \dots, s_9\}\)。</li>
+    <li><strong>状态 (state)</strong>:agent 此刻"是谁、在哪里"的信息描述。在 grid world 里,就是它当前占据的那一格。所有可能的状态构成 <strong>状态空间 (state space)</strong>,记作 \(\mathcal{S} = \{s_1, s_2, \dots, s_n\}\)。<strong>本系列统一使用 5×5 网格</strong>(\(n = 25\),\(\mathcal{S} = \{s_1, \dots, s_{25}\}\));原书 §1.2 开篇用的是 3×3,从 ch02 起作者也切到 5×5,我们让 ch01 一开始就和后续对齐。</li>
     <li><strong>动作 (action)</strong>:agent 在某个状态下能做的一个选择。grid world 的标准动作集是 5 个:上、右、下、左、原地不动,记作 \(a_1, a_2, a_3, a_4, a_5\)。所有可能动作构成 <strong>动作空间 (action space)</strong> \(\mathcal{A}\)。注意:不同状态原则上可以有不同的动作空间(如靠墙的格子向墙走会被弹回);本书为简洁起见,统一假设 \(\mathcal{A}(s_i) = \mathcal{A}\) 对所有 \(i\) 成立。</li>
     <li><strong>状态转移 (state transition)</strong>:agent 在状态 \(s\) 下执行动作 \(a\),环境把它送到下一个状态 \(s&#39;\) 的过程。直觉:"我做了这件事,世界变成什么样"。一般写成条件概率 \(p(s&#39;\mid s, a)\):在 \(s\) 做 \(a\) 后到达 \(s&#39;\) 的概率。</li>
     <li><strong>策略 (policy)</strong>:agent 的"行动手册" —— 告诉它在每个状态下,下一步该按什么概率挑哪个动作。数学上,策略是一个条件概率分布 \(\pi(a \mid s)\)。<em>关键认知</em>:策略不是"一个动作",而是"每个状态对应一个动作分布"。这是为什么 §4 我们要用 <strong>distribution-bar</strong> 把它画出来。</li>
@@ -71,18 +71,18 @@
 
   <!-- §4 Grid-world 例子 -->
   <h2>§4 Grid-world 实例化</h2>
-  <p>用本书贯穿全程的网格世界把上面的符号"具体化"。原书在 §1.2 用的是 3×3 网格(9 个 state);从 ch02 开始,作者切换到 5×5 用来演示更复杂的策略 —— 我们在所有 lesson 里统一使用 5×5 版本,以便概念在后续 50 节课里完全对齐。</p>
-  <p><strong>设定:</strong> 5 行 5 列网格,目标格 target = \((3, 2)\)(行 3、列 2,从 0 开始数),禁区 forbidden = \(\{(1,1), (2,1), (2,2), (1,3), (3,3)\}\)。下面这张图同时展示了一个确定性策略(每格一根箭头)以及从 \((0,0)\) 出发到达 target 的一条 trajectory:</p>
+  <p>用本书贯穿全程的网格世界把上面的符号"具体化"。下面这张图同时展示了一个确定性策略(每格一根箭头;<strong>forbidden 和 target 格上不画箭头</strong>,因为前者是惩罚区、后者是终态)以及从 \((0,0)\) 出发到达 target 的一条 trajectory。注意:箭头方向随 agent 的<strong>策略</strong>而变,trajectory 是<strong>实际走出来</strong>的路径 —— 二者一致才说明 agent 是按这个策略行动。</p>
+  <p><strong>设定:</strong> 5 行 5 列网格,目标格 target = \((3, 2)\)(行 3、列 2,从 0 开始数),禁区 forbidden = \(\{(1,1), (2,1), (2,2), (1,3), (3,3)\}\)。trajectory 走的是"先沿第 0 列下到第 3 行,再向右两步"的路径 \((0,0) \to (1,0) \to (2,0) \to (3,0) \to (3,1) \to (3,2)\),正好对应箭头里被走过的那 5 步:</p>
   <div data-component="gridworld" id="gw-ch01-l01" data-config='{
     "rows": 5, "cols": 5,
     "target": [3, 2],
     "forbidden": [[1,1],[2,1],[2,2],[1,3],[3,3]],
     "agent": [0, 0],
     "policy": [
-      ["→","↓","↓","↓","↓"],
-      ["→","→","↓","↓","↓"],
-      ["→","→","→","→","↓"],
-      ["→","→","→","↓","←"],
+      ["↓","↓","↓","↓","↓"],
+      ["↓","","↓","","↓"],
+      ["↓","","","→","↓"],
+      ["→","→","","","←"],
       ["→","→","↑","←","←"]
     ],
     "trajectory": [[0,0],[1,0],[2,0],[3,0],[3,1],[3,2]]
