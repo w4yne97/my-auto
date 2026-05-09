@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>时序差分(P2):TD 算法介绍 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch07-l02" data-est-minutes="20">
+<div class="container">
+
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.7 / Lesson 2</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <p class="kicker">Bilibili #30 · YouTube #30 · Book §7.1.2 pp. 128-130</p>
+  <h1>L2: TD Algorithm Introduction<small style="color:var(--color-muted); font-weight:400;">  (TD 算法 + δ_t 灵魂表达式)</small></h1>
+
+  <h2>§1 Why this lesson</h2>
+  <p>L1 把 (7.3) 写成"<em>估 \(\mathbb E[R + \gamma v(X&#39;)]\)</em>" 的递推种子。本节(教材 §7.1.2)<strong>把它正式落成 TD(0) 算法</strong>,并引入<em>整个 Ch.7-Ch.10 最常被引用的单一表达式</em>:<strong>TD error \(\delta_t = r_{t+1} + \gamma V(s_{t+1}) - V(s_t)\)</strong>。后续 Sarsa、Expected Sarsa、Q-learning 都只是 \(\delta_t\) 中"<em>下一状态 value 怎么算</em>" 的<em>变奏</em> —— 所以 \(\delta_t\) 在本节<em>定义一次,Ch.7-Ch.8 反复复用</em>。</p>
+  <p>核心 takeaway:<strong>(a)</strong> TD(0) 更新公式:\(V(s_t) \leftarrow V(s_t) + \alpha_t \delta_t\)。<strong>(b)</strong> \(\delta_t\) 是<em>带噪 Bellman 残差</em>:\(\mathbb E[\delta_t | S_t = s] = v_\pi(s) - V(s) - 0\)?不,准确说 \(\mathbb E[\delta_t | S_t = s, V] = (T_\pi V)(s) - V(s)\),即<em>当前估计与 Bellman 算子一次作用后的差</em>。\(\delta_t \to 0\) ⇔ \(V = T_\pi V\) ⇔ \(V = v_\pi\)。<strong>(c)</strong> 算法 update 等价于"<em>把 \(V(s_t)\) 往 target \(r_{t+1} + \gamma V(s_{t+1})\) 移动 \(\alpha_t\) 比例</em>"。<strong>(d)</strong> 与 MC 的对照:MC 用 \(G_t\) 取代 target,target 无 bias 但需等 episode。</p>
+
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>TD(0) 算法(教材 (7.5)/(7.6))</strong>:每收一条样本 \((s_t, r_{t+1}, s_{t+1})\),做 \(V(s_t) \leftarrow V(s_t) + \alpha_t [r_{t+1} + \gamma V(s_{t+1}) - V(s_t)]\)。<em>未访问到的状态<em>不更新</em></em>。</li>
+    <li><strong>TD target(教材 §7.1.2)</strong>:\(\bar V_t \doteq r_{t+1} + \gamma V(s_{t+1})\)。"<em>一步 reward + 下一状态当前估计</em>"。这是 Bellman 期望右端的<em>一次单样本估计</em>。</li>
+    <li><strong>TD error \(\delta_t\)(全章灵魂)</strong>:\(\boxed{\delta_t \doteq r_{t+1} + \gamma V(s_{t+1}) - V(s_t)}\)。即<em>当前 target 与当前估计的差</em>。<em>4 个组件</em>:\(r_{t+1}\)(即时 reward)、\(\gamma V(s_{t+1})\)(打折后的下一状态值)、\(V(s_t)\)(当前估计)、\(\delta_t\) 是它们的代数差。</li>
+    <li><strong>性质 1:零均值条件</strong>。\(\mathbb E_\pi[\delta_t | S_t = s] = (T_\pi V)(s) - V(s)\)。<em>当 \(V = v_\pi\)</em> 时,\(T_\pi v_\pi = v_\pi\) ⇒ \(\mathbb E[\delta_t] = 0\)。所以 \(\delta_t\) 是<em>"<em>偏离 \(v_\pi\) 的带噪测度</em>"</em>。</li>
+    <li><strong>性质 2:更新方向</strong>。\(\delta_t > 0\) ⇒ target 比当前估计大 ⇒ \(V(s_t)\) 上调;\(\delta_t < 0\) ⇒ 下调。这与 SGD 沿负梯度的更新结构相同(L3 揭示具体 \(g\))。</li>
+    <li><strong>"未访问状态不动"</strong>。TD 是<em>状态局部</em> 更新。每步只改 \(V(s_t)\) 一格。这与 Ch.4 DP 的<em>同步全表更新</em> 形成结构对比 —— 本质是<em>用样本接触状态空间</em>。</li>
+  </ul>
+
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节核心是<strong>\(\delta_t\) 的定义</strong>:整个 Ch.7-Ch.8 反复复用,值得一次性把 4 个组件画清。</p>
+
+  <p><strong>公式:TD error \(\delta_t\) 与 TD(0) 更新</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\delta_t \\doteq \\underbrace{r_{t+1}}_{\\text{即时 reward}} + \\underbrace{\\gamma V(s_{t+1})}_{\\text{下一估计(打折)}} - \\underbrace{V(s_t)}_{\\text{当前估计}};\\quad V(s_t) \\leftarrow V(s_t) + \\alpha_t \\delta_t",
+    "annotations": [
+      {"key": "r", "label": "组件 1:即时 reward r_{t+1}", "description": "环境单步真实反馈,无 bias 无估计。这是 TD 公式中&#39;唯一来自真世界&#39; 的部分。"},
+      {"key": "next_V", "label": "组件 2:γ V(s_{t+1})", "description": "对下一状态的&#39;当前估计&#39;,打了折扣 γ。bootstrap 来源:这一项把&#39;未来的不确定&#39; 压成&#39;一个数&#39;,代价是引入 bias(V 不一定准)。"},
+      {"key": "cur_V", "label": "组件 3:V(s_t)", "description": "当前对 s_t 的估计。被减项,即&#39;现在以为是多少&#39;。"},
+      {"key": "delta_meaning", "label": "δ_t 的含义", "description": "&#39;target 与当前估计的差&#39;。δ_t > 0 ⇒ V(s_t) 偏低,该上调;δ_t < 0 ⇒ 偏高,该下调。零均值下 V 已对齐 v_π。"},
+      {"key": "update", "label": "更新规则", "description": "V(s_t) ← V(s_t) + α_t δ_t。形态等价于 SGD:沿&#39;负 g̃&#39; 走步,其中 g̃ = -δ_t = V(s_t) − [r + γ V(s_{t+1})](L3 揭示这是 g(V) = V − T_π V 的带噪估计)。"},
+      {"key": "reuse", "label": "Ch.7-Ch.8 复用", "description": "Sarsa: δ_t 中 V(s_{t+1}) → Q(s_{t+1}, a_{t+1});Q-learning: → max_a Q(s_{t+1}, a);Expected Sarsa: → Σ_a π(a|s_{t+1}) Q(s_{t+1}, a)。&#39;变化只在 δ_t 的下一状态项&#39;。"}
+    ]
+  }'></div>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>把 TD(0) 写成 RM 形态</em>。L1 §3 已铺好:令 \(g(V)(s) \doteq V(s) - (T_\pi V)(s) = V(s) - \mathbb E[r_{t+1} + \gamma V(s_{t+1}) | S_t = s]\)。<em>带噪估计</em> \(\tilde g_t \doteq V(s_t) - [r_{t+1} + \gamma V(s_{t+1})] = -\delta_t\)。代入 RM:\(V(s_t) \leftarrow V(s_t) - \alpha_t \tilde g_t = V(s_t) + \alpha_t \delta_t\)。这<em>正</em> 是 TD(0)。所以 <strong>TD(0) ≡ RM 在 Bellman 算子的固定点上</strong>。
+  </div>
+
+  <div class="callout">
+    <strong>Step 2.</strong> <em>\(\delta_t\) 的<em>条件零均值</em></em>。给定 \(S_t = s\) 与当前 \(V\),\(R_{t+1}\) 与 \(S_{t+1}\) 由环境分布 \(p(s&#39;,r|s,\pi(s))\) 生成。\(\mathbb E[\delta_t | S_t = s] = \mathbb E[r + \gamma V(s&#39;) | s] - V(s) = (T_\pi V)(s) - V(s)\)。<em>当 \(V = v_\pi\)</em> 时 \(T_\pi v_\pi = v_\pi\) ⇒ 零均值。所以 \(\delta_t\) 是<em>"<em>偏离 \(v_\pi\)</em>" 的带噪诊断量</em>,RM 第三条件天然满足。
+  </div>
+
+  <div class="callout">
+    <strong>Step 3.</strong> <em>\(\delta_t\) 在 Ch.7 全章是<em>名词</em></em>。后面所有讨论"<em>哪种 \(\delta\)</em>" 时,只需指明<em>下一状态 value 怎么算</em>:Sarsa \(= Q(s_{t+1}, a_{t+1})\)、Expected Sarsa \(= \sum_a \pi(a|s_{t+1}) Q\)、Q-learning \(= \max_a Q\)、TD(0) \(= V(s_{t+1})\)。<em>4 个算法,4 个 \(\delta\) 变体,1 个共享骨架</em>。这是 Ch.7 给学习者最大的"<em>认知压缩</em>"。
+  </div>
+
+  <h2>§4 数值演示:TD(0) 单步更新如何推动 V 向 v_π 走</h2>
+  <p>本节<strong>不用 grid-world</strong>(纯算法骨架,空间布局不增信息)。用 iteration-stepper 把 6 步 \((s_t, r_{t+1}, s_{t+1})\) 样本逐帧展示,每帧给出 \(\delta_t\) 与 \(V\) 表更新,直观看 \(V\) 收敛到 \(v_\pi\) 的过程。</p>
+
+  <div data-component="iteration-stepper" data-config='{
+    "steps": [
+      {
+        "label": "Init: V(s) = 0 ∀ s",
+        "note": "初始所有状态值为 0。准备消费样本流。"
+      },
+      {
+        "label": "t=0: 样本 (s_A, r=1, s_B);γ=0.9",
+        "note": "δ_0 = 1 + 0.9·0 − 0 = 1。V(s_A) ← 0 + 0.1·1 = 0.1。注意只有 V(s_A) 被更新;V(s_B) 不动。"
+      },
+      {
+        "label": "t=1: 样本 (s_B, r=0, s_T) 终态 V=0",
+        "note": "δ_1 = 0 + 0.9·0 − 0 = 0。V(s_B) 不变。即时 reward 与 bootstrap 项均为 0,δ_1 自然零。"
+      },
+      {
+        "label": "t=2: 样本 (s_A, r=1, s_B) 重访 A",
+        "note": "δ_2 = 1 + 0.9·0 − 0.1 = 0.9。V(s_A) ← 0.1 + 0.1·0.9 = 0.19。比第一次更新少了 0.01,因 bootstrap 项还是 0(V(s_B) 仍未变)。"
+      },
+      {
+        "label": "t=3: 样本 (s_B, r=0.5, s_A) γV(s_A)=0.171",
+        "note": "δ_3 = 0.5 + 0.9·0.19 − 0 = 0.671。V(s_B) ← 0 + 0.1·0.671 = 0.0671。&#39;V(s_A) 之前的更新&#39; 经 γ 折扣传到了 V(s_B) 的 target —— 这就是 bootstrap 的&#39;接龙&#39;。"
+      },
+      {
+        "label": "t=4: 样本 (s_A, r=1, s_B);V(s_B)=0.0671",
+        "note": "δ_4 = 1 + 0.9·0.0671 − 0.19 = 0.870。V(s_A) ← 0.19 + 0.087 = 0.277。注意 bootstrap 项不再为 0,V(s_A) 的 target 受 V(s_B) 已更新值影响 —— 信息从 s_B 反向传给 s_A。"
+      },
+      {
+        "label": "长期收敛预告",
+        "note": "继续跑 1000 步,V(s_A) → v_π(s_A),V(s_B) → v_π(s_B)。L3 给收敛严证。&#39;每一步只动一格&#39;,但通过 bootstrap 反复接龙,信息渐渐充满整个状态空间。"
+      }
+    ]
+  }'></div>
+
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"TD(0) 收敛快是因为更新次数多。"<br>
+    <strong>实际上:</strong><strong>真正原因是<em>信息的局部传播</em></strong>。每步只改 \(V(s_t)\) 一格,但 \(V(s_t)\) 一动,下次 \(s_{t-1}\) 经过时<em>它的 target</em>(\(r + \gamma V(s_t)\))就更新了 —— bootstrap 让<em>已学到的信息沿轨迹反向接龙</em>。MC 没有这种接龙(target 只用真采样),因此 long horizon 任务里 TD 信息利用率几倍于 MC。<br>
+    <strong>因为:</strong>"<em>更新次数</em>" 是表象;"<em>每次更新带的信息含量</em>" 才是本质。TD 的 \(\delta_t\) 把<em>已经学到的下一状态估计</em> 也用上了,等于"<em>每步用的不止当前 reward,还有过去所有步的累积学习</em>"。这是 RL 中"<em>样本效率</em>" 的<em>结构来源</em>。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"\(\delta_t = 0\) 就代表算法收敛。"<br>
+    <strong>实际上:</strong><strong>需要<em>对所有 \(s\) 经常性\(\delta_t \to 0\)</em></strong>。单条样本 \(\delta_t = 0\) 可能只是巧合(reward 噪声平衡)。算法收敛要求<em>条件期望</em> \(\mathbb E[\delta_t | S_t = s, V] \to 0\) 对所有 \(s\) —— 即 \(V = T_\pi V\) ⇔ \(V = v_\pi\)。这是 Bellman 算子固定点的<em>同义</em> 表述,L3 用 RM 严证。<br>
+    <strong>因为:</strong>"<em>样本 \(\delta\)</em>" 与"<em>期望 \(\delta\)</em>" 不同。前者带噪,后者无噪;算法看的是<em>长期平均</em>。这条区分是 RM 第三条件\(\mathbb E[\eta|\mathcal H]=0\)的本质要求,Ch.6 L7 已强调。
+  </div>
+
+  <h2>§6 自检 + 视频 + 下一节</h2>
+  <details>
+    <summary><strong>Q1.</strong> 写出 \(\delta_t\) 的 4 个组件,并说明 \(\delta_t > 0\) 时 \(V(s_t)\) 的变化方向。</summary>
+    <p><strong>A.</strong> \(\delta_t = r_{t+1} + \gamma V(s_{t+1}) - V(s_t)\)。组件:即时 reward \(r_{t+1}\);打折下一估计 \(\gamma V(s_{t+1})\);当前估计 \(V(s_t)\)。\(\delta_t > 0\) ⇒ target 大于当前估计 ⇒ \(V(s_t)\) 通过 \(V \leftarrow V + \alpha\delta\) <em>上调</em>。<em>反之</em> 下调。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> 把 TD(0) 写成 RM 形态:找出 \(g\)、\(\tilde g\)、\(\eta\)。</summary>
+    <p><strong>A.</strong> \(g(V)(s) = V(s) - (T_\pi V)(s) = V(s) - \mathbb E[r + \gamma V(s&#39;) | s]\),其根 \(V^* = v_\pi\)。\(\tilde g_t = V(s_t) - [r_{t+1} + \gamma V(s_{t+1})] = -\delta_t\)。噪声 \(\eta_t = \tilde g_t - g(V)(s_t) = (T_\pi V)(s_t) - [r_{t+1} + \gamma V(s_{t+1})]\),条件零均值。RM:\(V \leftarrow V - \alpha\tilde g = V + \alpha\delta\)。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=30&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=30" target="_blank">YouTube 备链</a></p>
+
+  <h3>下一节预告</h3>
+  <p>L2 给出 TD(0) 与 \(\delta_t\) 的<em>定义</em>。<strong>L3(教材 §7.1.3)</strong> 用 Ch.6 RM 框架直接证明 TD(0) 收敛:把 \(g(V) = V - T_\pi V\) 与 \(\tilde g\) 代入 Theorem 6.1/6.3,只需验证<em>步长两条件</em>、<em>\(\eta\) 条件零均值方差有界</em>、<em>\(g\) 单调有界</em> 三件事。Ch.6 投资在这里第一次<em>立刻</em> 收回。</p>
+
+  <nav class="lesson-nav">
+    <a href="lesson-01.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-03.html">Next →</a>
+  </nav>
+</div>
+
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>
