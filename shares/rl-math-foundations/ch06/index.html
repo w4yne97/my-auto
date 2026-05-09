@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>Ch.6 随机近似 — RL Math Foundations</title>
+<link rel="stylesheet" href="../_assets/css/style.css">
+</head>
+<body data-chapter-id="ch06">
+<div class="container">
+
+  <nav class="lesson-nav">
+    <a href="../index.html">← Master Index</a>
+    <span>Ch.6 of 10</span>
+  </nav>
+
+  <p class="kicker">Chapter 6</p>
+  <h1>Stochastic Approximation <small style="font-weight:400; color:var(--color-muted);">(随机近似)</small></h1>
+
+  <p>数学工具章。系统讲 RM 算法、Dvoretzky 收敛定理、SGD,为后面 TD、值函数近似、策略梯度提供「为什么会收敛」的统一理论框架。</p>
+
+  <h2>本章 lesson 列表</h2>
+  <ol id="lesson-list"></ol>
+
+  <nav class="lesson-nav">
+    <a href="../ch05/index.html">← Prev Chapter</a>
+    <a href="../index.html">Master Index</a>
+    <a href="../ch07/index.html">Next Chapter →</a>
+  </nav>
+</div>
+
+<script src="../_assets/js/progress.js"></script>
+<script>
+(async () => {
+  const r = await fetch('../_data/lessons.json');
+  const data = await r.json();
+  const ch = data.chapters.find(c => c.id === document.body.dataset.chapterId);
+  const list = document.getElementById('lesson-list');
+  ch.lessons.forEach(l => {
+    const li = document.createElement('li');
+    const a = document.createElement('a');
+    a.href = `lesson-${String(l.lesson_number).padStart(2,'0')}.html`;
+    a.textContent = `${l.title_zh} (${l.title_en})`;
+    li.appendChild(a);
+    if (Progress.isComplete(l.id)) {
+      const tag = document.createElement('span');
+      tag.textContent = ' ✓';
+      tag.style.color = 'var(--color-success)';
+      li.appendChild(tag);
+    }
+    const meta = document.createElement('div');
+    meta.style.fontSize = '0.85rem';
+    meta.style.color = '#666';
+    meta.textContent = `${l.teaser} · ${l.est_minutes} 分钟 · 书 §${l.book_section}`;
+    li.appendChild(meta);
+    list.appendChild(li);
+  });
+})();
+</script>
+</body>
+</html>

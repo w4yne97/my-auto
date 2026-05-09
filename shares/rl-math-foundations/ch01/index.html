@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>Ch.1 基本概念 — RL Math Foundations</title>
+<link rel="stylesheet" href="../_assets/css/style.css">
+</head>
+<body data-chapter-id="ch01">
+<div class="container">
+
+  <nav class="lesson-nav">
+    <a href="../index.html">← Master Index</a>
+    <span>Ch.1 of 10</span>
+  </nav>
+
+  <p class="kicker">Chapter 1</p>
+  <h1>Basic Concepts <small style="font-weight:400; color:var(--color-muted);">(基本概念)</small></h1>
+
+  <p>全书的术语奠基章节。用一个 grid world 把 state / action / policy / reward / return / MDP 这些 RL 词汇全部装进同一个具体场景,后面九章所有公式都会回引这些定义。</p>
+
+  <h2>本章 lesson 列表</h2>
+  <ol id="lesson-list"></ol>
+
+  <nav class="lesson-nav">
+    <a href="../index.html">← Prev Chapter</a>
+    <a href="../index.html">Master Index</a>
+    <a href="../ch02/index.html">Next Chapter →</a>
+  </nav>
+</div>
+
+<script src="../_assets/js/progress.js"></script>
+<script>
+(async () => {
+  const r = await fetch('../_data/lessons.json');
+  const data = await r.json();
+  const ch = data.chapters.find(c => c.id === document.body.dataset.chapterId);
+  const list = document.getElementById('lesson-list');
+  ch.lessons.forEach(l => {
+    const li = document.createElement('li');
+    const a = document.createElement('a');
+    a.href = `lesson-${String(l.lesson_number).padStart(2,'0')}.html`;
+    a.textContent = `${l.title_zh} (${l.title_en})`;
+    li.appendChild(a);
+    if (Progress.isComplete(l.id)) {
+      const tag = document.createElement('span');
+      tag.textContent = ' ✓';
+      tag.style.color = 'var(--color-success)';
+      li.appendChild(tag);
+    }
+    const meta = document.createElement('div');
+    meta.style.fontSize = '0.85rem';
+    meta.style.color = '#666';
+    meta.textContent = `${l.teaser} · ${l.est_minutes} 分钟 · 书 §${l.book_section}`;
+    li.appendChild(meta);
+    list.appendChild(li);
+  });
+})();
+</script>
+</body>
+</html>
