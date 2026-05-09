@@ -81,14 +81,26 @@ def validate_lesson_html(path: Path) -> list[LessonHtmlIssue]:
 
 
 def validate_internal_links(root: Path) -> list[BrokenLinkIssue]:
+    """Scan all .html files under root for broken relative links.
+
+    Skips template files (which have unfilled {{...}} placeholders) and
+    skips hrefs that look like template/JS interpolation (containing {{ or ${).
+    """
     issues: list[BrokenLinkIssue] = []
-    html_files = list(root.rglob("*.html"))
+    html_files = [
+        f for f in root.rglob("*.html")
+        if "template" not in f.name.lower()
+    ]
     for hf in html_files:
         text = hf.read_text(errors="ignore")
         for href in re.findall(r'href="([^"]+)"', text):
             if href.startswith(("http://", "https://", "mailto:", "//", "#")):
                 continue
             if href.startswith("data:"):
+                continue
+            # Skip template / JS interpolation placeholders; these are
+            # rendered at runtime or filled by codegen, not real refs.
+            if "{{" in href or "${" in href:
                 continue
             target = (hf.parent / href).resolve()
             target = Path(str(target).split("#", 1)[0])

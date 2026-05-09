@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>附录导读 — RL Math Foundations</title>
+<link rel="stylesheet" href="../_assets/css/style.css">
+</head>
+<body>
+<div class="container">
+
+  <nav class="lesson-nav">
+    <a href="../index.html">← Master Index</a>
+    <span>Appendix</span>
+  </nav>
+
+  <p class="kicker">Appendix · Book pp. 237-272</p>
+  <h1>附录:数学预备 <small style="font-weight:400; color:var(--color-muted);">(Mathematical Preliminaries)</small></h1>
+
+  <div class="callout">
+    <strong>关于翻译策略:</strong>本系列正文使用中文 + 英文术语保留,但<strong>附录的数学预备(概率论 / 线性代数 / 凸优化基础)不在本系列翻译范围内</strong>——这些是工科常识性内容,中文优秀教材已经很多。本页只列附录的子主题与原书页码,需要回顾时直接翻原 PDF。
+  </div>
+
+  <h2>附录子主题(原书 pp. 237-272)</h2>
+  <ol>
+    <li><strong>Probability theory basics</strong>(概率论基础)— 教材 §A.1,pp. 237-244。覆盖事件 / 条件概率 / 期望 / 方差 / 大数定律 / 中心极限定理。</li>
+    <li><strong>Stochastic processes</strong>(随机过程)— 教材 §A.2,pp. 245-251。重点是 Markov chain 的基本性质、平稳分布、收敛速度——本书 ch.6 (RM) 与 ch.7 (TD) 多次回引。</li>
+    <li><strong>Linear algebra essentials</strong>(线性代数要点)— 教材 §A.3,pp. 252-260。矩阵特征值 / 谱半径 / 范数等价 / 收缩映射定理(Banach Fixed-Point Theorem)——这是 ch.3 BOE 收敛证明的关键引理。</li>
+    <li><strong>Optimization preliminaries</strong>(优化基础)— 教材 §A.4,pp. 261-268。凸函数 / 一阶/二阶条件 / 梯度下降收敛性——ch.6/ch.9 反复用到。</li>
+    <li><strong>Useful inequalities</strong>(常用不等式)— 教材 §A.5,pp. 269-272。Jensen / Hoeffding / Markov / Chebyshev——ch.5 (MC) 的样本复杂度分析依赖这些。</li>
+  </ol>
+
+  <h2>什么时候需要回这里</h2>
+  <p>正文大多数推导都是自包含的,但以下几个高密度数学环节强烈建议先回查附录:</p>
+  <ul>
+    <li>读 <strong>ch.3 BOE</strong> 的 <em>压缩映射存在唯一性证明</em> 之前,补 §A.3 收缩映射定理。</li>
+    <li>读 <strong>ch.6 Robbins-Monro</strong> 的 <em>步长条件 \(\sum \alpha_t = \infty,\ \sum \alpha_t^2 < \infty\)</em> 之前,补 §A.2 随机过程收敛。</li>
+    <li>读 <strong>ch.9 策略梯度定理</strong> 的 <em>对数导数技巧</em> 之前,补 §A.1 期望与梯度的可交换条件。</li>
+  </ul>
+
+  <div class="callout">
+    <strong>未来可能的扩展(Plan 2 / M7):</strong>当前页只是导读骨架。如果你在使用过程中希望某个附录子主题获得本系列的中文教学版(对照正文 lesson 的写法),可以提 issue;Plan 2 会评估"哪些数学预备值得详写、哪些直接指原书"。
+  </div>
+
+  <nav class="lesson-nav">
+    <a href="../ch10/index.html">← Ch.10 Actor-Critic</a>
+    <a href="../index.html">Master Index</a>
+    <span></span>
+  </nav>
+</div>
+</body>
+</html>
