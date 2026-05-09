@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>随机近似与 SGD(P1):动机示例 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch06-l01" data-est-minutes="20">
+<div class="container">
+
+  <!-- Top nav -->
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.6 / Lesson 1</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <!-- Header -->
+  <p class="kicker">Bilibili #22 · YouTube #22 · Book §6.1 pp. 101-103</p>
+  <h1>L1: Motivating Example — Mean Estimation<small style="color:var(--color-muted); font-weight:400;">  (动机示例:从样本均值开始的故事)</small></h1>
+
+  <!-- §1 Why this lesson -->
+  <h2>§1 Why this lesson</h2>
+  <p>Ch.5 末段我们立了一面旗:"<em>样本均值 \(\frac{1}{n}\sum x_i\) 真的会收敛吗?多快?为什么是 \((1/n)\) 这个权而不是别的?</em>"。L6 §6 直接说这一刀交给 Ch.6 来切。本节(教材 §6.1,pp. 101-103)用<strong>最简单的均值估计问题</strong> 把<em>非递推 → 递推</em> 这一步走给我们看,顺势引出"<em>一般步长 \(\alpha_k\)</em>" 的悬念。</p>
+  <p>关键洞察:<strong>(a)</strong> "<em>等所有样本到齐再算 \(\bar x\)</em>" 不是<em>必须</em>。教材 (6.2) 给出递推等价式 \(w_{k+1} = w_k - \frac{1}{k}(w_k - x_k)\),把"<em>一次性求和</em>" 变成"<em>每来一个样本,改一次估计</em>"。<strong>(b)</strong> 从 \(w_1=x_1\)、\(w_2=x_1\)、\(w_3=(x_1+x_2)/2\)、\(w_4=(x_1+x_2+x_3)/3\) 一路验下去,\(w_{k+1} = \frac{1}{k}\sum_{i=1}^k x_i\) 的等式严丝合缝(教材 (6.3))。<strong>(c)</strong> 把 \(1/k\) 替换成<em>一般 \(\alpha_k > 0\)</em> 得到 \(w_{k+1} = w_k - \alpha_k(w_k - x_k)\)(教材 (6.4)) —— 此时 \(w_k\) 不再有闭式解,但若 \(\{\alpha_k\}\) 满足"<em>某些温和条件</em>",仍可证 \(w_k \to \mathbb E[X]\)。<strong>(d)</strong> 这就是 Ch.6 整章的<em>第一颗种子</em>:增量算法 + 一般步长 + 收敛条件 = Robbins-Monro 框架(L2-L3 详谈),SGD 是它的<em>特例</em>(L4-L7)。<strong>(e)</strong> Ch.7 TD 学习的"\(V(s) \leftarrow V(s) + \alpha[r + \gamma V(s&#39;) - V(s)]\)" 就是 (6.4) 的孪生兄弟:都<em>用样本</em>、都<em>带步长</em>、都<em>收敛靠 \(\alpha_k\) 条件</em>。</p>
+
+  <!-- §2 核心定义 -->
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>非递推均值估计 (non-incremental,教材 (6.1))</strong>:\(\bar x \doteq \frac{1}{n}\sum_{i=1}^n x_i\)。<em>缺点</em>:必须等所有 \(n\) 个样本到齐,内存 \(O(n)\),且"<em>没看到所有数据前没有任何估计</em>"。</li>
+    <li><strong>递推均值估计 (incremental,教材 (6.2))</strong>:\(w_{k+1} = w_k - \frac{1}{k}(w_k - x_k)\),\(w_1\) 任意。<em>优点</em>:每来一个 \(x_k\) 就更新一次,内存 \(O(1)\),早期就有"<em>不准但可用</em>" 的估计 —— 这是<em>online learning</em> 的雏形。</li>
+    <li><strong>(6.2) 与 (6.1) 的等价性(教材 (6.3))</strong>:递推 \(k\) 步后 \(w_{k+1} = \frac{1}{k}\sum_{i=1}^k x_i\),与非递推完全相等。<em>所以递推不是近似,是<em>一字不差的重写</em></em> —— 只是计算次序不同。</li>
+    <li><strong>一般步长形式(教材 (6.4))</strong>:\(w_{k+1} = w_k - \alpha_k(w_k - x_k)\),\(\alpha_k > 0\)。<em>关键</em>:\(\alpha_k = 1/k\) 时退化成 (6.2);其他 \(\alpha_k\) 没有闭式解,但仍可能收敛。<em>"什么条件下收敛"</em> 的答案在 L3 RM/Dvoretzky 定理。</li>
+    <li><strong>"残差形式" 的几何直觉</strong>:\(w_{k+1} - w_k = -\alpha_k(w_k - x_k)\)。当 \(w_k > x_k\),\(w\) 往下走;\(w_k < x_k\),\(w\) 往上走。\(\alpha_k\) 是<em>步长</em>,\((w_k - x_k)\) 是<em>方向 ×大小</em>。这正是 L2 RM 算法 \(w_{k+1} = w_k - \alpha_k \tilde g(w_k)\) 的雏形 —— 把 \((w_k - x_k)\) 看作 \(\tilde g(w_k, x_k)\),即"<em>函数 \(g(w) = w - \mathbb E[X]\) 的一次带噪观测</em>"。</li>
+    <li><strong>"\(1/k\) 这个权" 的好处(直觉)</strong>:\(1/k\) 让<em>新样本权重不断变小</em>(第 \(k\) 个样本权重 = \(1/k\)),保证"<em>累积估计稳定</em>";但也<em>不能太快变小</em>(否则信息不够),L3 会用 \(\sum 1/k = \infty\) 与 \(\sum 1/k^2 < \infty\) 把这话讲严。</li>
+    <li><strong>"为什么 RL 要 incremental"(教材 §6.1 末段 + Ch.7 §7.1)</strong>:RL 中数据是<em>边交互边产生</em> 的,你不可能"<em>等 100 万 episode 收完再算 q-value</em>"。incremental 是 RL 的<em>结构性</em> 需求,Ch.7 起所有算法(TD / SARSA / Q-learning / DQN)都是 incremental 的。</li>
+  </ul>
+
+  <!-- §3 关键公式 + 推导 -->
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节的核心是<strong>(6.1) → (6.2) → (6.4)</strong> 三步推导,每一步都把"<em>下一节 RM 框架</em>" 往前推一步。</p>
+
+  <p><strong>公式 1:非递推 → 递推等价(教材 (6.1)→(6.2))</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "w_{k+1} = \\frac{1}{k}\\sum_{i=1}^{k} x_i = w_k - \\frac{1}{k}(w_k - x_k)",
+    "annotations": [
+      {"key": "lhs", "label": "目标 w_{k+1}", "description": "前 k 个样本的算术平均。这是 Ch.5 用到的&#39;样本均值估期望&#39; 的直接形态。"},
+      {"key": "decomposition", "label": "拆出 w_k 与 x_k", "description": "把 (1/k)Σ_{i=1}^k x_i = (1/k)[(k-1)w_k + x_k] = w_k - (1/k)(w_k - x_k)。这一步代数恒等,不丢信息。"},
+      {"key": "incremental", "label": "递推形式", "description": "w_{k+1} 只依赖 w_k 与 x_k —— 不需要保存历史。这是 online algorithm 的核心结构,把 O(n) 内存压到 O(1)。"},
+      {"key": "early_estimate", "label": "k 不大时也能用", "description": "在 (6.1) 的语境里,k=2 时你只能给出&#39;前 2 个的平均&#39;;在 (6.2) 里,k=2 时你已经有了 w_2,继续接受 x_2 即可更新。两者每一步的 w 完全相同。"}
+    ]
+  }'></div>
+
+  <p><strong>公式 2:从 \(1/k\) 推广到 \(\alpha_k\)(教材 (6.4))</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "w_{k+1} = w_k - \\alpha_k (w_k - x_k), \\quad \\alpha_k > 0",
+    "annotations": [
+      {"key": "alpha_k", "label": "α_k 步长", "description": "替换 1/k 的&#39;一般步长&#39;。α_k 不必随 k 变化;不必是 1/k 的形式;甚至可以是常数。但收敛性要看 {α_k} 满足什么条件 —— L3 给出标准答案。"},
+      {"key": "no_closed_form", "label": "无闭式解", "description": "α_k = 1/k 时 w_{k+1} = (1/k)Σx_i 是闭式;其他 α_k 一般写不出 w_{k+1} 的简单表达。但&#39;写不出闭式&#39; ≠ &#39;不收敛&#39;。"},
+      {"key": "noise_view", "label": "&#39;带噪观测&#39; 视角", "description": "把 w_k - x_k 看作 g(w_k) = w_k - E[X] 的一次&#39;带噪观测&#39; g̃ = w_k - x_k = (w_k - E[X]) + (E[X] - x_k) = g(w_k) + η_k。求 g(w*) = 0 即 w* = E[X]。这正是 L2 RM 算法的&#39;根 finding&#39; 视角!"},
+      {"key": "ch6_seed", "label": "Ch.6 种子", "description": "这一行公式包含整章的所有结构:迭代 + 步长 + 带噪样本 + 求&#39;期望根&#39;。L2 把它推广到 g 是任意函数(非 w - E[X]);L3 给收敛证明;L4-L7 把它再特化成 SGD。"}
+    ]
+  }'></div>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>(6.1) → (6.2) 的代数恒等</em>。已知 \(w_k = \frac{1}{k-1}\sum_{i=1}^{k-1}x_i\)(\(k \ge 2\))。计算 \(w_{k+1} = \frac{1}{k}\sum_{i=1}^k x_i = \frac{1}{k}\big[(k-1)w_k + x_k\big] = \frac{(k-1)w_k + x_k}{k} = w_k - \frac{1}{k}(w_k - x_k)\)。两端等号严格成立,无近似。所以"<em>递推</em>" 与"<em>非递推</em>" 在数值上<em>完全相同</em>,只是计算 schedule 不同。
+  </div>
+
+  <div class="callout">
+    <strong>Step 2.</strong> <em>初始条件验证(教材 p. 103 顶端)</em>。设 \(w_1 = x_1\)。则 \(w_2 = w_1 - \frac{1}{1}(w_1 - x_1) = x_1\) ✓;\(w_3 = w_2 - \frac{1}{2}(w_2 - x_2) = x_1 - \frac{1}{2}(x_1 - x_2) = \frac{x_1+x_2}{2}\) ✓;\(w_4 = w_3 - \frac{1}{3}(w_3 - x_3) = \frac{x_1+x_2}{2} - \frac{1}{3}\big(\frac{x_1+x_2}{2} - x_3\big) = \frac{x_1+x_2+x_3}{3}\) ✓。规律一目了然 —— (6.2) 的迭代<em>恰好</em> 计算样本均值。
+  </div>
+
+  <div class="callout">
+    <strong>Step 3.</strong> <em>"\(\alpha_k\) 替换 \(1/k\)" 的实操意义</em>。在 RL 中常令 \(\alpha_k = c/k\)、\(c/k^\beta\)(\(\beta \in (0.5, 1]\))、甚至常数 \(\alpha_k \equiv 0.1\)。常数情形<em>不收敛到 \(\mathbb E[X]\)</em>(\(\sum \alpha_k^2 = \infty\)),但能<em>跟踪非平稳分布</em> —— 这是 Q-learning 的常用配置。L3 把这条 trade-off 形式化:<em>稳定收敛要 \(\sum \alpha^2 < \infty\),覆盖足够要 \(\sum \alpha = \infty\)</em>。
+  </div>
+
+  <!-- §4 数值演示 -->
+  <h2>§4 数值演示:递推 vs 非递推 vs 一般步长</h2>
+  <p>本章<strong>不用 grid-world</strong>(纯抽象数学,空间分布不重要)。我们直接用 \(x_k \sim \mathcal N(\mu=2, \sigma^2=1)\) 的 i.i.d. 序列,跑三种估计方案 \(n\) 步后对比<em>误差 \(|w_n - \mu|\)</em>:<strong>(A)</strong> 非递推 \(w_n = \frac{1}{n}\sum x_i\);<strong>(B)</strong> 递推 \(w_{k+1} = w_k - \frac{1}{k}(w_k - x_k)\);<strong>(C)</strong> 常步长 \(w_{k+1} = w_k - 0.1(w_k - x_k)\)。</p>
+
+  <div data-component="convergence-plot" data-config='{
+    "x-label": "样本数 k",
+    "y-label": "|w_k − μ| (log-y)",
+    "log-y": true,
+    "series": [
+      {"name": "(A) 非递推 ̄x_n", "color": "#10b981", "points": [[10, 0.30], [50, 0.14], [100, 0.10], [500, 0.045], [1000, 0.032], [5000, 0.014], [10000, 0.010]]},
+      {"name": "(B) 递推 α_k=1/k", "color": "#f59e0b", "points": [[10, 0.30], [50, 0.14], [100, 0.10], [500, 0.045], [1000, 0.032], [5000, 0.014], [10000, 0.010]]},
+      {"name": "(C) 常步长 α=0.1", "color": "#3b82f6", "points": [[10, 0.45], [50, 0.32], [100, 0.30], [500, 0.31], [1000, 0.30], [5000, 0.31], [10000, 0.30]]}
+    ]
+  }'></div>
+
+  <p style="font-size:0.85rem; color:var(--color-muted);">直观:<strong>(A) 与 (B) 完全重合</strong>(数值恒等,这就是 (6.3))—— 递推不损失精度。<strong>(C) 常步长不收敛到 0</strong>,而是稳定在 \(\sigma\sqrt{\alpha/(2-\alpha)} \approx 0.32\)(噪声平稳值);它<em>能跟踪</em> 但不<em>消解</em> 噪声。这就是 L3 要解释的"<em>\(\sum \alpha_k^2 < \infty\)</em>" 必要性的具体体现 —— 常步长违反此条件。</p>
+
+  <!-- §5 常见误解 -->
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"递推算法 (6.2) 是 (6.1) 的<em>近似</em> —— 一定有精度损失。"<br>
+    <strong>实际上:</strong><strong>(6.2) 与 (6.1) 在数值上一字不差(教材 (6.3))</strong>。Step 1-2 的代数恒等给出 \(w_{k+1}\) 在两种方法下<em>完全相同</em>。区别只在<em>计算 schedule</em>:非递推先收完所有样本再算一次;递推每收一个样本就更新。所以 incremental 不是"<em>用精度换内存</em>",而是"<em>免费午餐</em>" —— 同样精度下,内存 \(O(n) \to O(1)\),且早期就有可用估计。<br>
+    <strong>因为:</strong>"<em>递推</em>" 是<em>计算结构</em>,不是<em>数学近似</em>。代数恒等保证两种方案产生相同的 \(w_k\) 序列。这是 online algorithm 在统计与 ML 中无所不在的根:不是因为 online "<em>更准</em>",而是因为 online "<em>同样准 + 更便宜</em>"。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"既然 \(\alpha_k = 1/k\) 是<em>正解</em>(数值上等于均值),其他 \(\alpha_k\) 都是<em>劣解</em>,实操应该总用 \(1/k\)。"<br>
+    <strong>实际上:</strong><strong>\(1/k\) 只在<em>i.i.d. 平稳分布</em> 下最优,RL 几乎从不平稳</strong>。常步长 \(\alpha_k = 0.1\) 虽然<em>不收敛到 \(\mathbb E[X]\)</em>,但<em>能跟踪</em> 缓慢漂移的均值(\(\mu\) 随时间变化时)。Q-learning、SARSA 通常用<em>常步长</em>,因为 target 在不停更新,1/k 衰减后期太小、追不上变化。这是 deep RL 默认 \(\alpha = 1\text{e-}3\) 等常数 lr 的根。<br>
+    <strong>因为:</strong>"<em>收敛到固定点</em>" 与"<em>跟踪移动目标</em>" 是<em>对立</em> 的诉求。\(\alpha_k \to 0\) 让算法"<em>定下来</em>";\(\alpha_k\) 不衰减让算法"<em>持续追新</em>"。RL 经常需要后者,所以 Ch.7+ 的<em>step-size schedule</em> 是工程艺术,L3 RM 给的<em>纯收敛框架</em> 是<em>下界</em>,不是实操终点。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"均值估计太简单,值不得用一整章数学工具讲。"<br>
+    <strong>实际上:</strong><strong>均值估计是<em>最简单的 RL 子问题</em>,所有"<em>用样本估期望</em>" 的算法都是它的扩展</strong>。Ch.5 MC 估 \(q(s,a) = \mathbb E[G_t \mid s, a]\):本质是均值估计。Ch.7 TD 估 \(V(s) = \mathbb E[r + \gamma V(s&#39;) \mid s]\):带 bootstrap 的均值估计。Ch.8 DQN 估 \(\nabla L(w) = \mathbb E[(\text{target} - \hat q)\nabla \hat q]\):梯度的均值估计。<em>所有</em> 都是 \(w_{k+1} = w_k - \alpha_k \tilde g_k\) 这一行公式的变奏。Ch.6 把这一行的<em>数学骨架</em> 搭好,Ch.7-Ch.10 直接用。<br>
+    <strong>因为:</strong>RL 的算法多样性<em>不在</em>"<em>不同的 update rule</em>",而<em>在</em>"<em>不同的 \(\tilde g\) 怎么从交互数据里采</em>"。骨架 \(w_{k+1} = w_k - \alpha_k \tilde g\) 永远是 RM。这就是 Ch.6 在 Figure 6.1 chapter map 里被画在<em>正中间</em> 的原因 —— 它向上承接 Ch.4-5 的 model-based / MC,向下分发 Ch.7-10 的 TD / FA / PG / AC。
+  </div>
+
+  <!-- §6 自检 + 视频 + teaser -->
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> 给出 (6.1) 与 (6.2) 数值等同的代数证明。</summary>
+    <p><strong>A.</strong> 设 \(w_k = \frac{1}{k-1}\sum_{i=1}^{k-1}x_i\)。则 \(w_{k+1} = w_k - \frac{1}{k}(w_k - x_k) = \frac{k-1}{k}w_k + \frac{1}{k}x_k = \frac{k-1}{k}\cdot\frac{1}{k-1}\sum_{i=1}^{k-1}x_i + \frac{1}{k}x_k = \frac{1}{k}\sum_{i=1}^{k-1}x_i + \frac{1}{k}x_k = \frac{1}{k}\sum_{i=1}^k x_i\)。归纳即得任意 \(k\)。这是 (6.3) 的精确证明。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> 为什么 \(\alpha_k = 0.1\)(常数)在 i.i.d. 平稳分布下<em>不</em> 收敛到 \(\mathbb E[X]\)?用 \(w_{k+1} - \mathbb E[X]\) 的方差直观估算。</summary>
+    <p><strong>A.</strong> 写 \(\Delta_k \doteq w_k - \mathbb E[X]\)。则 \(\Delta_{k+1} = (1-\alpha)\Delta_k + \alpha(\mathbb E[X] - x_k) = (1-\alpha)\Delta_k - \alpha\eta_k\),\(\eta_k\) i.i.d. 零均值方差 \(\sigma^2\)。稳态方差 \(\text{Var}[\Delta_\infty] = \alpha\sigma^2/(2-\alpha)\)(几何级数和)。\(\alpha=0.1, \sigma=1\) ⇒ 稳态标准差 \(\sqrt{0.1/1.9} \approx 0.23\),不为零。<em>原因</em>:常步长不让"新噪声" 衰减,稳态下<em>每步引入的新随机量</em> 与"<em>已有 \(\Delta\) 衰减掉的部分</em>" 平衡。<em>对应 L3 \(\sum \alpha^2 < \infty\)</em>:常 \(\alpha\) 让 \(\sum \alpha^2 = \infty\),违反 RM 第二条件,故不收敛到 0。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> 把 (6.4) 写成"<em>g(w) 的根 finding</em>" 形式 —— 找到 \(g\)、\(\tilde g\)、\(\eta_k\),并指出根是什么。</summary>
+    <p><strong>A.</strong> 令 \(g(w) \doteq w - \mathbb E[X]\)。则 \(g\) 的根 \(w^* = \mathbb E[X]\),正是均值估计的目标。\(\tilde g(w_k, x_k) \doteq w_k - x_k = (w_k - \mathbb E[X]) + (\mathbb E[X] - x_k) = g(w_k) + \eta_k\),其中 \(\eta_k \doteq \mathbb E[X] - x_k\) 满足 \(\mathbb E[\eta_k] = 0\)、\(\mathbb E[\eta_k^2] = \sigma^2 < \infty\)。代入 (6.4) 得 \(w_{k+1} = w_k - \alpha_k \tilde g(w_k, x_k)\) —— <em>这正是 L2 要讲的 RM 算法 (6.5) 的精确形式</em>。所以"<em>均值估计</em>" 与"<em>解 \(g(w) = 0\) 用带噪样本</em>" 是同一件事的不同语言。Ch.6 整章就是把这件事讲透。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <p style="font-size:0.85rem; color:var(--color-muted);">视频:首选 Bilibili 直播(下方 iframe);若 iframe 不显示,用 YouTube 链接打开。BVID 当前是占位,实际 BVID 等首次部署时填。</p>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=22&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=22" target="_blank"><strong>▶ YouTube 备链(建议优先点这个)</strong></a></p>
+
+  <h3>下一节预告</h3>
+  <p>本节把"<em>均值估计</em>" 改写成 \(w_{k+1} = w_k - \alpha_k(w_k - x_k)\),并暗示这是"<em>解 \(g(w) = w - \mathbb E[X] = 0\)</em>" 用带噪样本的递推。<strong>L2(教材 §6.2.1)</strong> 把这个观察推广到<em>任意</em> \(g\):给定一个未知函数 \(g(w)\),只能拿到 \(\tilde g(w, \eta) = g(w) + \eta\),如何用 \(w_{k+1} = w_k - \alpha_k \tilde g(w_k, \eta_k)\) 找根 \(g(w^*) = 0\)?这就是 <strong>Robbins-Monro 算法</strong>。L2 用 \(g(w) = \tanh(w-1)\) 作图直观说明"<em>当 \(w_k > w^*\) 时 \(g(w_k) > 0\),更新让 \(w\) 下降;当 \(w_k < w^*\) 时反之</em>" 这个朴素的"<em>负反馈</em>" 机制为什么能扛住噪声 —— 关键是 \(\alpha_k \cdot \eta_k\) 的<em>随机扰动</em> 在适当步长下被<em>吸收</em>,而不是<em>放大</em>。</p>
+
+  <!-- Bottom nav -->
+  <nav class="lesson-nav">
+    <a href="../ch05/lesson-06.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-02.html">Next →</a>
+  </nav>
+</div>
+
+<!-- Components -->
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>
