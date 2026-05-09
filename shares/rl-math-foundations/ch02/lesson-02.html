@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>贝尔曼方程(P2):状态值 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch02-l02" data-est-minutes="20">
+<div class="container">
+
+  <!-- Top nav -->
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.2 / Lesson 2</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <!-- Header -->
+  <p class="kicker">Bilibili #5 · YouTube #5 · Book §2.3 pp. 19-20</p>
+  <h1>L2: Bellman Equation (P2 - State value)<small style="color:var(--color-muted); font-weight:400;">  (贝尔曼方程(P2):状态值)</small></h1>
+
+  <!-- §1 Why this lesson -->
+  <h2>§1 Why this lesson</h2>
+  <p>上一节(L1)结尾,作者悄悄在 \(\text{return}_3\) 上点了一句:"它其实不是严格的 return,而更像一个期望 —— 后面会发现它就是 state value。"这一节就把这件事正面写下来。</p>
+  <p>问题是:为什么不能继续用 return 评估策略?因为一旦策略 \(\pi\) 或环境 \(p\) 是<strong>真随机</strong>的,从同一个 \(s\) 出发的 trajectory 不止一条,每条 return 都不一样,你不知道用哪条才公平。教材 §2.3(pp. 19-20)的解决方案是定义 <strong>state value</strong>:\(v_\pi(s) \doteq \mathbb{E}_\pi[G_t \mid S_t = s]\) —— 把"从 \(s\) 出发的所有可能 return"求平均(期望),得到一个<em>跟 trajectory 选哪条无关</em>的标量。这一节我们只做一件事:把这个定义讲透,把它和 return 的关系讲清,顺手为下一节(L3 推 Bellman 方程)铺好"\(G_t = R_{t+1} + \gamma G_{t+1}\)"这个递归骨架。</p>
+
+  <!-- §2 核心定义 -->
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>随机变量化的 trajectory(教材 §2.3,p. 19)</strong>:把第 1 章用小写 \(s_t, a_t, r_t\) 写的 trajectory 升级为大写随机变量 \(S_t, A_t, R_{t+1}\),即 \(S_t \xrightarrow{A_t} S_{t+1}, R_{t+1}\)。约束:\(S_t, S_{t+1} \in \mathcal{S}\),\(A_t \in \mathcal{A}(S_t)\),\(R_{t+1} \in \mathcal{R}(S_t, A_t)\)。从 \(t\) 起的 trajectory 是 \(S_t \xrightarrow{A_t} S_{t+1}, R_{t+1} \xrightarrow{A_{t+1}} S_{t+2}, R_{t+2} \to \dots\)。</li>
+    <li><strong>折现 return 也是随机变量</strong>:\(G_t \doteq R_{t+1} + \gamma R_{t+2} + \gamma^2 R_{t+3} + \dots\)。注意作者特别强调"\(G_t\) 是 random variable",因为它的每一项 \(R_{t+k+1}\) 都来自随机过程 \((\pi, p)\)。<em>这是 Ch.1 L2 写过 \(G_t\) 之后第一次明确地把它当成 RV 处理。</em></li>
+    <li><strong>状态值 (state value) \(v_\pi(s)\)(教材 §2.3 公式定义,p. 19)</strong>:\(v_\pi(s) \doteq \mathbb{E}_\pi[G_t \mid S_t = s]\)。一句话:从 \(s\) 出发、在策略 \(\pi\) 下,所有可能 return 的期望。<em>书 p. 20 的三条核心 remark</em>:</li>
+    <li class="remark-list">
+      <strong>(R1)</strong> \(v_\pi(s)\) 依赖 \(s\) —— 因为定义里就有 \(S_t = s\) 的条件。<br>
+      <strong>(R2)</strong> \(v_\pi(s)\) 依赖 \(\pi\) —— trajectory 是按 \(\pi\) 生成的;策略一变,期望就变。这就是为什么写成 \(v_\pi\)、不是 \(v\)(下标必须带)。<br>
+      <strong>(R3)</strong> \(v_\pi(s)\) <em>不</em>依赖 \(t\) —— 这是 Markov 性 + 时齐 (time-homogeneous) MDP 的直接后果:从 \(s\) 出发的"未来"在哪个时刻看都一样。所以函数签名是 \(v_\pi: \mathcal{S} \to \mathbb{R}\),没有时间维。
+    </li>
+    <li><strong>state value 与 return 的关系(教材 §2.3,p. 20 中段)</strong>:策略和环境<strong>都确定</strong>时,从 \(s\) 出发的 trajectory 唯一,return 就是个数 —— 此时 \(v_\pi(s)\) <strong>就等于</strong>那条 return(期望退化为常数);否则 trajectory 不唯一,\(v_\pi(s)\) 是这些 return 的"加权平均"(权重就是各条 trajectory 出现的概率)。这正是 L1 §2.1 \(\text{return}_3\) 的真相。</li>
+    <li><strong>为什么用 state value 而不是 return 评估策略</strong>:return 在随机系统里是 RV,不可比较;state value 是一个数,直接可比。教材 p. 20 末段:"policies that generate greater state values are better." —— 后面 Ch.3 会把"最优策略"严格定义在 \(v_\pi(s)\) 上。</li>
+  </ul>
+
+  <!-- §3 关键公式 + 推导 -->
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节只有<strong>一条</strong>核心公式 —— state value 的定义。但这条定义里塞着两个微妙之处,值得拆开看。</p>
+
+  <p><strong>公式 1:state value 定义(教材 §2.3,p. 19)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "v_\\pi(s) \\doteq \\mathbb{E}_\\pi \\bigl[ G_t \\,\\big|\\, S_t = s \\bigr] = \\mathbb{E}_\\pi \\Bigl[ \\sum_{k=0}^\\infty \\gamma^k R_{t+k+1} \\,\\Big|\\, S_t = s \\Bigr]",
+    "annotations": [
+      {"key": "v_pi", "label": "v_π(s)", "description": "状态值函数,从 s 出发按策略 π 走的折现 return 期望。下标 π 不能丢,它编码了&#39;按谁的策略行动&#39;。"},
+      {"key": "expectation", "label": "𝔼_π[ · | S_t = s ]", "description": "条件期望:对所有可能的 trajectory(由 π 和 p 共同决定的概率)求平均。π 决定动作分布、p 决定状态/奖励分布,二者一起组成期望算子的概率测度。"},
+      {"key": "G_t", "label": "G_t", "description": "从 t 时刻起的折现 return,是随机变量。注意 R_{t+k+1} 的下标:做 A_{t+k}、收 R_{t+k+1}(动作打 t、reward 落 t+1)。"},
+      {"key": "no_t_dep", "label": "不依赖 t", "description": "因为时齐 MDP 下,&#39;从 s 出发&#39;的随机过程在任何 t 都是同一个 —— 期望就只取决于 s 本身。所以 v_π 不带 t。"}
+    ]
+  }'></div>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>"从 \(s\) 出发"是条件,不是初值。</em>定义里的 \(S_t = s\) 是条件期望的<strong>条件事件</strong>;agent 不一定真的在时刻 \(t\) 处于 \(s\),只是"假设它现在站在 \(s\),那么后续 return 的期望是多少"。这种"假设性问询"让 \(v_\pi\) 能对<em>每一个</em>状态都有定义,即便它在当前 trajectory 上根本没出现过。<br>
+    <strong>Step 2.</strong> <em>期望算子 \(\mathbb{E}_\pi\) 的下标。</em>这个下标提醒你:期望是<strong>在策略 \(\pi\) 诱导的概率测度下</strong>取的。环境 \(p\) 是固定的(MDP 给的),但 \(\pi\) 是可调的;调 \(\pi\) 就调期望。所以 \(v_\pi\) 是策略的<em>泛函</em> —— RL 的核心优化目标 \(\max_\pi v_\pi\) 就这样登场了。<br>
+    <strong>Step 3.</strong> <em>"\(v_\pi(s)\) 不依赖 \(t\)" 的反例。</em>如果 reward 函数显式依赖时间(比如 \(r_t = +1 \cdot \mathbb{1}[t < 100]\)、之后归零),MDP 就不是时齐的,\(v_\pi(s, t)\) 必须带 \(t\)。本书所有讨论都假设时齐(p. 20 (R3) 的隐含假设),所以放心去掉 \(t\)。
+  </div>
+
+  <p><strong>公式 2:确定性退化与 \(\text{return}_3\) 的真身(L1 + 教材 p. 20 中段)</strong></p>
+  <p>当策略和环境都确定时,从 \(s\) 出发的 trajectory 唯一,\(G_t\) 退化为<em>常数</em>:</p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "v_\\pi(s) = \\sum_{\\tau} \\Pr_\\pi(\\tau \\mid S_t = s) \\cdot G(\\tau), \\quad \\text{trajectory } \\tau \\text{ 沿 } (\\pi, p) \\text{ 的所有可能}",
+    "annotations": [
+      {"key": "tau", "label": "τ", "description": "一条具体 trajectory(确定的状态-动作-奖励序列)。"},
+      {"key": "Pr", "label": "Pr_π(τ | S_t = s)", "description": "在策略 π 和环境 p 下,从 s 出发产生 trajectory τ 的概率。π 给动作分布、p 给下一状态/奖励分布,二者乘积。"},
+      {"key": "G_tau", "label": "G(τ)", "description": "trajectory τ 上的折现 return(确定的数,因为 τ 给定后所有 r_t 就给定了)。"},
+      {"key": "weighted_avg", "label": "加权平均", "description": "v_π(s) 就是所有可能 trajectory return 的加权平均 —— L1 的 return₃ = 0.5 · A 路 return + 0.5 · B 路 return,正是这个公式 |τ|=2 时的特例。"}
+    ]
+  }'></div>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>L1 的 return₁、return₂ 都是退化情形。</em>它们对应的是 \(s_1\) 上的两个<strong>确定性</strong>策略,trajectory 唯一,加权平均 = 单点取值 = 那条 trajectory 的 return。所以"return = state value"在<em>确定性策略 + 确定性环境</em>下成立。<br>
+    <strong>Step 2.</strong> <em>L1 的 return₃ 是真期望。</em>\(s_1\) 上策略是 0.5/0.5 随机,trajectory 有两条:走 \(s_3\) 那条(概率 0.5,return = \(\gamma/(1-\gamma)\))和走 \(s_2\) 那条(概率 0.5,return = \(-1 + \gamma/(1-\gamma)\))。加权平均就是 \(0.5 \cdot \gamma/(1-\gamma) + 0.5 \cdot (-1 + \gamma/(1-\gamma)) = -0.5 + \gamma/(1-\gamma)\) —— 完全对得上 §2.1 的 \(\text{return}_3\)。这就是为什么作者说"\(\text{return}_3\) 实际上是 state value":它就是 \(v_\pi(s_1)\) 的加权平均显式形式。<br>
+    <strong>Step 3.</strong> <em>有限 vs 无限 trajectory。</em>L1 的 \(\text{return}_3\) 只有 2 条 trajectory 是因为随机性只在第一步;一旦每一步都随机,trajectory 数会指数爆炸,枚举不可行。这就是下一节<strong>非要用贝尔曼方程</strong>(而不是定义式枚举)算 \(v_\pi\) 的根本原因。
+  </div>
+
+  <!-- §4 Grid-world 例子 -->
+  <h2>§4 Grid-world 实例化</h2>
+  <p>把 \(v_\pi\) 当成 25 个数的<em>热图</em>来看(颜色深 = state value 高)。设定:target = \((3, 2)\),forbidden = \(\{(1,1),(2,1),(2,2),(1,3),(3,3)\}\),target 后自环每步 +1,\(\gamma = 0.9\)。策略沿"外圈安全路"到达 target。每格的值由 \(v_{(r,c)} = \gamma^{d(r,c)} \cdot \dfrac{1}{1-\gamma}\) 给出,其中 \(d(r,c)\) 是沿策略到 target 的步数(target 自身 \(d=0\)):</p>
+  <div data-component="gridworld" id="gw-ch02-l02" data-config='{
+    "rows": 5, "cols": 5,
+    "target": [3, 2],
+    "forbidden": [[1,1],[2,1],[2,2],[1,3],[3,3]],
+    "policy": [
+      ["↓","↓","↓","↓","↓"],
+      ["↓","","↓","","↓"],
+      ["↓","","","→","↓"],
+      ["↓","→","","","←"],
+      ["→","→","↑","←","←"]
+    ],
+    "heatmap": [
+      [4.78, 5.31, 5.90, 6.56, 7.29],
+      [5.31, 0,    6.56, 0,    8.10],
+      [5.90, 0,    0,    9.00, 9.00],
+      [6.56, 7.29, 10.0, 0,    8.10],
+      [7.29, 8.10, 9.00, 8.10, 7.29]
+    ]
+  }'></div>
+
+  <p><strong>怎么读这张热图?</strong>颜色越深(数值越大)= state value 越高 = "从这里出发,期望折现回报越高" = "离 target 越近"。target 自己 \(v_\pi = 1/(1-\gamma) = 10\)(自环每步 +1 的几何级数和),远端起点 \((0,0)\) 经过 6 步到 target,所以 \(v_\pi = 0.9^6 \cdot 10 \approx 5.31\)。forbidden 格在本节先<strong>不画 value</strong>(它在当前策略下不可达,值依赖于策略上的 \(p(s' \mid s, a)\),L3 推 Bellman 时再正式处理)。</p>
+
+  <p><strong>"同一策略、同一环境,但不同起点 → 不同 v_π(s)" 的直觉。</strong>这正是 (R1) 的可视化:state value 是<strong>状态的函数</strong>,起点不同,值不同。同时这张图也暗示了 Ch.3 BOE 的故事:把每格的箭头换成"局部最优动作"后,这张热图会变得更"光滑、单调指向 target",对应"最优 state value"\(v^*\)。</p>
+
+  <p><strong>"同一状态、不同策略 → 不同 \(v_\pi(s)\)" 的直觉(R2 可视化)。</strong>把策略换成"全部向上"那种烂策略,几乎所有格子的 trajectory 都会撞墙、永远到不了 target,\(v_\pi(s)\) 退化为大负数。教材 §2.5 的 Figure 2.7 用同一张 5×5 网格画了 4 种策略,值范围从 \(\approx 10\)(好策略)跌到 \(\approx -10\)(坏策略),正是 (R2) 的最直观佐证。</p>
+
+  <!-- §5 常见误解 -->
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"\(v_\pi(s) = \mathbb{E}_\pi[G_t \mid S_t = s]\) 里的 \(G_t\) 既然是随机变量,直接写 \(v_\pi(s) = G_t\) 不就行了?"<br>
+    <strong>实际上:</strong>\(G_t\) 是 RV,\(v_\pi(s)\) 是<strong>常数</strong>(标量),两者类型不同,绝不能划等号。这是初学者最容易写错的一步,改卷子的时候它跟"忘下标"齐名。<br>
+    <strong>因为:</strong>RV 没有"等于一个数"这件事,只能"取期望后等于一个数"。下一节推 Bellman 时,\(\mathbb{E}\) 这个算子会反复被拆开 / 移进移出 sum;一旦你把 \(\mathbb{E}\) 漏写,后面整个推导就垮。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"既然 \(v_\pi(s)\) 不依赖 \(t\),那 trajectory 长度无限和有限对它没影响。"<br>
+    <strong>实际上:</strong>"不依赖 \(t\)"指的是<em>从 \(s\) 起算往后看</em>这件事跟当前钟点无关;但"无限 trajectory + \(\gamma < 1\)"的<strong>收敛性</strong>仍然是 \(v_\pi\) 有限的<em>前提</em>。两者是不同的事。<br>
+    <strong>因为:</strong>\(v_\pi(s) \le R_\text{max} / (1-\gamma)\) 这个上界依赖 \(\gamma < 1\)(L1 的 Q3 已用 Neumann 级数解释)。\(\gamma = 1\) 时 \(v_\pi\) 可能发散,定义就垮了 —— 教材 §1.5 / §2.3 都默认 \(\gamma \in (0, 1)\)。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"我怎么计算 \(v_\pi(s)\)?是不是把所有 trajectory 都 enumerate 一遍,然后加权平均?"<br>
+    <strong>实际上:</strong><em>能</em>枚举只是动机示例的福利(L1 那两条 trajectory 的玩具情形)。一般情况下 trajectory 数指数爆炸甚至无穷,枚举不可行。真实算法走的是<strong>贝尔曼方程</strong>:把 25 个 \(v_\pi(s)\) 看成 25 个未知数,联立线性方程组求解(L3 / L4)。<br>
+    <strong>因为:</strong>本节定义式 \(v_\pi(s) = \mathbb{E}_\pi[G_t \mid S_t = s]\) 是<strong>语义</strong>(它告诉你这个量"是什么");贝尔曼方程是<strong>计算</strong>(它告诉你这个量"怎么算")。两者缺一不可,下一节我们就把语义翻译成计算式。
+  </div>
+
+  <!-- §6 自检 + 视频 + teaser -->
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> 为什么 \(v_\pi(s)\) 写成 \(v_\pi(s)\) 而不是 \(v_\pi(s, t)\)?如果某天 reward 显式带 \(t\)(比如有"截止日期"),会变成什么样?</summary>
+    <p><strong>A.</strong> 时齐 (time-homogeneous) MDP 假设 \(\pi, p, R\) 都不显式依赖 \(t\),所以"从 \(s\) 出发的随机过程"在任何 \(t\) 看都是同一个,期望只是 \(s\) 的函数。如果 reward 带 \(t\),时齐性破坏,需要把 \(t\) 加入 state(<em>扩状态</em>方法,Ch.1 L2 Q3 已经预演过):用 \(\tilde s = (s, t)\) 重新建模,在新状态空间上仍然时齐。代价:状态空间变大、值函数表变大。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> L1 的 \(\text{return}_3\) 是 \(s_1\) 处随机策略下的 \(v_\pi(s_1)\)。其他三个状态(\(s_2, s_3, s_4\))的 \(v_\pi\) 是多少?</summary>
+    <p><strong>A.</strong> 在 L1 §2.1 的设定下,\(s_2\) 是 forbidden,但策略让 agent 进入 \(s_2\) 后就"再下一步到 \(s_4\)"(教材图 2.2 中 \(s_2\) 的箭头朝下),所以从 \(s_2\) 出发 trajectory 是 \(s_2 \to s_4 \to s_4 \to \dots\),reward 序列 \(+1, +1, +1, \dots\),return = \(1 + \gamma + \gamma^2 + \dots = 1/(1-\gamma)\),即 \(v_\pi(s_2) = 1/(1-\gamma)\)。同理 \(v_\pi(s_3) = 1/(1-\gamma)\)、\(v_\pi(s_4) = 1/(1-\gamma)\)(target 自环每步 +1)。注意三者都不带 0.5 加权 —— 因为 \(s_2, s_3, s_4\) 上策略和环境都确定,trajectory 唯一。<em>只有</em> \(s_1\) 处的随机分叉让它需要算期望,这把 (R2) 又强调了一遍:同一策略下,不同 \(s\) 的 \(v_\pi\) 可以是退化的常数,也可以是真正的加权平均。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> 把策略 \(\pi\) 换成"全部向左",grid-world 5×5 上从任意 \((r, c)\) 出发,大致估计 \(v_\pi(s)\) 的量级和正负?(假设 \(r_\text{boundary} = -1\)、其余按本节设定。)</summary>
+    <p><strong>A.</strong> "全部向左"意味着 agent 一直撞左墙,trajectory 从第 \(c\) 步起永远停在 \((r, 0)\) 自环,每步 \(r_\text{boundary} = -1\),return 是 \(0 + 0 + \dots + (-1) - \gamma - \gamma^2 - \dots = -\gamma^c \cdot \dfrac{1}{1-\gamma}\)(前 \(c\) 步还在内部 reward = 0)。\(\gamma = 0.9\) 时,从 \((r, 4)\) 起 \(v_\pi \approx -6.56\),从 \((r, 0)\) 起 \(v_\pi = -10\)(从一开始就撞)。这在直觉上完全正确:坏策略 → 大负 value(对应教材 Figure 2.7(b) 的"bad policies" 那张表)。这也再次印证 (R2):state value <strong>就是</strong>策略好坏的量化指标。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <p style="font-size:0.85rem;color:var(--color-muted);">视频:首选 Bilibili 直播(下方 iframe);若 iframe 不显示,用 YouTube 链接打开。BVID 当前是占位,实际 BVID 等首次部署时填。</p>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=5&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=5" target="_blank"><strong>▶ YouTube 备链(建议优先点这个)</strong></a></p>
+
+  <h3>下一节预告</h3>
+  <p>这一节我们给了 \(v_\pi(s)\) 的<strong>语义定义</strong> —— "从 \(s\) 出发的折现 return 期望"。但定义是"语义",要算需要"语法"。下一节(L3,Book §2.4-2.5)就把这个定义<strong>展开</strong>成大名鼎鼎的<strong>贝尔曼方程</strong>:从 \(G_t = R_{t+1} + \gamma G_{t+1}\) 这条 return 自身的递归出发,两边取条件期望,用 Markov 性把 \(\mathbb{E}[G_{t+1} \mid S_t]\) 改写成 \(\sum_{s&#39;} v_\pi(s&#39;) \, p(s&#39; \mid s)\),最后一行就是教材公式 (2.7) 的 \(v_\pi(s) = \sum_a \pi(a\mid s) [\sum_r p(r\mid s,a) r + \gamma \sum_{s&#39;} p(s&#39;\mid s,a) v_\pi(s&#39;)]\)。这是整章最关键的一步推导,下节专门用 3 个 callout 把它走完。</p>
+
+  <!-- Bottom nav -->
+  <nav class="lesson-nav">
+    <a href="lesson-01.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-03.html">Next →</a>
+  </nav>
+</div>
+
+<!-- Components -->
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>
