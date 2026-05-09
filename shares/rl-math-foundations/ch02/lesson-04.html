@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>贝尔曼方程(P4):矩阵-向量形式与求解 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch02-l04" data-est-minutes="20">
+<div class="container">
+
+  <!-- Top nav -->
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.2 / Lesson 4</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <!-- Header -->
+  <p class="kicker">Bilibili #7 · YouTube #7 · Book §2.6-2.7 pp. 25-30</p>
+  <h1>L4: Bellman Equation (P4 - Matrix-vector form and solution)<small style="color:var(--color-muted); font-weight:400;">  (贝尔曼方程(P4):矩阵-向量形式与求解)</small></h1>
+
+  <!-- §1 Why this lesson -->
+  <h2>§1 Why this lesson</h2>
+  <p>上一节(L3)我们得到了贝尔曼方程的<strong>逐元素形式</strong>(elementwise form):\(\forall s \in \mathcal{S}\),都有 \(v_\pi(s) = \sum_a \pi(a\mid s)[\sum_r p(r\mid s,a)r + \gamma \sum_{s&#39;} p(s&#39;\mid s,a) v_\pi(s&#39;)]\)。<strong>问题在于</strong>:\(|\mathcal{S}| = 25\) 已经要写 25 条联立方程,真实问题 \(|\mathcal{S}|\) 可达上千上万,逐条写不现实。</p>
+  <p>本节(教材 §2.6-2.7,pp. 25-30)做两件事:(1) <strong>§2.6</strong> 把 (2.7) 打包成一行<em>矩阵-向量等式</em>:\(v_\pi = R_\pi + \gamma P_\pi v_\pi\),其中 \(v_\pi, R_\pi\) 是 \(|\mathcal{S}|\) 维向量、\(P_\pi\) 是 \(|\mathcal{S}| \times |\mathcal{S}|\) 概率转移矩阵。这不是新方程,只是<em>记号上的合并</em>。(2) <strong>§2.7</strong> 给两条求解路径:闭式 \(v_\pi = (I - \gamma P_\pi)^{-1} R_\pi\)(理论用),和迭代 \(v_{k+1} = R_\pi + \gamma P_\pi v_k\)(实践用,Ch.4 价值迭代的雏形)。本节<strong>不教线性代数</strong> —— 我们只把矩阵形式当一个干净的"压缩记号"来看,把存在性、可逆性、收敛性这些技术细节扼要带过即可。</p>
+
+  <!-- §2 核心定义 -->
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>策略下的奖励向量 (reward vector under \(\pi\)) \(R_\pi\)(教材 §2.6 公式 (2.8) 下方)</strong>:\([R_\pi]_i \doteq r_\pi(s_i) = \sum_a \pi(a \mid s_i) \sum_r p(r \mid s_i, a) \, r\)。<em>翻译</em>:在状态 \(s_i\) 上、按策略 \(\pi\) 选动作后,期望即时 reward。这就是 (2.7) 方括号里第一项,被打包成<strong>向量的第 \(i\) 个分量</strong>。</li>
+    <li><strong>策略下的状态转移矩阵 (state transition matrix under \(\pi\)) \(P_\pi\)(教材 §2.6 公式 (2.8) 下方)</strong>:\([P_\pi]_{ij} \doteq p_\pi(s_j \mid s_i) = \sum_a \pi(a \mid s_i) \, p(s_j \mid s_i, a)\)。<em>翻译</em>:从 \(s_i\) 出发、按 \(\pi\) 选动作后,环境把 agent 送到 \(s_j\) 的总概率。这是 (2.7) 方括号里第二项的核心。<strong>注意维度</strong>:\(P_\pi \in \mathbb{R}^{|\mathcal{S}| \times |\mathcal{S}|}\),行 \(i\) 对应 "<em>从 \(s_i\) 出发</em>",列 \(j\) 对应 "<em>到 \(s_j\)</em>"。</li>
+    <li><strong>状态值向量 (state value vector) \(v_\pi\)</strong>:\(v_\pi \doteq [v_\pi(s_1), \dots, v_\pi(s_n)]^\top \in \mathbb{R}^n\),其中 \(n = |\mathcal{S}|\)。<em>这是 25 个数堆叠成的向量</em>,L4 的所有式子都把它当作单一对象操作。</li>
+    <li><strong>矩阵-向量形式 (matrix-vector form,教材 §2.6 公式 (2.10))</strong>:\(v_\pi = R_\pi + \gamma P_\pi v_\pi\)。<em>这就是把 (2.7) 在 \(\forall s\) 上"竖着堆叠"得到的等式</em>:每一行就是 (2.7) 在某个 \(s_i\) 上的展开。注意 \(v_\pi\) 同时出现在两边 —— bootstrap 的标志。</li>
+    <li><strong>闭式解 (closed-form solution,教材 §2.7.1 公式 (2.11) 上方)</strong>:\(v_\pi = (I - \gamma P_\pi)^{-1} R_\pi\)。前提是 \(I - \gamma P_\pi\) 可逆 —— L4 §3 用 Gershgorin 圆盘定理给一个直观证明。</li>
+    <li><strong>迭代解 (iterative solution,教材 §2.7.2 公式 (2.11))</strong>:\(v_{k+1} = R_\pi + \gamma P_\pi v_k, \quad k = 0, 1, 2, \dots\),从任意 \(v_0\)(典型取 \(v_0 = 0\))出发。可证 \(v_k \to v_\pi\) 当 \(k \to \infty\)。这是 Ch.4 价值迭代算法的"政策评估"子步骤,本节先<strong>预演</strong>。</li>
+    <li><strong>\(P_\pi\) 的两个性质</strong>:(a) \(P_\pi \ge 0\)(逐元素非负 —— 概率); (b) \(P_\pi \mathbf{1} = \mathbf{1}\)(每行求和为 1 —— 行随机矩阵)。这两条性质保证了所有特征值的绝对值 \(\le 1\),进而保证 \(I - \gamma P_\pi\) 可逆与迭代收敛。</li>
+  </ul>
+
+  <!-- §3 关键公式 + 推导 -->
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节有<strong>三条</strong>关键公式:矩阵-向量形式、闭式解、迭代式。我们把它们一次写齐,再用一个 callout 阐明可逆性与收敛性。</p>
+
+  <p><strong>公式 1:矩阵-向量形式(教材 §2.6 公式 (2.10),p. 26)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "v_\\pi = R_\\pi + \\gamma P_\\pi v_\\pi",
+    "annotations": [
+      {"key": "v_pi_vec", "label": "v_π ∈ ℝⁿ", "description": "状态值向量,n = |𝒮|。每个分量是 v_π(s_i),把 L3 的 25 个未知数堆成一列。"},
+      {"key": "R_pi_vec", "label": "R_π ∈ ℝⁿ", "description": "策略下的期望即时 reward 向量,[R_π]_i = Σ_a π(a|s_i) Σ_r p(r|s_i,a)r。注意是&#39;给定 (s_i, a) 后 reward 的期望&#39;再对动作平均。"},
+      {"key": "P_pi_mat", "label": "P_π ∈ ℝⁿˣⁿ", "description": "策略下的状态转移矩阵,[P_π]_{ij} = Σ_a π(a|s_i)p(s_j|s_i,a)。&#39;从 s_i 一步到 s_j&#39;的总概率,把 π 和 p 卷在一起。"},
+      {"key": "bootstrap", "label": "v_π 出现两次", "description": "左右都有 v_π —— 这就是 bootstrap 的矩阵化:不是&#39;算式&#39;,是&#39;方程&#39;,需要联立求解。"}
+    ]
+  }'></div>
+
+  <p><strong>公式 2:闭式解(教材 §2.7.1)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "v_\\pi = (I - \\gamma P_\\pi)^{-1} R_\\pi",
+    "annotations": [
+      {"key": "I", "label": "I", "description": "n×n 单位矩阵。"},
+      {"key": "I_minus_gamma_P", "label": "I − γP_π", "description": "由 (2.10) 移项得 (I − γP_π) v_π = R_π。这个矩阵在 γ < 1 下一定可逆(下方 callout 给证明)。"},
+      {"key": "inverse", "label": "(I − γP_π)^{−1}", "description": "理论上一锤求解;实践中维度大时 O(n³) 太慢,改用迭代法。"},
+      {"key": "Neumann", "label": "Neumann 级数", "description": "(I − γP_π)^{−1} = I + γP_π + γ²P_π² + … —— 把闭式解展开,正好对应迭代法收敛后的 v_π,几何意义是&#39;沿无限步轨迹累计折扣回报&#39;。"}
+    ]
+  }'></div>
+
+  <p><strong>公式 3:迭代解(教材 §2.7.2 公式 (2.11),p. 28)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "v_{k+1} = R_\\pi + \\gamma P_\\pi v_k, \\qquad v_0 \\in \\mathbb{R}^n \\text{ 任取(常取 } 0\\text{)}",
+    "annotations": [
+      {"key": "v_k", "label": "v_k", "description": "第 k 次迭代后对 v_π 的估计。可任取 v_0(通常 v_0 = 0)。"},
+      {"key": "update", "label": "v_{k+1} = R_π + γP_π v_k", "description": "右端把当前估计 v_k 代入,得到下一次估计 v_{k+1}。这就是 fixed-point iteration:把方程的&#39;右端是函数&#39;视角变成迭代规则。"},
+      {"key": "convergence", "label": "v_k → v_π", "description": "误差 δ_k = v_k − v_π 满足 δ_{k+1} = γP_π δ_k,几何衰减 γ^k → 0。Box 2.1(教材 p. 28)给出严格证明,本节用图直观看。"},
+      {"key": "preview_VI", "label": "Ch.4 预告", "description": "这就是&#39;策略评估&#39;的内核;Ch.4 把它和&#39;策略改进&#39;交替执行,即 PI / VI 两大算法。"}
+    ]
+  }'></div>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>从 (2.10) 到 (2.11) 的可逆性证明(直观版)。</em>把 (2.10) 移项 \((I - \gamma P_\pi) v_\pi = R_\pi\),只要 \(I - \gamma P_\pi\) 可逆就能闭式解。\(P_\pi\) 是行随机矩阵,Gershgorin 圆盘定理告诉你它的所有特征值落在以 \([P_\pi]_{ii}\) 为圆心、\(\sum_{j \ne i} [P_\pi]_{ij}\) 为半径的圆盘并集里。每个圆盘 = 圆心 + 半径 = 行的<em>对角元 + 非对角和</em> = 该行总和 = 1。所以特征值的绝对值 \(\le 1\),从而 \(\gamma P_\pi\) 的特征值绝对值 \(\le \gamma < 1\),\(I - \gamma P_\pi\) 没有 0 特征值,可逆。教材 §2.7.1 用同一个论证更细。
+  </div>
+
+  <div class="callout">
+    <strong>Step 2.</strong> <em>从 (2.11) 看收敛性(对应教材 Box 2.1)。</em>设 \(\delta_k = v_k - v_\pi\),代入 (2.11) 与 (2.10) 相减得 \(\delta_{k+1} = \gamma P_\pi \delta_k\),从而 \(\delta_k = \gamma^k P_\pi^k \delta_0\)。因 \(\|P_\pi^k\|_\infty \le 1\)(行随机矩阵的幂仍是行随机矩阵),\(\|\delta_k\|_\infty \le \gamma^k \|\delta_0\|_\infty\) —— 误差<strong>几何衰减</strong>,收敛速率 = \(\gamma\)。\(\gamma = 0.9\) 时每次迭代误差减小 10%,大约 60-70 次迭代误差就低于 \(10^{-3}\)。这是 Ch.4 VI 收敛分析的预演。
+  </div>
+
+  <!-- §4 Grid-world 例子 -->
+  <h2>§4 Grid-world 实例化</h2>
+  <p>用<strong>教材 §2.6 图 2.6 / §2.5 图 2.5</strong> 那个 2×2 例子(随机策略),手工写出 \(v_\pi = R_\pi + \gamma P_\pi v_\pi\) 的具体形状。target = \(s_4\)、forbidden = \(s_2\)、\(s_1\) 上 0.5 概率向右(撞 \(s_2\) 拿 \(-1\))/0.5 概率向下(走 \(s_3\) 拿 \(0\)),\(s_2, s_3\) 都直接走到 \(s_4\) 拿 \(+1\),\(s_4\) 自环每步 \(+1\):</p>
+  <ul>
+    <li>\(R_\pi = [\,0.5 \cdot 0 + 0.5 \cdot (-1),\ 1,\ 1,\ 1\,]^\top = [-0.5,\ 1,\ 1,\ 1]^\top\)</li>
+    <li>\(P_\pi = \begin{pmatrix} 0 & 0.5 & 0.5 & 0 \\ 0 & 0 & 0 & 1 \\ 0 & 0 & 0 & 1 \\ 0 & 0 & 0 & 1 \end{pmatrix}\):第 1 行是 \(s_1\) 出发的转移分布(0.5→\(s_2\)、0.5→\(s_3\));第 2、3、4 行都是 \(\to s_4\) 的确定转移。每行和都是 1 ✓。</li>
+    <li>\(\gamma = 0.9\) 代入 (2.10) 解出(也可手工逐项):\(v_\pi(s_4) = 1/(1-0.9) = 10\),\(v_\pi(s_3) = v_\pi(s_2) = 1 + 0.9 \cdot 10 = 10\),\(v_\pi(s_1) = -0.5 + 0.9 \cdot (0.5 \cdot 10 + 0.5 \cdot 10) = -0.5 + 9 = 8.5\)。与 L3 §4 例 2 完全一致 —— 矩阵形式没引入新的物理,只是<strong>记号压缩</strong>。</li>
+  </ul>
+
+  <p>下面把<strong>迭代法</strong>的过程<em>动起来</em>:从 \(v_0 = 0\)(全零向量)出发,逐步代入 \(v_{k+1} = R_\pi + 0.9 \, P_\pi v_k\),看每一步 \(v_\pi\) 在 5×5 网格上(只展示左上 2×2 那 4 格)的热图变化。这是 Ch.4 VI 算法的"内循环"预演:</p>
+  <div data-component="gridworld" id="gw-ch02-l04" data-config='{
+    "rows": 5, "cols": 5,
+    "target": [3, 2],
+    "forbidden": [[1,1],[2,1],[2,2],[1,3],[3,3]],
+    "policy": [
+      ["↓","↓","↓","↓","↓"],
+      ["↓","","↓","","↓"],
+      ["↓","","","→","↓"],
+      ["↓","→","","","←"],
+      ["→","→","↑","←","←"]
+    ],
+    "heatmap": [
+      [0,0,0,0,0],
+      [0,0,0,0,0],
+      [0,0,0,0,0],
+      [0,0,0,0,0],
+      [0,0,0,0,0]
+    ]
+  }'></div>
+  <div data-component="iteration-stepper" data-config='{
+    "linked-gridworld": "#gw-ch02-l04",
+    "steps": [
+      {
+        "label": "k=0  v_0 = 0",
+        "patch": {
+          "heatmap": [
+            [0,0,0,0,0],
+            [0,0,0,0,0],
+            [0,0,0,0,0],
+            [0,0,0,0,0],
+            [0,0,0,0,0]
+          ]
+        },
+        "note": "起点:对所有状态都猜 v(s) = 0(纯无知初值)。"
+      },
+      {
+        "label": "k=1  v_1 = R_π",
+        "patch": {
+          "heatmap": [
+            [0,0,0,0,0],
+            [0,0,0,0,0],
+            [0,0,0,0,0],
+            [0,0,1,0,0],
+            [0,0,0,0,0]
+          ]
+        },
+        "note": "v_1 = R_π + γ·0 = R_π。只有 target (3,2) 拿到即时奖励 +1,其他格子还看不到 target。"
+      },
+      {
+        "label": "k=2  v_2 = R_π + γP_π v_1",
+        "patch": {
+          "heatmap": [
+            [0,0,0,0,0],
+            [0,0,0,0,0],
+            [0,0,0,0.9,0],
+            [0,0,1.9,0,0.9],
+            [0,0,0.9,0,0]
+          ]
+        },
+        "note": "信息从 target 向邻居扩散一格 —— 凡是策略指向 target 的格子,v 升到 0.9。target 自身累积 1 + 0.9 = 1.9。"
+      },
+      {
+        "label": "k=3",
+        "patch": {
+          "heatmap": [
+            [0,0,0,0,0],
+            [0,0,0,0,0],
+            [0,0,0,1.71,0.81],
+            [0,0,2.71,0,1.71],
+            [0,0,1.71,0.81,0]
+          ]
+        },
+        "note": "信息再扩一格。target 的值变成 1 + 0.9·1.9 = 2.71;距离 target 2 步的格子开始有非零值(0.81 = 0.9²)。"
+      },
+      {
+        "label": "k=10  接近收敛",
+        "patch": {
+          "heatmap": [
+            [3.49, 3.87, 4.31, 4.78, 5.31],
+            [3.87, 0,    4.78, 0,    5.90],
+            [4.31, 0,    0,    6.56, 6.56],
+            [4.78, 5.31, 7.29, 0,    5.90],
+            [5.31, 5.90, 6.56, 5.90, 5.31]
+          ]
+        },
+        "note": "k=10 后已经接近真值。误差 δ_k ≤ γ^k · ‖δ_0‖ = 0.9^10 ≈ 0.349,的确量级在 10⁻¹。"
+      },
+      {
+        "label": "k→∞  收敛到 v_π",
+        "patch": {
+          "heatmap": [
+            [4.78, 5.31, 5.90, 6.56, 7.29],
+            [5.31, 0,    6.56, 0,    8.10],
+            [5.90, 0,    0,    9.00, 9.00],
+            [6.56, 7.29, 10.0, 0,    8.10],
+            [7.29, 8.10, 9.00, 8.10, 7.29]
+          ]
+        },
+        "note": "迭代收敛到 L2 §4 用闭式给出的同一张热图。两条路径殊途同归,但实际计算时都用迭代(O(n²) 每步,而不是闭式的 O(n³))。"
+      }
+    ]
+  }'></div>
+
+  <p><strong>怎么读这个动画?</strong>每按一次"下一步",信息从 target 向外扩散一层(像水波),距离 target 越近的格子越早收到非零值。\(\gamma = 0.9\) 决定衰减系数:每多走一步,值多乘一次 0.9。这就是 Ch.4 价值迭代的内核 —— "<strong>每次只用上一轮的 \(v_k\) 算下一轮 \(v_{k+1}\)</strong>",简单且只需 \(O(n^2)\) 矩阵-向量乘,适合大状态空间。</p>
+
+  <!-- §5 常见误解 -->
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"既然有闭式解 \(v_\pi = (I - \gamma P_\pi)^{-1} R_\pi\),为什么还要迭代?直接套公式不就完了?"<br>
+    <strong>实际上:</strong>闭式解只在<strong>理论分析</strong>时有用。实际计算 \((I - \gamma P_\pi)^{-1}\) 需要 \(O(n^3)\) flops 和 \(O(n^2)\) 内存(还得做 LU 分解);而迭代法每步 \(O(n^2)\),空间 \(O(n)\),且 \(\gamma\) 不太大时几十轮就收敛。一旦 \(n\) 大于 1000(grid 32×32 起),闭式解就明显吃力。<br>
+    <strong>因为:</strong>实际 RL 关心可扩展性。Ch.4 VI、Ch.7 TD、Ch.8 DQN 全都用<em>迭代/采样</em>规避矩阵求逆 —— 闭式解此后基本不再出现,但它的存在是<strong>正确性的</strong>背书:迭代法收敛到的就是这个闭式解。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"\(P_\pi\) 是状态转移矩阵 —— 等等,这跟 MDP 五元组里的 \(p(s&#39;\mid s, a)\) 不是一回事吗?"<br>
+    <strong>实际上:</strong>差一个<em>策略层</em>。\(p(s&#39;\mid s, a)\) 是<strong>环境</strong>给定 \((s, a)\) 后的转移;\(P_\pi\) 是<strong>把策略 \(\pi\) 也卷入</strong>后的"\(s \to s&#39;\)"转移:\([P_\pi]_{ij} = \sum_a \pi(a \mid s_i) \, p(s_j \mid s_i, a)\)。前者是 MDP 自带的,后者依赖策略 —— 不同 \(\pi\) 给出不同的 \(P_\pi\),\(v_\pi\) 自然不同。<br>
+    <strong>因为:</strong>Ch.1 L1 §5 那条"\(p\) 是环境的、\(\pi\) 是 agent 的"提醒,这里是在<strong>线性代数层面</strong>再演一次:\(P_\pi\) 这个 "<em>strapped</em>" 矩阵就是把两个属性卷起来的产物,后面 Ch.3 BOE 就把 max 套在这层卷积上做"最优"。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"\(v_0 = 0\) 是迭代的<em>必须</em>初值。"<br>
+    <strong>实际上:</strong><strong>任何</strong> \(v_0 \in \mathbb{R}^n\) 都行 —— 误差几何衰减 \(\gamma^k\),起点只影响初期速率,不影响极限。\(v_0 = 0\) 只是最常用的"无信息先验",方便实现。如果你已有一个粗糙估计(比如上轮 PI 留下的 \(v\)),从那个 \(v_0\) 开始可能收敛更快(<em>warm start</em>,Ch.4 PI 会用)。<br>
+    <strong>因为:</strong>压缩映射(\(\gamma\)-Lipschitz)的不动点不依赖起点,只依赖映射本身。Ch.3 BOE 收敛证明会用到同样的 Banach 不动点定理,本节先在线性情形预演一次。
+  </div>
+
+  <!-- §6 自检 + 视频 + teaser -->
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> 在 §4 那个 4 状态例子里,把 \(\gamma\) 从 0.9 改到 0.5,迭代收敛大约需要多少次才能让 \(\|\delta_k\|_\infty < 10^{-3}\)?</summary>
+    <p><strong>A.</strong> \(\|\delta_k\|_\infty \le \gamma^k \|\delta_0\|_\infty\)。设 \(\|\delta_0\|_\infty \approx 10\)(初值 0,真值上限大约是 10),则需要 \(0.5^k \cdot 10 < 10^{-3}\) 即 \(0.5^k < 10^{-4}\),\(k > 4 / \log_{10} 2 \approx 13.3\)。<strong>大约 14 次</strong>。对比 \(\gamma = 0.9\) 时需要 \(0.9^k < 10^{-4}\),\(k > 87\) —— 差了 6 倍。这正是<strong>γ 越小、收敛越快</strong>的直觉佐证(短视的 agent 不需要看远,迭代少几轮就够);代价是 γ 小了"最优策略"也变了,这是上一节 (R2) 的延续。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> 为什么 \(P_\pi\) 一定是<em>行随机</em>(每行和为 1)而不是<em>列随机</em>?</summary>
+    <p><strong>A.</strong> 因为 \([P_\pi]_{ij}\) 编码"<em>从 \(s_i\) 出发</em>(行下标)<em>到 \(s_j\)</em>(列下标)的概率",同一行的所有元素就是"从 \(s_i\) 出发,所有可能下一状态的概率分布",自然加和为 1。如果定义反了(行=终点、列=起点),那它就是列随机矩阵 —— 数学上等价,只是约定不同。本书统一用"<strong>行 = from、列 = to</strong>"的约定,后面 Ch.4-Ch.10 都跟着用,改成另一种会让 \(v_\pi = R_\pi + \gamma P_\pi v_\pi\) 变成 \(v_\pi = R_\pi + \gamma P_\pi^\top v_\pi\),记号会乱。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> "迭代法收敛到 \(v_\pi\)"和"\(v_\pi = (I - \gamma P_\pi)^{-1} R_\pi\)"两件事,谁更基础?如果 \(I - \gamma P_\pi\) 不可逆(假设 \(\gamma = 1\) 又有自环),迭代法还会收敛吗?</summary>
+    <p><strong>A.</strong> 闭式解的"存在性"依赖于"\(I - \gamma P_\pi\) 可逆";<strong>迭代法的收敛性也依赖同一件事</strong>(因为收敛极限就是闭式解)。如果 \(I - \gamma P_\pi\) 不可逆(典型场景:\(\gamma = 1\) + 状态空间有环),\(v_\pi\) 可能不存在或不唯一,迭代会发散或循环。所以 \(\gamma < 1\) 是<em>整个理论的根</em> —— 不是技术细节,是 RL 这个数学问题<strong>能成立的前提</strong>。这也呼应 Ch.1 L2 把 γ ∈ [0, 1) 写进 MDP 五元组的原因。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <p style="font-size:0.85rem;color:var(--color-muted);">视频:首选 Bilibili 直播(下方 iframe);若 iframe 不显示,用 YouTube 链接打开。BVID 当前是占位,实际 BVID 等首次部署时填。</p>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=7&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=7" target="_blank"><strong>▶ YouTube 备链(建议优先点这个)</strong></a></p>
+
+  <h3>下一节预告</h3>
+  <p>这一节我们用 \(v_\pi(s)\) 评估"<em>整个状态</em>"。但 RL 真正想做的是:<strong>找出每个状态下最值得执行的那个动作</strong>。要回答"动作好坏",需要一个比 state value 更细的量 —— <strong>action value</strong> \(q_\pi(s, a) \doteq \mathbb{E}_\pi[G_t \mid S_t = s, A_t = a]\):"在 \(s\) 下<em>强行</em>执行 \(a\)、之后再按 \(\pi\) 走"的折现 return 期望。下一节(L5,Book §2.8)会引入它,推出 \(v_\pi(s) = \sum_a \pi(a\mid s) q_\pi(s, a)\) 这个干净的关系,以及 \(q_\pi(s, a) = \sum_r p(r\mid s, a) r + \gamma \sum_{s&#39;} p(s&#39;\mid s, a) v_\pi(s&#39;)\) —— 它是后续 Q-learning(Ch.7)、DQN(Ch.8)、Policy Gradient(Ch.9)的核心对象。</p>
+
+  <!-- Bottom nav -->
+  <nav class="lesson-nav">
+    <a href="lesson-03.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-05.html">Next →</a>
+  </nav>
+</div>
+
+<!-- Components -->
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>
