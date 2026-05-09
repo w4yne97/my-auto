@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>时序差分(P6):Q-learning 介绍 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch07-l06" data-est-minutes="20">
+<div class="container">
+
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.7 / Lesson 6</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <p class="kicker">Bilibili #34 · YouTube #34 · Book §7.4.1-7.4.2 pp. 140-144</p>
+  <h1>L6: Q-learning Introduction<small style="color:var(--color-muted); font-weight:400;">  (max 不 sample — 直接学 q*)</small></h1>
+
+  <h2>§1 Why this lesson</h2>
+  <p>Sarsa(L4)与 Expected Sarsa(L5)在 \(\delta_t\) 中"<em>下一状态 value</em>" 用<em>当前 policy</em>(sampled 或 expected)的 \(Q\)。本节(教材 §7.4.1-7.4.2)把这一项<em>第三种处理</em>:\(\max_a Q(s_{t+1}, a)\)。<strong>(1)</strong> 算法名 <strong>Q-learning</strong>。<strong>(2)</strong> 学到的是 \(q^*\)(最优 \(q\)),不是 \(q_\pi\) ⇒ <strong>off-policy</strong>:behavior policy(采数据)与 target policy(被估 = greedy w.r.t. \(Q\))<em>分离</em>。<strong>(3)</strong> 这是 deep RL 时代 DQN 与一族经典算法的<em>种子</em>。</p>
+  <p>核心 takeaway:<strong>(a)</strong> Q-learning \(\delta_t = r_{t+1} + \gamma \max_a Q(s_{t+1}, a) - Q(s_t, a_t)\)。<strong>(b)</strong> "<em>max</em>" 把 \(\delta_t\) 中的"<em>下一动作 value</em>" 计算成"<em>greedy policy 上的值</em>",独立于 behavior policy ⇒ off-policy。<strong>(c)</strong> 收敛点 = Bellman 最优算子 \(T^*\) 的固定点 = \(q^*\)。<strong>(d)</strong> 三种"<em>下一动作处理</em>" 视觉化:Sarsa(sampled)、Expected Sarsa(weighted by π)、Q-learning(max)。</p>
+
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>Q-learning 更新(教材 (7.31))</strong>:\(Q(s_t, a_t) \leftarrow Q(s_t, a_t) + \alpha_t [r_{t+1} + \gamma \max_a Q(s_{t+1}, a) - Q(s_t, a_t)]\)。<em>结构与 Sarsa 一字差,只把 sampled \(a_{t+1}\) 改成 \(\arg\max_a Q(s_{t+1}, a)\)</em>。</li>
+    <li><strong>Q-learning \(\delta_t\)</strong>:\(\delta_t = r_{t+1} + \gamma \max_a Q(s_{t+1}, a) - Q(s_t, a_t)\)。等价于"<em>从下一状态起,假设之后总走 greedy policy</em>" 时的 Bellman 最优残差。</li>
+    <li><strong>off-policy 含义</strong>:<em>behavior policy</em>(采数据用,如 \(\epsilon\)-greedy)与 <em>target policy</em>(被估的策略,即 greedy w.r.t. \(Q\))<em>分离</em>。Q-learning 学的是 target policy 的 \(q\),不论 behavior 是什么。</li>
+    <li><strong>Bellman 最优方程的固定点</strong>:\(q^*(s,a) = \mathbb E[R + \gamma \max_{a&#39;} q^*(s&#39;, a&#39;) | s, a]\)。Q-learning 的 \(\delta_t\) 期望<em>正</em> 是 \(g(Q)(s,a) = Q(s,a) - (T^* Q)(s,a)\),根 \(Q = q^*\)。</li>
+    <li><strong>与 Sarsa 的<em>关键单点对比</em></strong>:Sarsa 用 \(Q(s_{t+1}, a_{t+1}^{\text{sampled}})\);Q-learning 用 \(\max_a Q(s_{t+1}, a)\)。<em>sampled 是 \(\pi\) 上的随机抽,max 是 \(\pi_*\) 上的确定挑</em>。"<em>谁负责挑下一动作</em>" 决定 on/off-policy。</li>
+    <li><strong>off-policy 的工程价值</strong>:可<em>复用旧数据</em>(replay buffer)、<em>从 demonstrations 学</em>、<em>同时探索与利用</em>。这是 DQN/Rainbow/SAC 等深度 RL 算法的基础。</li>
+  </ul>
+
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节核心是<strong>"<em>下一动作处理</em>" 的三种结构对比</strong>:Sarsa(sampled)、Expected Sarsa(\(\sum_a \pi\))、Q-learning(\(\max_a\))。</p>
+
+  <p><strong>公式:Q-learning vs Sarsa vs Expected Sarsa 的 \(\delta_t\)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\delta_t^{\\text{Sarsa}} = r + \\gamma Q(s&#39;, a&#39;_{\\text{sampled}}) - Q(s, a);\\quad \\delta_t^{\\text{ES}} = r + \\gamma \\sum_a \\pi(a|s&#39;) Q(s&#39;, a) - Q(s, a);\\quad \\delta_t^{\\text{Q-learn}} = r + \\gamma \\max_a Q(s&#39;, a) - Q(s, a)",
+    "annotations": [
+      {"key": "structure", "label": "三者共享骨架", "description": "δ_t = r + γ · &#39;下一动作 value&#39; − Q(s,a)。&#39;下一动作 value&#39; 的算法决定算法身份。这是 Ch.7 全章&#39;一个公式 4 个变体&#39; 的核心。"},
+      {"key": "sarsa", "label": "Sarsa: sampled a&#39;", "description": "a&#39; ∼ π(·|s&#39;) 单点采样。on-policy 因 a&#39; 来自当前 π。target 含两层噪声(r 与 a&#39;)。学到 q_π。"},
+      {"key": "exp_sarsa", "label": "Expected Sarsa: π-期望", "description": "Σ_a π(a|s&#39;) Q(s&#39;, a) 用当前 π 加权所有动作。on-policy(权重还是 π);消除 a&#39; 采样噪声。学到 q_π。"},
+      {"key": "q_learn", "label": "Q-learning: max", "description": "max_a Q(s&#39;, a):用&#39;greedy w.r.t. Q&#39; 的 policy 选下一动作 value。off-policy(target policy = greedy(Q),behavior 可以任意)。学到 q*。"},
+      {"key": "operator_link", "label": "对应 Bellman 算子", "description": "Sarsa/ES → T_π(期望算子,根 q_π);Q-learning → T*(最优算子,根 q*)。算法的&#39;唯一&#39; 哲学差别在&#39;算的是哪个算子&#39;。"},
+      {"key": "off_policy_value", "label": "off-policy 的工程价值", "description": "behavior 与 target 分离 ⇒ 可重用历史数据(replay buffer)、可从 demonstration 学、可同时探索与利用。这是 DQN 在 deep RL 时代成功的根本结构原因。"}
+    ]
+  }'></div>
+
+  <p><strong>"<em>下一动作 value</em>" 三种处理的可视化对比</strong>(动作空间 \(\mathcal A = \{a_1, a_2, a_3, a_4\}\) 在 \(s_{t+1}\) 处的 \(Q\) 表):</p>
+
+  <div data-component="distribution-bar" data-config='{
+    "title": "Sarsa: 用 sampled a&#39; 的 Q —— 单点采样,带 π 上的随机性",
+    "labels": ["a1", "a2", "a3", "a4"],
+    "values": [0, 1, 0, 0],
+    "annotation": "若 π 在 s&#39; 处采到 a2,target 用 Q(s&#39;,a2)=2.0。其他动作 0 权重。&#39;π-采样 + 单点&#39;。"
+  }'></div>
+  <div data-component="distribution-bar" data-config='{
+    "title": "Expected Sarsa: 用 π 加权 Q —— 当前 π 的期望",
+    "labels": ["a1", "a2", "a3", "a4"],
+    "values": [0.025, 0.925, 0.025, 0.025],
+    "annotation": "ε=0.1 greedy(对 a2):权重 0.925/0.025/0.025/0.025;target = Σ_a π(a)Q(s&#39;,a)。&#39;π-加权 + 解析期望&#39;。"
+  }'></div>
+  <div data-component="distribution-bar" data-config='{
+    "title": "Q-learning: 用 max Q —— greedy policy 单点(独立于 π)",
+    "labels": ["a1", "a2", "a3", "a4"],
+    "values": [0, 1, 0, 0],
+    "annotation": "max 选 a2(假设 Q(s&#39;,a2) 最大);target 用 Q(s&#39;,a2)。注意:这与 Sarsa 在 a2 处的&#39;选中&#39; 不同 —— Q-learning 是确定 max,Sarsa 是 π 随机抽到 a2 的&#39;一次实现&#39;。"
+  }'></div>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>"<em>max</em>" 让 Q-learning 不依赖 behavior policy</em>。Sarsa 的 \(a_{t+1}\) 与 Expected Sarsa 的权重 \(\pi(a|s_{t+1})\) 都涉及"<em>当前 \(\pi\)</em>"。Q-learning 的 \(\max_a\) 只用<em>当前 \(Q\)</em>,不引用任何 \(\pi\) ⇒ 即使 behavior 是<em>纯随机</em>,target 仍朝向 \(q^*\)。所以同一份样本数据,可在不同 behavior 下复用 ⇒ off-policy 性。
+  </div>
+
+  <div class="callout">
+    <strong>Step 2.</strong> <em>Q-learning 收敛到 \(q^*\) 的 RM 视角</em>。\(g(Q)(s,a) = Q(s,a) - (T^* Q)(s,a)\),其中 \(T^*\) 是 Bellman 最优算子(Ch.3 已熟)。\(\tilde g_t = Q(s_t, a_t) - [r + \gamma \max_a Q(s_{t+1}, a)] = -\delta_t\)。代入 RM:\(Q \leftarrow Q + \alpha \delta_t\)。<em>三条件 + 每 \((s,a)\) 无穷访问 ⇒ \(Q \to q^*\)</em>(Watkins-Dayan 1992,套 Theorem 6.3 多变量 RM)。L7 详细给伪代码与"<em>每 \((s,a)\) 无穷访问</em>" 的 behavior 设计。
+  </div>
+
+  <div class="callout">
+    <strong>Step 3.</strong> <em>maximization bias 警告</em>。\(\max_a Q(s, a)\) 是<em>有偏估计 \(\max_a q^*(s,a)\) 的</em>:\(\mathbb E[\max_a \hat Q] \ge \max_a \mathbb E[\hat Q]\)(Jensen),即使 \(\hat Q\) 无偏,\(\max\) 仍把<em>正噪声</em> 放大。这导致 Q-learning 早期阶段<em>过高估</em> \(q^*\),收敛慢。Double Q-learning(Hado van Hasselt 2010)用<em>两套 \(Q\) 解耦"<em>选 action</em>" 与"<em>估 value</em>"</em> 修这一 bias。L7 / Ch.8 DDQN 处理。
+  </div>
+
+  <h2>§4 Grid-world 例子:Q-learning vs Sarsa cliff-walking 经典对比</h2>
+  <p>5×5 grid,target=(3,2),"<em>悬崖式</em>" forbidden = {(1,1),(2,1),(2,2),(1,3),(3,3)}(踩入 \(r=-10\))。\(\epsilon\)-greedy 探索 \(\epsilon=0.1\)。</p>
+  <div data-component="gridworld" id="gw-ch07-l06" data-config='{
+    "rows": 5, "cols": 5,
+    "target": [3, 2],
+    "forbidden": [[1,1],[2,1],[2,2],[1,3],[3,3]],
+    "policy": [
+      [{"a":"down"},{"a":"down"},{"a":"down"},{"a":"left"},{"a":"left"}],
+      [{"a":"down"},{"a":""},{"a":"down"},{"a":""},{"a":"left"}],
+      [{"a":"down"},{"a":""},{"a":""},{"a":"down"},{"a":"left"}],
+      [{"a":"right"},{"a":"right"},{"a":""},{"a":""},{"a":"left"}],
+      [{"a":"up"},{"a":"up"},{"a":"up"},{"a":"up"},{"a":"up"}]
+    ],
+    "trajectory": [[0,0],[1,0],[2,0],[3,0],[3,1],[3,2]]
+  }'></div>
+  <p style="font-size:0.85rem; color:var(--color-muted);"><em>解读</em>:<strong>Q-learning</strong> 学到的 greedy policy 走"<em>贴边 cliff 旁的最短路</em>"(因 target = greedy,不计 \(\epsilon\) 探索风险);<strong>Sarsa</strong> 学到的<em>稍远 cliff 的"<em>安全路</em>"(因 target = sampled,把"<em>探索误入 cliff</em>" 的 \(-10\) 计入)。<em>同一 ε-greedy behavior,两个算法学到不同 policy</em> —— 这是<em>"<em>评估当前 policy</em> vs <em>评估最优 policy</em>"</em> 的<em>结构后果</em>。L7 详细做 cliff-walking。</p>
+
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"Q-learning 既然学 \(q^*\),就<em>不</em> 需要 behavior 探索。"<br>
+    <strong>实际上:</strong><strong>Q-learning 仍需<em>每 \((s,a)\) 无穷访问</em>,这<em>必须</em> 由 behavior 探索保证</strong>。target 的 \(\max_a Q(s_{t+1}, a)\) 是 greedy,但要让 Q-learning 在 \((s,a)\) 上更新 \(Q\),必须<em>实际访问到 \((s,a)\)</em>。若 behavior 也 greedy ⇒ 永远不试其他 action ⇒ 某些 \(Q\) 永不更新 ⇒ 不收敛。所以 Q-learning 需要 \(\epsilon\)-greedy 等<em>有探索的 behavior</em>。<br>
+    <strong>因为:</strong>"<em>off-policy</em>" 不等于"<em>免探索</em>"。off-policy 只是把"<em>采数据的 policy</em>" 与"<em>被估的 policy</em>" 分开,前者仍要充分覆盖状态-动作空间。这是 RM 第二条件(每分量步长两条件 + 每分量更新无穷次)在 RL 上的<em>结构要求</em>。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"\(\max_a Q\) 的 max 让 Q-learning 估计偏高,Q-learning 不可靠。"<br>
+    <strong>实际上:</strong><strong>maximization bias 是真实问题,但有结构化解</strong>:Double Q-learning(L7 / Ch.8 DDQN)把"<em>选 action</em>" 与"<em>估 value</em>" 解耦,用两套 \(Q_1, Q_2\) 互相估,bias 大幅消减。tabular Q-learning 在小动作空间上偏差有限,实操问题不大;deep RL(动作空间大、网络拟合)bias 严重 ⇒ DDQN 是 DQN 改进的核心一笔。<br>
+    <strong>因为:</strong>"<em>max 偏高</em>" 是<em>有限样本</em> 现象,渐近来看 \(Q \to q^*\) 仍成立(Watkins-Dayan 收敛定理)。但<em>有限样本下</em> 偏差让 deep RL 高估 \(Q\) ⇒ policy 选错 action ⇒ 性能恶化。Ch.8 DDQN 详谈。
+  </div>
+
+  <h2>§6 自检 + 视频 + 下一节</h2>
+  <details>
+    <summary><strong>Q1.</strong> 写出 Q-learning 的 \(\delta_t\),并指出"<em>max 不 sample</em>" 让它从 Sarsa 的 on-policy 变成 off-policy 的根本原因。</summary>
+    <p><strong>A.</strong> \(\delta_t = r_{t+1} + \gamma \max_a Q(s_{t+1}, a) - Q(s_t, a_t)\)。"<em>max</em>" 让 target 计算"<em>下一动作 value</em>" 不引用任何 \(\pi\),只用<em>当前 \(Q\)</em>,等价于<em>"<em>用 greedy(Q) 这一固定 target policy 评估</em>"</em> ⇒ behavior(采数据 policy)可任意,target policy 锁定为 greedy(Q)。<em>分离 ⇒ off-policy</em>。Sarsa 的 sampled \(a_{t+1}\) 来自当前 \(\pi\) ⇒ behavior 与 target 锁住 ⇒ on-policy。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> Q-learning、Sarsa、Expected Sarsa 三者在 \(s_{t+1}\) 处对"<em>下一动作 value</em>" 的处理各是什么?学到的固定点分别是什么?</summary>
+    <p><strong>A.</strong> Sarsa: \(Q(s_{t+1}, a_{t+1}^{\text{sampled}})\) — 单点采样(\(a_{t+1} \sim \pi\));固定点 \(q_\pi\)(on-policy)。Expected Sarsa: \(\sum_a \pi(a | s_{t+1}) Q(s_{t+1}, a)\) — \(\pi\) 加权期望;固定点 \(q_\pi\)(on-policy)。Q-learning: \(\max_a Q(s_{t+1}, a)\) — greedy 选;固定点 \(q^*\)(off-policy,target = greedy(Q))。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=34&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=34" target="_blank">YouTube 备链</a></p>
+
+  <h3>下一节预告</h3>
+  <p>L6 给出 Q-learning 的<em>更新公式</em> 与<em>off-policy 性</em>。<strong>L7(教材 §7.4.3-7.4.4)</strong> 把 Q-learning 落成<em>20 行伪代码</em>,并展示 cliff-walking 经典 demo:同一 \(\epsilon\)-greedy behavior,Q-learning 学"<em>贴 cliff 短路</em>",Sarsa 学"<em>绕远安全路</em>" —— 这是 on/off-policy 哲学差异在<em>具体 policy 形态上</em> 的最直观体现。然后 L8 总结全章统一视角。</p>
+
+  <nav class="lesson-nav">
+    <a href="lesson-05.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-07.html">Next →</a>
+  </nav>
+</div>
+
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>
