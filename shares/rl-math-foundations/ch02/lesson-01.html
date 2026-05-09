@@ -94,7 +94,7 @@
   <p><strong>策略 A 的 return(沿用书 §2.1 的口径,target 之后留在原地,每步 \(+1\)):</strong>前 6 步 reward 全是 0,从第 7 步起每步 \(+1\),所以</p>
   <p>\(\text{return}_A = \gamma^6 \cdot 1 + \gamma^7 \cdot 1 + \dots = \dfrac{\gamma^6}{1-\gamma} = \dfrac{0.9^6}{0.1} \approx 5.314\)。</p>
 
-  <p><strong>把 §2.1 三策略的"控制变量"思想搬到这里:</strong>如果把 \((0,0)\) 处的动作从"↓"换成 "→"(直接面向墙)<strong>不会</strong>真撞,但会让<em>第一步 reward 变成 0</em> 后再被弹回原格(boundary 在书 §1.5 设为 \(-1\),但本系列前面用的是 \(0\),为内部一致仍记 \(0\))—— trajectory 长度 +1、target 到达延后 1 步,return 退化为 \(\dfrac{\gamma^7}{1-\gamma} \approx 4.783\)。这是 "→" 起步策略 A':<strong>同一目标、同一 forbidden、只有起步一步差异</strong>,return 立刻分得开。这正是 §2.1 的最小例子在 5×5 上的复现。</p>
+  <p><strong>把 §2.1 三策略的"控制变量"思想搬到这里:</strong>如果把 \((0,0)\) 处的动作从"↓"换成 "↑"(向上撞顶墙),agent 被弹回原格(boundary 在书 §1.5 设 \(r = -1\),但本系列前面用的是 \(0\),为内部一致仍记 \(0\))—— trajectory 长度 +1、target 到达延后 1 步,return 退化为 \(\dfrac{\gamma^7}{1-\gamma} \approx 4.783\)。这是 "↑" 起步策略 A':<strong>同一目标、同一 forbidden、只有起步一步差异</strong>,return 立刻分得开。这正是 §2.1 的最小例子在 5×5 上的复现。</p>
 
   <p><strong>"return 互相递归"的直觉。</strong>在策略 A 下,从 \((0,0)\) 出发的 return,可以写成"在 \((0,0)\) 收到的 \(r_1 = 0\) + \(\gamma\) 倍从 \((1,0)\) 出发的 return":\(v_{(0,0)} = 0 + 0.9 \cdot v_{(1,0)}\)。同理 \(v_{(1,0)} = 0 + 0.9 \cdot v_{(2,0)}\),一直传到 \(v_{(4,2)} = 1 + 0.9 \cdot v_{(3,2)}\) 和 \(v_{(3,2)} = 1 + 0.9 \cdot v_{(3,2)}\)(target 自环)。最后一条立刻给出 \(v_{(3,2)} = 1/(1-0.9) = 10\),回代得到 \(v_{(4,2)} = 1 + 9 = 10\)、\(v_{(4,1)} = 9\)、…、\(v_{(0,0)} = 0.9^6 \cdot 10 \approx 5.314\) —— 和上面无穷级数算的<strong>完全一致</strong>。这就是 bootstrap 的具体长相:沿 trajectory 倒着代,绕开无穷求和。</p>
 
