@@ -32,7 +32,8 @@ htmlcov/
 *.local.yaml
 *.local.json
 scratch/
-shares/
+shares/*
+!shares/rl-math-foundations/
 
 # start-my-day platform additions
 *.zip
