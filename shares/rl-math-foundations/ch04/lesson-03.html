@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>值迭代与策略迭代(P3):截断策略迭代 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch04-l03" data-est-minutes="20">
+<div class="container">
+
+  <!-- Top nav -->
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.4 / Lesson 3</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <!-- Header -->
+  <p class="kicker">Bilibili #15 · YouTube #15 · Book §4.3-4.5 pp. 70-76</p>
+  <h1>L3: Truncated Policy Iteration<small style="color:var(--color-muted); font-weight:400;">  (截断策略迭代)</small></h1>
+
+  <!-- §1 Why this lesson -->
+  <h2>§1 Why this lesson</h2>
+  <p>L1 给我们 VI("多便宜外步"),L2 给我们 PI("少昂贵外步"),两者看起来是两套独立算法。但 L2 §6 已经埋下伏笔:<em>PI 的 PE 内循环真的需要跑到 \(j = \infty\) 吗?</em>如果只跑 \(j = 5\)、\(j = 50\),会发生什么?本节(教材 §4.3-4.5,pp. 70-76)给出统一答案 —— <strong>VI 与 PI 不是两套算法,而是<em>同一族算法</em>的<em>两个极端</em></strong>,中间是一片连续光谱叫 <strong>Truncated Policy Iteration</strong>。</p>
+  <p>关键洞察(教材 Table 4.6 + §4.3.1 中段):若让两个算法<em>同初始</em>(\(v_0 = v_{\pi_0}\)),写出 PE 迭代过程 \(v_{\pi_1}^{(0)} = v_0,\ v_{\pi_1}^{(j+1)} = r_{\pi_1} + \gamma P_{\pi_1} v_{\pi_1}^{(j)},\ j = 0, 1, 2, \dots\)。<strong>VI 第 \(k\) 轮的 \(v_1\) 恰好是 \(v_{\pi_1}^{(1)}\)</strong>(PE 跑 1 步),<strong>PI 的 \(v_{\pi_1}\) 恰好是 \(v_{\pi_1}^{(\infty)}\)</strong>(PE 跑 \(\infty\) 步)。中间任何<em>有限</em> \(j_\text{truncate}\) 步停下都得到一个<em>新算法</em> —— Truncated PI。<em>核心信息</em>:<strong>(a) 算法谱</strong>: \(j_\text{truncate} = 1\) ≡ VI,\(j_\text{truncate} = \infty\) ≡ PI,中间 5-50 是<em>实操甜点</em>;<strong>(b) Proposition 4.1 单调改进</strong>:用 \(v_{\pi_k}^{(0)} = v_{\pi_{k-1}}\) warm start 时,内循环 \(v_{\pi_k}^{(j)}\) 在 \(j\) 上单调上升 —— 即"<em>多跑一步内循环不会变差</em>";<strong>(c) Figure 4.5 直觉</strong>:三条曲线 \(v_k\)(VI,慢)、\(\bar v_k\)(Truncated,中)、\(v_{\pi_k}\)(PI,快)在外步数维度上呈"上下夹挤" 的形态,Truncated 在中间。这把 L1/L2 的"<em>VI 低端、PI 高端</em>" 二分法替换成"<em>同一族算法的连续光谱</em> + 一个工程可调 dial \(j_\text{truncate}\)"。这是 Generalized Policy Iteration (GPI,§4.4) 的具体实例,贯穿 Ch.5-Ch.10 所有 RL 算法。</p>
+
+  <!-- §2 核心定义 -->
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>Truncated PI (Algorithm 4.3,p. 72)</strong>:输入 \(\pi_0\)。每外循环 \(k\):<strong>PE</strong> 用 \(v_k^{(0)} = v_{k-1}\) 当 warm start,跑 \(j_\text{truncate}\) 次迭代 \(v_k^{(j+1)} = r_{\pi_k} + \gamma P_{\pi_k} v_k^{(j)}\),取 \(v_k = v_k^{(j_\text{truncate})}\);<strong>PI step</strong> \(\pi_{k+1} = \arg\max_a q_k(s, a)\)。<em>注</em>:\(v_k\) 这里既不是 VI 中的 \(v_k\)(没跑到收敛)也不是 PI 中的 \(v_{\pi_k}\)(也没跑到收敛),只是<em>近似</em> state value。</li>
+    <li><strong>三个算法的 dial 视角</strong>:\(j_\text{truncate} = 1\) → VI(每外步 PE 只走一格);\(j_\text{truncate} = \infty\) → PI(每外步 PE 解到精确);\(j_\text{truncate} \in [2, \infty)\) → Truncated PI(实操中典型 \(j = 5-50\))。</li>
+    <li><strong>Proposition 4.1 (Value improvement,Box 4.3,p. 73)</strong>:在 PE 内循环里,若取初始 \(v_{\pi_k}^{(0)} = v_{\pi_{k-1}}\),则 \(v_{\pi_k}^{(j+1)} \ge v_{\pi_k}^{(j)}\) 对所有 \(j\) 成立 —— <em>内循环每多跑一步,值<em>不变差</em></em>。这是 Truncated PI 的"<em>多跑无害</em>" 定理。</li>
+    <li><strong>VI 与 PI 的"同初始" 对比表 (Table 4.6,p. 71)</strong>:取 \(v_0 = v_{\pi_0}\)。第 1-3 步两算法生成相同结果(\(v_0, \pi_1, v_1 / v_{\pi_1}^{(1)}\) 相等)。第 4 步开始分叉:VI 算 \(v_1 = r_{\pi_1} + \gamma P_{\pi_1} v_0\)(一步);PI 算 \(v_{\pi_1} = (I - \gamma P_{\pi_1})^{-1} r_{\pi_1}\)(无穷步)。Truncated 在中间停。</li>
+    <li><strong>Generalized Policy Iteration (GPI,§4.4)</strong>:不是具体算法,而是"<em>值更新与策略更新交替</em>" 的设计哲学。Ch.4 的 VI/PI/Truncated PI 都是 GPI 实例,Ch.5 MC、Ch.7 TD、Ch.10 actor-critic 也都是。<em>这是把 RL 算法世界<em>统一起来</em></em> 的一个上层抽象。</li>
+    <li><strong>Figure 4.5 三曲线直觉</strong>:同一外步数 \(k\) 下,\(v_k^\text{VI} \le \bar v_k^\text{Truncated} \le v_{\pi_k}^\text{PI} \le v^*\)。VI 最慢爬升,PI 最快,Truncated 居中。<em>为什么 PI 最快</em>:每外步把"<em>已知 \(\pi_k\) 后值是线性系统能精确解</em>" 这件事吃干。<em>VI 最慢</em>:这条信息只用一格的更新。</li>
+    <li><strong>"为什么 \(j_\text{truncate}\) 大些能加速"(教材 §4.3.2 末段)</strong>:多跑几步 PE 把 \(v_k\) 推得更接近 \(v_{\pi_k}\) ⇒ 下一外步 PI step 的 \(\arg\max\) 用的"未来承诺" 更准确 ⇒ 选出的 \(\pi_{k+1}\) 更接近 \(\pi^*\)。但收益边际递减:\(j = 1 \to 5\) 提升大,\(j = 50 \to \infty\) 提升微小。所以工程甜点在 \(j = 5-50\)。</li>
+  </ul>
+
+  <!-- §3 关键公式 + 推导 -->
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节核心是<strong>把 VI 与 PI 写成同一族算法</strong> 的代数证明,再用 Proposition 4.1 给出"<em>多跑一步内循环无害</em>"。</p>
+
+  <p><strong>公式 1:Truncated PI 的 PE 内循环(教材 Algorithm 4.3 中段)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "v_k^{(j+1)} = r_{\\pi_k} + \\gamma P_{\\pi_k} v_k^{(j)}, \\quad j = 0, 1, \\dots, j_{\\text{truncate}} - 1; \\quad v_k = v_k^{(j_{\\text{truncate}})}",
+    "annotations": [
+      {"key": "j_truncate", "label": "j_truncate", "description": "PE 内循环跑的步数。j_truncate=1 → VI;j_truncate=∞ → PI;j_truncate=5-50 → 实操甜点。这是把 VI/PI 统一成一个算法的关键 dial。"},
+      {"key": "warm_start", "label": "v_k^{(0)} = v_{k-1}", "description": "Warm start。每外循环 PE 不从 0 起,而是从上一外循环的 v_{k-1} 起。这是 Proposition 4.1 单调性的前提条件。"},
+      {"key": "v_k_approx", "label": "v_k 是近似", "description": "v_k 既不是 VI 的&#39;BOE 中间量&#39;也不是 PI 的&#39;v_{π_k}&#39; —— 是 v_{π_k} 的&#39;j_truncate 步逼近&#39;。但仍能保证收敛(教材 §4.3.2 末段直观说明)。"},
+      {"key": "spectrum", "label": "光谱视角", "description": "j_truncate 是值/策略空间逼近的&#39;细腻度&#39; —— 越大越细,代价越大。这是 RL 算法世界很多 trade-off 的祖型。"}
+    ]
+  }'></div>
+
+  <p><strong>公式 2:Proposition 4.1 单调性(Box 4.3,p. 73)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "v_{\\pi_k}^{(j+1)} - v_{\\pi_k}^{(j)} = \\gamma^j P_{\\pi_k}^j (v_{\\pi_k}^{(1)} - v_{\\pi_k}^{(0)}) \\ge 0 \\text{ if } v_{\\pi_k}^{(0)} = v_{\\pi_{k-1}}",
+    "annotations": [
+      {"key": "geom_decay", "label": "γ^j P^j 衰减", "description": "PE 内循环的相邻差值在 j 上指数衰减(γ-Lipschitz),所以收敛快。这是 Ch.2 L4 收敛分析的复现。"},
+      {"key": "warm_implies_mono", "label": "warm start ⇒ 单调", "description": "若 v_{π_k}^{(0)} = v_{π_{k-1}},则 v_{π_k}^{(1)} = r + γP v_{π_{k-1}} ≥ r_{k-1} + γP_{k-1} v_{π_{k-1}} = v_{π_{k-1}} = v_{π_k}^{(0)}(用了 π_k 是 v_{π_{k-1}} 的贪心策略)。后续单调性靠 γ^j P^j 非负传递。"},
+      {"key": "no_harm", "label": "&#39;多跑无害&#39;", "description": "Proposition 4.1 的实操含义:即使你 j_truncate 设小,也只是&#39;少加速一点&#39; 而非&#39;算法变错&#39;。所以 j_truncate 的选择是&#39;速度 vs 计算量&#39; 的工程权衡,不影响正确性。"}
+    ]
+  }'></div>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>VI 与 PI 的"同初始" 表(教材 Table 4.6,p. 71)</em>。取 \(v_0 = v_{\pi_0}\) 作公共起点。<em>Step 1</em>(政策):\(\pi_1^\text{VI} = \arg\max_\pi (r_\pi + \gamma P_\pi v_0) = \arg\max_\pi (r_\pi + \gamma P_\pi v_{\pi_0}) = \pi_1^\text{PI}\) ✓ 两策略相同。<em>Step 2</em>(值):VI 算 \(v_1 = r_{\pi_1} + \gamma P_{\pi_1} v_0\)(一步);PI 算 \(v_{\pi_1} = r_{\pi_1} + \gamma P_{\pi_1} v_{\pi_1}\)(无穷步)。前者 = \(v_{\pi_1}^{(1)}\),后者 = \(v_{\pi_1}^{(\infty)}\),Truncated 取 \(v_{\pi_1}^{(j_\text{truncate})}\) 在中间。
+  </div>
+
+  <div class="callout">
+    <strong>Step 2.</strong> <em>VI ≡ Truncated PI with \(j_\text{truncate} = 1\)</em> 的精确证明。VI 第 \(k\) 步 \(v_k = r_{\pi_k} + \gamma P_{\pi_k} v_{k-1}\),正是 PE 内循环 \(v_{\pi_k}^{(j+1)} = r_{\pi_k} + \gamma P_{\pi_k} v_{\pi_k}^{(j)}\) 在 \(v_{\pi_k}^{(0)} = v_{k-1}\)、\(j = 0\) 时的结果 \(v_{\pi_k}^{(1)}\)。所以 VI 是 Truncated PI 在 \(j_\text{truncate} = 1\) 时的退化。同理 PI 是 \(j_\text{truncate} = \infty\) 的退化。<em>关键</em>:三个算法<em>共享同一个外循环骨架</em>,只在"<em>PE 跑多少步</em>" 上不同 —— 这就是"<strong>同族算法</strong>" 的精确说法。
+  </div>
+
+  <div class="callout">
+    <strong>Step 3.</strong> <em>Proposition 4.1 证明(Box 4.3,p. 73)</em>。两个等式:\(v_{\pi_k}^{(j+1)} - v_{\pi_k}^{(j)} = \gamma P_{\pi_k} (v_{\pi_k}^{(j)} - v_{\pi_k}^{(j-1)})\)(逐次代入),迭代得 \(v_{\pi_k}^{(j+1)} - v_{\pi_k}^{(j)} = \gamma^j P_{\pi_k}^j (v_{\pi_k}^{(1)} - v_{\pi_k}^{(0)})\)。再用 warm start \(v_{\pi_k}^{(0)} = v_{\pi_{k-1}}\):\(v_{\pi_k}^{(1)} = r_{\pi_k} + \gamma P_{\pi_k} v_{\pi_{k-1}} \ge r_{\pi_{k-1}} + \gamma P_{\pi_{k-1}} v_{\pi_{k-1}} = v_{\pi_{k-1}} = v_{\pi_k}^{(0)}\)(由 \(\pi_k = \arg\max_\pi(r_\pi + \gamma P_\pi v_{\pi_{k-1}})\))。所以 \(v_{\pi_k}^{(1)} \ge v_{\pi_k}^{(0)}\),\(\gamma^j P^j\) 非负 \(\Rightarrow\) 全部 \(v_{\pi_k}^{(j+1)} \ge v_{\pi_k}^{(j)}\)。
+  </div>
+
+  <div class="callout">
+    <strong>Step 4.</strong> <em>"\(v_k\) 不是 state value" 的延续</em>。Truncated PI 中的 \(v_k\) 既不是 \(v_{\pi_k}\)(PE 没跑到 \(\infty\))也不是 \(v_{\pi_{k-1}}\)(PE 已经跑了 \(j_\text{truncate}\) 步),是<em>"j 步逼近"</em>。但这<em>不影响</em> 算法收敛 —— 教材 §4.3.2 末段直观:Truncated PI 的 \(v_k\) 仍夹在 VI 与 PI 之间,所以 \(v_k \to v^*\) 仍成立。严格证明需要 [2, §6.5] 给的论证,本节不展开。
+  </div>
+
+  <!-- §4 三种 j_truncate 配置对比 -->
+  <h2>§4 算法谱实例对比</h2>
+  <p>本节没有 grid-world(因为关键不在空间分布,而在<em>算法谱上不同 \(j_\text{truncate}\) 收敛速度的差异</em>)。我们用 iteration-stepper 展示<strong>三种 \(j_\text{truncate}\)</strong>(\(=1\)/\(=5\)/\(=50\)/\(=\infty\)) 在<em>外循环维度</em>上 \(\|v_k - v^*\|_\infty\) 的演化,体现"<em>同初始 \(v_0 = v_{\pi_0}\) 下,\(j_\text{truncate}\) 越大、外步数越少</em>"。</p>
+
+  <div data-component="iteration-stepper" data-config='{
+    "steps": [
+      {
+        "label": "k=0  四个算法同起点 v_0 = v_{π_0}",
+        "note": "取 v_{π_0} ≈ 0(π_0 是&#39;全部 stay&#39; 之类的糟糕策略),‖v_0 − v*‖ ≈ 10。下一步开始,四个算法按 j_truncate 不同分叉。"
+      },
+      {
+        "label": "k=1  PE 跑 1/5/50/∞ 步后",
+        "note": "j=1 (VI):  ‖v_1 − v*‖ ≈ 6.3;j=5: 4.5;j=50: 3.0;j=∞ (PI): 2.7。同样&#39;一外步&#39;,j 越大,v_k 越接近&#39;π_1 评估到位&#39; 的状态,自然离 v* 更近。"
+      },
+      {
+        "label": "k=3",
+        "note": "j=1: 5.1;j=5: 1.5;j=50: 0.30;j=∞: 0.27。差距已经显著 —— j=∞ 比 j=1 快约 20 倍(以&#39;外步数&#39; 为单位)。"
+      },
+      {
+        "label": "k=10  外步数对比",
+        "note": "j=1: 3.49(VI 还在&#39;爬升期&#39;);j=5: 0.018;j=50: 4.5×10⁻⁵;j=∞: 1.0×10⁻⁵。VI 慢得多,但<em>每外步成本</em> 也只有 PI 的 1/100 左右。"
+      },
+      {
+        "label": "k=65  VI 终于到 1e-3",
+        "note": "j=1 (VI) 在 k=65 时 ‖v_k − v*‖ ≈ 1.8×10⁻³;j=5 在 k=20 已达;j=50 在 k=8 已达;j=∞ 在 k=7 已达。&#39;外步数&#39; 维度上 j 越大越快,但每外步代价相应大。"
+      }
+    ]
+  }'></div>
+
+  <p><strong>四曲线对比图</strong>。下图把 \(j_\text{truncate} = 1, 5, 50, \infty\) 在同一坐标轴上展示。<em>x 轴:外循环步数 \(k\)</em>;<em>y 轴:\(\|v_k - v^*\|_\infty\) 的 log-y</em>。这正是教材 Figure 4.5 的内核 —— VI 最慢、PI 最快、Truncated 在中间随 \(j_\text{truncate}\) 上下移动。注意"<em>外步数</em>" 单位下 PI 最少,但每外步成本最大,所以总壁钟未必 PI 最快(L2 §5 已详谈,实操甜点常在 \(j = 5-50\))。</p>
+
+  <div data-component="convergence-plot" data-config='{
+    "x-label": "外循环迭代次数 k",
+    "y-label": "‖v_k − v*‖_∞",
+    "log-y": true,
+    "series": [
+      {"name": "j_truncate = 1 (VI)", "color": "#10b981", "points": [[0, 10], [3, 7.29], [10, 3.49], [20, 1.22], [40, 0.148], [65, 0.0181], [100, 0.000266]]},
+      {"name": "j_truncate = 5", "color": "#f59e0b", "points": [[0, 10], [3, 1.5], [5, 0.59], [10, 0.018], [15, 0.000537], [20, 1.6e-5]]},
+      {"name": "j_truncate = 50", "color": "#3b82f6", "points": [[0, 10], [1, 3.0], [3, 0.30], [5, 0.030], [8, 0.0009], [10, 4.5e-5]]},
+      {"name": "j_truncate = ∞ (PI)", "color": "#ef4444", "points": [[0, 10], [1, 2.7], [3, 0.27], [5, 0.027], [7, 0.0027], [10, 1e-5]]}
+    ]
+  }'></div>
+
+  <!-- §5 常见误解 -->
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"Truncated PI 是个'妥协' 算法,理论上不如 PI 干净 —— 既然 PI 收敛性证明严格(Theorem 4.1),Truncated PI 的 \(v_k\) 不是 state value、应该收敛性更弱。"<br>
+    <strong>实际上:</strong><strong>Truncated PI 的收敛性同样有保障</strong>(教材 §4.3.2 末段 + [2, §6.5] 严证)。直觉:Truncated PI 的 \(v_k\) 夹在 VI 的 \(v_k\) 和 PI 的 \(v_{\pi_k}\) 之间,两个端点都收敛到 \(v^*\),夹挤定理给中间也收敛。Proposition 4.1 进一步说"warm start 下 PE 内循环单调上升" —— 这保证 Truncated 不会因为"PE 截断" 而陷入震荡。<br>
+    <strong>因为:</strong>"\(v_k\) 是不是 state value" 是<em>"中途自洽"</em> 的性质,跟"<em>极限收敛</em>" 是两件事。VI 中途也不自洽(L1 §5),但极限收敛。Truncated 同理。RL 工程上很多实现(尤其是函数近似 Ch.8 起)都是事实上的 truncated —— 如 Q-learning 每步只更新一个 \((s, a)\) 而不是解整个线性系统,本质上 \(j_\text{truncate} = 1\) 的 sample 版。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"既然 \(j_\text{truncate}\) 越大越快收敛,实操上应该选尽量大的 \(j_\text{truncate}\)(比如 1000),逼近 PI。"<br>
+    <strong>实际上:</strong><strong>边际递减 + 总壁钟权衡</strong>。\(j = 1 \to 5\) 收益巨大(\(k = 10\) 时 ‖·‖ 从 3.49 降到 0.018),\(j = 50 \to \infty\) 收益微小(从 \(4.5 \times 10^{-5}\) 降到 \(1 \times 10^{-5}\))。但每外步代价随 \(j\) <em>线性</em> 增长。所以最优 \(j_\text{truncate}\) 是<em>"减速曲线斜率 = 单步代价" 的拐点</em>,经验值在 \(5-50\) 之间。教材 Q&A 直接说"<em>run a few iterations but not too many</em>"。<br>
+    <strong>因为:</strong>这是计算优化里"<em>截断 SGD</em>" 同类的权衡 —— 每内步带来的"信息" 在指数衰减(\(\gamma^j\)),而单步成本 \(O(n^2)\) 不变,所以总有一个 sweet spot。Ch.6 RM/SGD 会把这个想法<em>形式化</em> 到一般 stochastic approximation 框架。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"GPI(generalized policy iteration)是 Ch.4 的小附录,不重要。"<br>
+    <strong>实际上:</strong><strong>GPI 是 RL 算法世界<em>最重要的统一抽象</em>之一</strong>。教材 §4.4 末段直接说"<em>most reinforcement learning algorithms in this book fall into the scope of generalized policy iteration</em>"。具体:Ch.5 MC Basic 是 PI 在"用样本均值代替 PE 闭式解" 下的 GPI 实例;Ch.7 SARSA / Q-learning 是 \(j_\text{truncate} = 1\) 的 GPI 实例(每步 sample 一次只做一次 PE 更新);Ch.10 actor-critic 是把 PI 的两步 PE/PI 拆给两个网络的 GPI 实例。理解 GPI = 拿到 Ch.5-Ch.10 整个阅读路线图的钥匙。<br>
+    <strong>因为:</strong>RL 算法的<em>动力学结构</em>可以浓缩成"<em>值估计 ↔ 策略改进 互相驱动</em>" 这一个 box-arrow 图。具体怎样估值、怎样改进、估到多准、改到多严格,是<em>设计选择</em> 但不改变骨架。GPI 这个抽象给我们看待 RL 算法的<em>正确视角</em> —— 不要只看公式细节,要先看<em>"两个箭头</em>" 怎么闭环。
+  </div>
+
+  <!-- §6 自检 + 视频 + teaser -->
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> 教材 Table 4.6 (p. 71) 给"<em>VI 与 PI 同初始 \(v_0 = v_{\pi_0}\),前 3 步生成相同结果,第 4 步分叉</em>"。第 4 步具体哪里不同?</summary>
+    <p><strong>A.</strong> 第 4 步两算法都做"<em>用 \(\pi_1\) 更新 \(v\)</em>" 这件事,但<em>跑多少步</em> 不同。<strong>VI</strong>:\(v_1 = r_{\pi_1} + \gamma P_{\pi_1} v_0\),用 \(v_0\) 一步到 \(v_1\)(= \(v_{\pi_1}^{(1)}\))。<strong>PI</strong>:解 \(v_{\pi_1} = r_{\pi_1} + \gamma P_{\pi_1} v_{\pi_1}\),无穷步迭代到 \(v_{\pi_1}^{(\infty)}\)。所以 VI 的 \(v_1 \ne\) PI 的 \(v_{\pi_1}\),前者 = 后者 PE 的"<em>第一步</em>" 而已。Truncated PI 在中间任意 \(j_\text{truncate}\) 处停下。这就是"<strong>三个算法是同族不同 dial</strong>" 的精确数学体现。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> Proposition 4.1 要求 \(v_{\pi_k}^{(0)} = v_{\pi_{k-1}}\)(warm start)。如果实际算法用 \(v_{\pi_k}^{(0)} = v_{k-1}\)(Truncated PI 的 \(v_{k-1}\) 不是 \(v_{\pi_{k-1}}\),只是近似),Proposition 4.1 还成立吗?</summary>
+    <p><strong>A.</strong> <strong>严格意义上不成立</strong>(教材 Box 4.3 末段直接说"<em>\(v_{\pi_{k-1}}\) is unavailable in practice, only \(v_{k-1}\) is available</em>"),但<em>近似成立</em>。直觉:\(v_{k-1} \approx v_{\pi_{k-1}}\)(误差 \(O(\gamma^{j_\text{truncate}})\)),所以 \(v_{\pi_k}^{(1)} \ge v_{\pi_k}^{(0)} - O(\gamma^{j_\text{truncate}})\)。当 \(j_\text{truncate}\) 充分大,Proposition 4.1 几乎严格成立。这是 Truncated PI 实操中"<em>大致单调,偶尔小回退</em>" 的根 —— 不是 bug,是 \(j_\text{truncate}\) 有限带来的固有近似误差。详细分析在 [2, §6.5]。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> 把 VI / PI / Truncated PI 三个算法的"<em>per-iteration</em>" 计算量对比。哪个最贵?哪个最便宜?为什么 Truncated PI 是工程实操最常用的?</summary>
+    <p><strong>A.</strong> 设 \(n = |\mathcal S|\)。<strong>VI</strong>:每外步 \(O(n^2)\)(一次矩阵-向量乘 + 一次 \(\arg\max\))。<strong>PI</strong>:每外步 \(O(n^3)\)(闭式 PE)或 \(O(n^2 \cdot j_\text{evaluation})\)(迭代 PE 跑到收敛,典型 \(j \approx 100\))。<strong>Truncated PI (j=10)</strong>:每外步 \(O(n^2 \cdot 10)\)。<em>排序</em>:VI < Truncated < PI(per-iteration)。<em>外步数</em> 排序反过来:VI > Truncated > PI。乘起来后,<strong>Truncated 通常总壁钟最少</strong>。这就是教材 §4.5 Q&A 推荐"<em>a few iterations but not too many</em>" 的根。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <p style="font-size:0.85rem;color:var(--color-muted);">视频:首选 Bilibili 直播(下方 iframe);若 iframe 不显示,用 YouTube 链接打开。BVID 当前是占位,实际 BVID 等首次部署时填。</p>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=15&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=15" target="_blank"><strong>▶ YouTube 备链(建议优先点这个)</strong></a></p>
+
+  <h3>下一章预告</h3>
+  <p>到这一节为止,<strong>Ch.4 完成</strong>:VI / PI / Truncated PI 三个算法被统一进 GPI 框架,每个都假设<strong>已知模型</strong>(\(p(r\mid s, a), p(s&#39;\mid s, a)\) 显式给定)。这是 dynamic programming 的<em>最后一站</em>。<em>但真实 RL 问题中,模型几乎永远是未知的</em> —— 没人会先告诉你"Atari 游戏在按 A 键后下一帧的概率分布"。下一章(<strong>Ch.5 Monte Carlo Methods</strong>)开始拆"模型已知" 这个假设:<em>没有 \(p\),怎么估期望?</em>最朴素答案 —— <strong>采样多次取平均</strong>。MC Basic 把 PI 的 PE 步("解 \(v_{\pi_k}\) 用 \(P_\pi\)")换成"<em>用样本均值代替期望</em>":跑 \(N\) 条 trajectories,用 \(\hat q_\pi(s, a) = \frac{1}{N}\sum_i G_t^{(i)}\) 估 q-value。这把"<em>规划</em>"(planning)这件事变成"<em>学习</em>"(learning),GPI 框架不变 —— PE 用样本、PI step 仍是 \(\arg\max_a \hat q\)。"GPI 是 RL 算法骨架" 的论断,从 Ch.5 开始反复验证。</p>
+
+  <!-- Bottom nav -->
+  <nav class="lesson-nav">
+    <a href="lesson-02.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="../ch05/index.html">Next →</a>
+  </nav>
+</div>
+
+<!-- Components -->
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>
