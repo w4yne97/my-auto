@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>贝尔曼最优方程(P1):动机示例 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch03-l01" data-est-minutes="20">
+<div class="container">
+
+  <!-- Top nav -->
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.3 / Lesson 1</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <!-- Header -->
+  <p class="kicker">Bilibili #9 · YouTube #9 · Book §3.1 pp. 35-37</p>
+  <h1>L1: Bellman Optimality Equation (P1 - Motivating example)<small style="color:var(--color-muted); font-weight:400;">  (贝尔曼最优方程(P1):动机示例)</small></h1>
+
+  <!-- §1 Why this lesson -->
+  <h2>§1 Why this lesson</h2>
+  <p>Ch.2 L5 收尾时,我们已经有了一个<strong>能改进策略</strong>的"小窍门":扫一遍当前 \(\pi\) 的 \(q_\pi(s, \cdot)\) 表,挑 \(\arg\max_a q_\pi(s, a)\) —— 把那个动作设成新策略,新策略的 \(v_{\pi'}(s)\) 一定不会比旧的低。在 2×2 例上,我们用这一招把 \(s_1\) 上的"50/50 随机"策略改进成"确定向下"策略,\(v_\pi(s_1)\) 从 8.5 升到 9。但 Ch.2 同时也留了一堆没回答的问题:<em>这种"局部贪心"会一直改进下去吗?会不会原地打转?</em><em>"最优策略"在数学上到底怎么定义 —— 是某种排名,还是某个不动点?</em><em>会不会有<strong>多个</strong>最优策略,或者根本<strong>没有</strong>?</em></p>
+  <p>本节(教材 §3.1,pp. 35-37)用作者的 2×2 玩具例先把"为什么要换策略、换完之后到底好在哪"讲清。\(s_1\) 上初始策略 \(\pi(a_2 \mid s_1) = 1\)(向右撞 forbidden \(s_2\)),写出贝尔曼方程逐式解,得 \(v_\pi(s_1) = 8\);再算出 \(s_1\) 的<strong>5 个动作的 \(q_\pi\) 值</strong> —— 发现 \(a_3\)(向下)的 \(q\) 值最大,达 9。把策略改成"\(s_1\) 选 \(a_3\)",新策略的 \(v\) 升到 9。这就是"<em>policy improvement</em>"的最小可视化:<strong>一次 \(\arg\max\),就把"当前 v"提升到了"还可以更好的那个 v"</strong>。本节不证收敛、不证唯一性,只完成两件事:(1) 把"什么是好策略"的<em>对比直觉</em>建立起来 —— 不同 \(\pi\) 给出不同 \(v_\pi\),它们之间真的可以分高下;(2) 把"局部 \(\arg\max\) 可以涨 v"这件事在<em>一个具体例子</em>上看明白,作为下节正式定义 \(v^*\)、\(\pi^*\) 与 BOE 的<strong>动机原型</strong>。L2 起的故事就建立在这一节种下的"\(\arg\max\) 是改进引擎"这颗种子上。</p>
+
+  <!-- §2 核心定义 -->
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>动机例(教材 §3.1,Figure 3.2,p. 36)</strong>:2×2 网格,target = \(s_4\)(蓝色,右下),forbidden = \(s_2\)(橙色,右上)。reward 设定 \(r_\text{target} = +1\)、\(r_\text{forbidden} = -1\)、其他 \(= 0\)。<strong>初始策略</strong>:\(s_1\) 上 \(\pi(a_2 \mid s_1) = 1\)(确定性向右,撞 \(s_2\)),\(s_2 / s_3\) 都向下走到 \(s_4\),\(s_4\) 自环。<em>这是一个不太好的策略</em>(作者原话: "this policy is <em>not good</em>"),因为它在 \(s_1\) 上选择了进入 forbidden 的动作 \(a_2\)。</li>
+    <li><strong>动机问题</strong>:已经知道这个策略不好,我们想"<strong>改进</strong>"它 —— 但是改进的依据是什么?是凭直觉(看着不顺眼就改),还是有<em>系统的数学量</em>可以指导?教材 §3.1 给出的答案是:<strong>看 action value \(q_\pi(s, a)\)</strong>。哪个 \(a\) 的 \(q_\pi(s_1, a)\) 最大,就把 \(\pi(s_1)\) 换成那个 \(a\)。</li>
+    <li><strong>计算策略下的 state value(教材 §3.1,p. 36 末)</strong>:对初始策略写贝尔曼方程 \(v_\pi(s_1) = -1 + \gamma v_\pi(s_2)\)、\(v_\pi(s_2) = +1 + \gamma v_\pi(s_4)\)、\(v_\pi(s_3) = +1 + \gamma v_\pi(s_4)\)、\(v_\pi(s_4) = +1 + \gamma v_\pi(s_4)\)。\(\gamma = 0.9\) 解出 \(v_\pi(s_4) = v_\pi(s_3) = v_\pi(s_2) = 10\),\(v_\pi(s_1) = -1 + 0.9 \cdot 10 = 8\)。</li>
+    <li><strong>计算 action value(教材 §3.1,p. 37 上)</strong>:用 Ch.2 L5 公式 (2.14) \(q_\pi(s, a) = \sum_r p(r\mid s,a) r + \gamma \sum_{s&#39;} p(s&#39;\mid s,a) v_\pi(s&#39;)\) 算出 \(s_1\) 全部 5 个动作:\(q_\pi(s_1, a_1) = 6.2\)(向上撞墙弹回)、\(q_\pi(s_1, a_2) = 8\)(向右撞 forbidden,与当前 \(v_\pi(s_1)\) 对得上 ✓)、\(q_\pi(s_1, a_3) = 9\)(向下走 \(s_3\),最大!)、\(q_\pi(s_1, a_4) = 6.2\)(向左撞墙)、\(q_\pi(s_1, a_5) = 7.2\)(原地停留)。<strong>关键观察</strong>:\(q_\pi(s_1, a_3) \ge q_\pi(s_1, a_i)\) 对所有 \(i \ne 3\) 成立。</li>
+    <li><strong>策略改进规则 (policy improvement,§3.1 末段)</strong>:\(\pi'(s_1) \doteq \arg\max_a q_\pi(s_1, a) = a_3\)(向下)。换言之,把 \(\pi\) 在 \(s_1\) 处的动作"换成 \(q_\pi\) 表中那个最高的"。新策略 \(\pi'\):\(s_1\) 选 \(a_3\)、其他状态不变。<em>直觉</em>:每个状态都"贪心"地选当前 \(q_\pi\) 表里最值钱的动作 —— 这就是后面 Ch.4 Policy Iteration 的内核机制。</li>
+    <li><strong>本节没回答的问题(也是后续 §3.2-3.4 的剧本)</strong>:(a) 反复"改一改"会不会陷入循环或停在某个非最优? (b) 如果原始策略<em>每个状态都不好</em>,这种局部 \(\arg\max\) 还能给出全局最优吗? (c) "最优策略"严格定义是什么?是否一定<strong>存在</strong>?是否<strong>唯一</strong>?(d) 是否一定<strong>确定性</strong>(deterministic),还是可能随机? <em>这四个问题决定了 RL 整套理论能不能立起来</em>;§3.2-3.4 会逐个回答。</li>
+  </ul>
+
+  <!-- §3 关键公式 + 推导 -->
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节没有"全新公式",但有<strong>一条核心思路</strong>需要写下来 —— 它将是 §3.2 BOE 的<em>骨架雏形</em>。</p>
+
+  <p><strong>公式 1:策略改进的<em>局部</em> \(\arg\max\) 规则(教材 §3.1 末段)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\pi&#39;(s) = \\arg\\max_{a \\in \\mathcal{A}} q_\\pi(s, a), \\quad \\forall s \\in \\mathcal{S}",
+    "annotations": [
+      {"key": "argmax", "label": "argmax_a q_π(s,a)", "description": "在状态 s 上枚举所有动作的 q 值,挑那个最大的 a。这是&#39;在 q 表的某一行选最值列&#39;,逐行独立。"},
+      {"key": "input", "label": "输入: 当前 q_π 表", "description": "右端 q_π(s,a) 是&#39;在当前策略 π 下&#39;算出来的,需要先用贝尔曼方程把 π 的 v_π 解出,再用 (2.14) 把 q_π 算出。"},
+      {"key": "output", "label": "输出: 新策略 π&#39;", "description": "新策略 π&#39; 是&#39;确定性的&#39;(每个 s 只挑一个 a),与原 π 可能是随机的不同。L4 我们会发现:&#39;确定性贪心&#39;就是 BOE 求解出的最优策略形式。"},
+      {"key": "improvement", "label": "改进性质 (本节例)", "description": "本节 2×2 例:从 v_π(s_1) = 8 升到 v_{π&#39;}(s_1) = 9。一般情况下 policy improvement 一定 v_{π&#39;}(s) ≥ v_π(s) ∀s —— 这是 Ch.4 PI 的&#39;改进定理&#39;,这里先看具体例子。"},
+      {"key": "for_all_s", "label": "∀ s ∈ 𝒮", "description": "每个状态独立做 argmax,逐行选最大 —— 因为 q_π 表已经把跨状态的耦合消化进每个 q_π(s,a) 了(它内含了 γ Σ p(s&#39;|s,a) v_π(s&#39;) 这一项)。"}
+    ]
+  }'></div>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>"为什么 \(\arg\max_a q_\pi\) 是合理的改进方向"</em>。从 Ch.2 L5 关系 (2.13) \(v_\pi(s) = \sum_a \pi(a\mid s) q_\pi(s, a)\) 出发:\(v_\pi(s)\) 是<em>按 \(\pi\) 分布加权平均</em>的 \(q_\pi(s, \cdot)\)。如果把<em>所有</em>权重压到 \(q\) 最大的那个 \(a^*\) 上,新加权平均就是 \(q_\pi(s, a^*) = \max_a q_\pi(s, a) \ge \sum_a \pi(a\mid s) q_\pi(s, a) = v_\pi(s)\)。所以"贪心选 \(\arg\max\)"<em>立即</em>给出"加权和不会变小"。这是个<em>局部一阶</em>论证 —— 它说明改一次就涨,但没说反复改后会不会停下来,这是 Ch.4 的故事。
+  </div>
+
+  <div class="callout">
+    <strong>Step 2.</strong> <em>本节例的算术验证</em>。代入数据:\(\sum_a \pi(a\mid s_1) q_\pi(s_1, a) = 1 \cdot q_\pi(s_1, a_2) = 8 = v_\pi(s_1)\) ✓(这条对得上是因为 \(q_\pi(s_1, a_2)\) 等于 \(v_\pi(s_1)\) 当 \(\pi\) 确定性选 \(a_2\) 时;Ch.2 L5 末段 R3 已说明:确定性策略下 \(v_\pi(s) = q_\pi(s, a^*_\pi)\))。换成贪心 \(\pi'(s_1) = a_3\) 后,新加权和 = \(q_\pi(s_1, a_3) = 9\),即 \(v_{\pi'}(s_1) \ge 9\) —— 而<em>实际</em>新 \(v_{\pi'}(s_1)\) 也是 9(因为 \(s_1\) 上的改动不影响 \(s_2, s_3, s_4\) 的转移与 reward,代入 \(v_{\pi'}(s_1) = 0 + 0.9 \cdot v_{\pi'}(s_3) = 0 + 0.9 \cdot 10 = 9\),完全等号成立)。<strong>注意</strong>:此时 \(q_\pi\) 的"\(\pi\)" 仍是<em>旧</em>策略下的 \(q\) 表 —— 改完策略后<strong>没有重算 \(q\)</strong>。下章 PI 会发现:再用新策略重算 \(q_{\pi'}\)、再 \(\arg\max\)、再改…… 这就是<em>策略迭代</em>。
+  </div>
+
+  <!-- §4 Grid-world 例子 -->
+  <h2>§4 Grid-world 实例化</h2>
+  <p>把 §3.1 的 2×2 例搬到我们贯穿全书的 5×5 框架里看。设定:target = \((3, 2)\),forbidden = \(\{(1,1),(2,1),(2,2),(1,3),(3,3)\}\),\(\gamma = 0.9\)。考察起点 \((0, 0)\) 上的<strong>三个候选策略</strong>(只在 \((0, 0)\) 上不同,其他状态都按"沿外圈走到 target"的安全策略),通过对比 trajectory return 来直观看"策略 \(\to\) state value"的映射:</p>
+
+  <p><strong>策略 A(向下,安全长路)</strong>:在 \((0, 0)\) 上选 \(\downarrow\),走 \((0,0)\!\to\!(1,0)\!\to\!(2,0)\!\to\!(3,0)\!\to\!(4,0)\!\to\!(4,1)\!\to\!(4,2)\!\to\!(3,2)\),共 7 步,完全不踩 forbidden。每步 \(r = 0\),到 target 后每步 \(+1\)。\(\text{return}_A = \gamma^7 \cdot \dfrac{1}{1-\gamma} = 0.9^7 / 0.1 \approx 4.783\)。</p>
+
+  <div data-component="gridworld" id="gw-ch03-l01" data-config='{
+    "rows": 5, "cols": 5,
+    "target": [3, 2],
+    "forbidden": [[1,1],[2,1],[2,2],[1,3],[3,3]],
+    "agent": [0, 0],
+    "policy": [
+      ["↓","↓","↓","↓","↓"],
+      ["↓","","↓","","↓"],
+      ["↓","","","→","↓"],
+      ["↓","→","","","←"],
+      ["→","→","↑","←","←"]
+    ],
+    "trajectory": [[0,0],[1,0],[2,0],[3,0],[4,0],[4,1],[4,2],[3,2]]
+  }'></div>
+
+  <p><strong>策略 B(向右,踩 forbidden 短路)</strong>:在 \((0, 0)\) 上选 \(\rightarrow\)、然后下行直冲 \((1,1)\) forbidden。即 trajectory \((0,0)\!\to\!(0,1)\!\to\!(1,1)_\text{forb}\!\to\!(2,1)_\text{forb}\!\to\!(3,1)\!\to\!(3,2)\),共 5 步、踩 forbidden 2 次拿 \(-2\)。\(\text{return}_B = -\gamma^2 - \gamma^3 + \gamma^5 \cdot \dfrac{1}{1-\gamma} = -0.81 - 0.729 + 0.59049/0.1 \approx -1.539 + 5.905 = 4.366\)。比策略 A 还低 —— "短路"撞 forbidden 的 \(-1\) 罚分把折扣后的总 return 拉了下来。</p>
+
+  <p><strong>策略 C(向上,撞墙)</strong>:在 \((0, 0)\) 上选 \(\uparrow\)、agent 弹回原格(boundary 在本系列设 \(r = 0\)),然后再走"向下"的安全路。trajectory \((0,0)\!\to\!(0,0)\!\to\!(1,0)\!\to\!\dots\!\to\!(3,2)\),共 8 步。\(\text{return}_C = \gamma^8 / (1-\gamma) = 0.9^8 / 0.1 \approx 4.305\)。 <em>"撞墙换不走 + 第一步 reward = 0"导致同款 trajectory 比 A 长 1 步、return 折扣多一档</em>。</p>
+
+  <p><strong>三策略 return 排序:\(A > B > C\)。</strong>这就给我们一个具体的"哪个 \(\pi\) 更好"的标量答案。下面用 distribution-bar 把这三种"\((0, 0)\) 处可选的动作分布"可视化(确定性策略 = 单峰条形;混合策略 = 多峰条形):</p>
+
+  <div data-component="distribution-bar" data-config='{
+    "actions": ["↑","→","↓","←","·"],
+    "distributions": [
+      {"label": "策略 A: ↓", "values": [0, 0, 1, 0, 0]},
+      {"label": "策略 B: →", "values": [0, 1, 0, 0, 0]},
+      {"label": "策略 C: ↑", "values": [1, 0, 0, 0, 0]},
+      {"label": "随机混合: 0.5↓ + 0.5→", "values": [0, 0.5, 0.5, 0, 0]}
+    ]
+  }'></div>
+
+  <p><strong>怎么读这张分布图?</strong>每行是一个候选策略 \(\pi(\cdot \mid (0,0))\) 的概率分布,5 个 bar 对应 5 个动作 \(\{\uparrow, \rightarrow, \downarrow, \leftarrow, \cdot\}\)。前三个是确定性策略(单 bar 高 100%),第四个是 \(0.5/0.5\) 混合 —— 它的 return 是 \(0.5 \cdot \text{return}_A + 0.5 \cdot \text{return}_B \approx 0.5 \cdot 4.783 + 0.5 \cdot 4.366 \approx 4.575\),正好夹在 A、B 之间(L1 §2.1 \(\text{return}_3\) 那种"加权平均"故事的复刻)。</p>
+
+  <p><strong>"局部 \(\arg\max\)" 在 \((0, 0)\) 上的具体演算。</strong>为算 \(q_\pi(s, \cdot)\) 我们需要先有一个 \(\pi\) 与对应的 \(v_\pi\)。取策略 A 作为<em>当前</em> \(\pi\),它在 \((0, 0)\) 上是 \(\downarrow\)、\(v_\pi((0,0)) \approx 4.783\)、\(v_\pi((1,0)) \approx 5.314\)(下一步沿外圈)。\((0,0)\) 上 5 个 \(q_\pi\) 值分别为:\(q_\pi(\uparrow) = 0 + \gamma v_\pi((0,0)) \approx 4.305\)(撞顶墙,弹回原格);\(q_\pi(\rightarrow) = 0 + \gamma v_\pi((0,1)) \approx 4.778\)(走右邻,\(v_\pi((0,1)) \approx 5.31\));\(q_\pi(\downarrow) = 0 + \gamma v_\pi((1,0)) \approx 4.783\)(走下邻,这就是策略 A 自己);\(q_\pi(\leftarrow) = 0 + \gamma v_\pi((0,0)) \approx 4.305\)(撞左墙);\(q_\pi(\cdot) = 0 + \gamma v_\pi((0,0)) \approx 4.305\)。<strong>\(\arg\max = \downarrow\)</strong>(与策略 A 自身一致,且与 \(\rightarrow\) 在小数位上几乎并列 —— 这反映了 \((0, 1)\) 与 \((1, 0)\) 都是"距离 target Manhattan 5 步"这件事;若按本系列 schematic 热图 \(v_\pi((0, 1)) = v_\pi((1, 0)) = 5.31\),两者会精确并列,平局)。<em>策略 A 在 \((0, 0)\) 上已经是当前 \(q\) 表的"贪心点"</em>,改不动了(本格局部已最优)。这就是 §3.2 即将正式给出的"<em>greedy 不动点</em>"现象:当某个状态的策略恰是 \(q_\pi\) 的 \(\arg\max\),改进就停在那里。如果<em>所有</em>状态都满足这个性质,我们就抵达 \(\pi^*\) 了 —— 这是 L2 / L3 的故事。</p>
+
+  <!-- §5 常见误解 -->
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"改进策略是看 \(v_\pi(s)\),哪个状态 \(v\) 低就<em>从那个</em>状态下手。"<br>
+    <strong>实际上:</strong>改进的尺度是 <strong>\(q_\pi(s, a)\) 而非 \(v_\pi(s)\)</strong>。\(v_\pi(s)\) 只告诉你"在 \(s\) 上当前策略的总分多少",<em>不告诉你换哪个动作能涨分</em>;\(q_\pi(s, a)\) 把"动作维度"打开,直接看见"选 \(a\) 与不选 \(a\) 的差距"。本节例 \(s_1\) 上 \(v_\pi = 8\),但你单看这个数无法判断"该往哪改";只有看到 \(q_\pi(s_1, a_3) = 9 > q_\pi(s_1, a_2) = 8\) 才知道"换成 \(a_3\) 涨 1 分"。<br>
+    <strong>因为:</strong>RL 的可调对象是 \(\pi(\cdot \mid s)\) 这个动作分布,不是 \(v_\pi(s)\) 本身;改 \(\pi\) 的"搜索方向"自然在动作维度上,需要逐动作的评估值 \(q\)。这也是 Ch.2 L5 反复强调"<em>未被 \(\pi\) 选中的动作也有 \(q\) 值</em>"的根本原因 —— 没有那些"未被选中动作的 \(q\) 值",改进就无从谈起。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"既然改一次就涨 v,那直接随机改 100 次,再挑 v 最高的那个不就完了?"<br>
+    <strong>实际上:</strong>"<em>盲目随机</em>"的策略空间是 \(|\mathcal{A}|^{|\mathcal{S}|}\)(确定性策略数,本课 \(5^{25} \approx 3 \times 10^{17}\)),不可能枚举。<strong>\(\arg\max_a q_\pi\)</strong> 提供的是<em>一阶下降方向</em> —— 它不是"试错"而是"按梯度走":每次都朝"局部最值钱"的方向迈一步,有<em>结构</em>的搜索。Ch.4 PI 会证明:这种贪心序列 \(\pi_0 \to \pi_1 \to \dots\) 在有限步内一定收敛到 \(\pi^*\),不需要随机搜。<br>
+    <strong>因为:</strong>\(q_\pi\) 这张表里编码了 MDP 的<strong>全部下一步信息</strong>(\(\sum_r p(r) r + \gamma \sum_{s&#39;} p(s&#39;) v_\pi(s&#39;)\)),贪心是在<em>已经知道下一步价值</em>的情况下做选择,远比黑盒搜索高效。这正是"<em>model-based</em>"算法(本章 + Ch.4)优于"model-free"枚举的根本来源 —— 模型 + 当前 \(v_\pi\) 给了你"动作的局部值钱程度"这个免费的搜索方向。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"既然每次 \(\arg\max\) 都涨 v,那本节看到 \(v_\pi(s_1)\) 从 8 升到 9 之后,<strong>这就是最优了</strong> —— \(\pi^*(s_1) = a_3\),case closed。"<br>
+    <strong>实际上:</strong><em>本节没有证明这是最优,只证明了"还可以更好"</em>。新策略 \(\pi'\) 是否仍可改进?要再算一次 \(q_{\pi'}\) 表才知道(<em>请注意 \(q\) 的下标变成新策略 \(\pi'\) 了 —— 因为 \(v_{\pi'} \ne v_\pi\)</em>)。本节恰巧 \(s_2, s_3, s_4\) 都没改,\(v_{\pi'}\) 与 \(v_\pi\) 在那三个状态上一致,\(q_{\pi'}(s_1, \cdot)\) 也跟 \(q_\pi(s_1, \cdot)\) 一致 —— 所以 \(\pi'\) 在 \(s_1\) 上的<em>新</em> \(\arg\max\) 还是 \(a_3\)、再改一次跟没改一样,这就停下来了。但这只是"巧合的"局部 / 全局重合;一般情况下需要<em>反复</em>"算 \(q\) — \(\arg\max\) — 重算 \(q\) — \(\arg\max\)" 直到不再变化,这就是 Ch.4 PI。<br>
+    <strong>因为:</strong>"局部一次贪心 \(\Rightarrow\) 全局最优" 不是免费的,要用 BOE 的<em>压缩映射</em>性质(L3 的故事)才能证。本节只是<em>动机</em>:让你相信"贪心是个好引擎",至于"它能开多远",L2-L3 给数学保证。
+  </div>
+
+  <!-- §6 自检 + 视频 + teaser -->
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> 在本节 2×2 例 §2 的初始策略下(\(\pi(a_2 \mid s_1) = 1\)),\(q_\pi(s_1, a_5)\) 为什么是 7.2 而不是 7.65(Ch.2 L5 §4 的同例值)?差别从哪来?</summary>
+    <p><strong>A.</strong> 差别来自 \(s_1\) 上策略不同 \(\Rightarrow\) \(v_\pi(s_1)\) 不同。Ch.2 L5 §4 上 \(s_1\) 用 \(\pi(a_2 \mid s_1) = \pi(a_3 \mid s_1) = 0.5\) 随机策略,得 \(v_\pi(s_1) = 8.5\);本节 \(s_1\) 用 \(\pi(a_2 \mid s_1) = 1\) 确定性策略,得 \(v_\pi(s_1) = 8\)。\(a_5\) 是"原地停留",其 \(q_\pi\) 值正比于 \(v_\pi(s_1)\):本节 \(q_\pi(s_1, a_5) = 0 + 0.9 \cdot 8 = 7.2\);Ch.2 L5 §4 \(q_\pi(s_1, a_5) = 0 + 0.9 \cdot 8.5 = 7.65\)。<em>记号警示</em>:\(q_\pi(s_1, a_5)\) 中的 \(\pi\) 是<strong>整个策略</strong>,不仅仅是 \(s_1\) 上的那一个动作 —— 换 \(\pi\) 就重算 \(v_\pi\),所有 \(q_\pi(s, a)\) 都跟着变。这是 Ch.2 L5 (R2) 的具体复刻。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> 本节算出 \(q_\pi(s_1, a_3) = 9\) 是<em>当前</em>策略 \(\pi\) 下的值。把 \(s_1\) 改成 \(\pi'(s_1) = a_3\) 之后,新 \(q_{\pi'}(s_1, a_3)\) 还是 9 吗?</summary>
+    <p><strong>A.</strong> 是的,仍然是 9 —— <strong>但理由微妙</strong>。\(q_{\pi'}(s_1, a_3) = 0 + \gamma v_{\pi'}(s_3)\)。\(s_3\) 上策略 \(\pi'\) 与 \(\pi\) 没改,且 \(s_3\) 上的转移与 reward 也没动 \(\Rightarrow\) \(v_{\pi'}(s_3) = v_\pi(s_3) = 10 \Rightarrow q_{\pi'}(s_1, a_3) = 9\)。<em>关键是 "\(s_3\) 后面的策略链没变"</em>。如果 \(s_3\) 的策略也跟着改了,\(v_{\pi'}(s_3)\) 就可能不再是 10,\(q_{\pi'}(s_1, a_3)\) 也跟着变。一般情况下,改 \(s\) 上的动作会通过 \(p(s&#39; \mid s, a)\) 影响"以 \(s\) 为前驱的状态"的 \(v\),需要重新解一次贝尔曼方程才能得到 \(v_{\pi'}\) 和 \(q_{\pi'}\)。这就是 Ch.4 PI"策略评估 + 策略改进"交替执行的<em>缘由</em>:每改一次,要把 \(v\) 重算一遍。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> 假设 \(s_1\) 的<em>所有</em> 5 个动作的 \(q_\pi\) 值都相等(都是 7.5),\(\arg\max\) 还能给出唯一的策略改进吗?这样的"平局"在 5×5 grid-world 里一般什么时候会出现?</summary>
+    <p><strong>A.</strong> 平局时 \(\arg\max\) 集合 \(\{a : q_\pi(s, a) = \max\}\) 不止一个元素,任意挑一个都能得到合法的"贪心策略",但<strong>策略不再唯一</strong>。这种"多策略同 v"的现象正是教材 §3.4 末段(Theorem 3.5)指出的"<em>optimal policies may not be unique</em>" —— 见 Figure 3.3 的两个等价最优策略例子。一般什么时候会出现?(a) 状态对所有动作的转移都"等价"(比如对称中心);(b) reward 与 \(\gamma\) 调出"两条路殊途同归"(本节 5×5 例如果策略 A、B 不踩 forbidden,return 一样,就有平局)。RL 实践中遇到平局通常用"字典序 / 随机打破"或者直接保留多个解,Ch.4 PI 实现里这是个常见 detail。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <p style="font-size:0.85rem;color:var(--color-muted);">视频:首选 Bilibili 直播(下方 iframe);若 iframe 不显示,用 YouTube 链接打开。BVID 当前是占位,实际 BVID 等首次部署时填。</p>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=9&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=9" target="_blank"><strong>▶ YouTube 备链(建议优先点这个)</strong></a></p>
+
+  <h3>下一节预告</h3>
+  <p>这一节我们看到了 \(\arg\max_a q_\pi\) 这个"局部改进引擎":它在<strong>具体例子</strong>上把 \(v_\pi(s_1)\) 从 8 抬到 9。但还有一连串问题没回答:<em>"最优策略" \(\pi^*\) 严格定义是什么</em>?<em>是否存在</em>?<em>是否唯一</em>?<em>"算 \(v_\pi\) 再 \(\arg\max\)"和"直接把 \(\max\) 写进贝尔曼方程"是不是一回事</em>?下一节(L2,Book §3.2-3.3)直接登场<strong>贝尔曼最优方程 (BOE)</strong>:把 Ch.2 (2.7) 中的 \(\sum_a \pi(a\mid s)[\dots]\) 替换成 \(\max_a [\dots]\),得到 \(v(s) = \max_a [\sum_r p(r\mid s,a) r + \gamma \sum_{s&#39;} p(s&#39;\mid s,a) v(s&#39;)]\)。这是从"<em>评估给定 \(\pi\)</em>"跨越到"<em>直接刻画最优 \(v^*\)</em>"的关键一跳 —— 我们将看到,BOE 不再是关于"特定 \(\pi\) 下的 \(v_\pi\)"的方程,而是直接<em>定义最优 \(v^*\)</em>,且 \(\pi^*\) 通过 \(\arg\max\) 隐式给出。L3 再用<strong>压缩映射定理</strong>证 BOE 解存在唯一,L4 谈最优性质。</p>
+
+  <!-- Bottom nav -->
+  <nav class="lesson-nav">
+    <a href="../ch02/lesson-05.html">← Prev (Ch.2)</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-02.html">Next →</a>
+  </nav>
+</div>
+
+<!-- Components -->
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>
