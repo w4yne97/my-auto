@@ -70,10 +70,16 @@ def validate_lessons_yaml(path: Path) -> list[YamlSchemaIssue]:
 
 
 def validate_lesson_html(path: Path) -> list[LessonHtmlIssue]:
+    """Verify lesson has §1..§6 h2 sections.
+
+    Tolerates inline tags inside h2 (e.g. <h2>§4 ...<em>foo</em>...</h2>):
+    extract h2 contents first, then search for the §N marker as text.
+    """
     issues: list[LessonHtmlIssue] = []
     text = path.read_text()
+    h2_blocks = re.findall(r"<h2[^>]*>(.*?)</h2>", text, re.DOTALL)
     for sec in REQUIRED_SECTIONS:
-        if not re.search(rf"<h2[^>]*>[^<]*{re.escape(sec)}[^<]*</h2>", text):
+        if not any(sec in block for block in h2_blocks):
             issues.append(
                 LessonHtmlIssue("missing_section", f"{sec} h2 not found", path)
             )

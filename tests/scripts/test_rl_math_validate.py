@@ -79,6 +79,18 @@ def test_validate_lesson_html_passes(tmp_path):
     assert issues == []
 
 
+def test_validate_lesson_html_tolerates_inline_tags(tmp_path):
+    """h2 with inline tags (e.g. <em>) inside should still be detected."""
+    text = GOOD_LESSON.replace(
+        '<h2>§4 Grid-world 例子</h2>',
+        '<h2>§4 Grid-world <em>实例化</em></h2>',
+    )
+    p = tmp_path / "lesson-01.html"
+    p.write_text(text)
+    issues = validate_lesson_html(p)
+    assert issues == []
+
+
 def test_validate_lesson_html_missing_section(tmp_path):
     bad = GOOD_LESSON.replace('<h2>§4 Grid-world 例子</h2>', '')
     p = tmp_path / "lesson-01.html"
