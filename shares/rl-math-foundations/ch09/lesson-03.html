@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>策略梯度方法(P3):指标 2——平均奖励 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch09-l03" data-est-minutes="20">
+<div class="container">
+
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.9 / Lesson 3</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <p class="kicker">Bilibili #47 · YouTube #47 · Book §9.2 pp. 193-198</p>
+  <h1>L3: PG (P3) — Metric 2: Average Reward<small style="color:var(--color-muted); font-weight:400;">  (策略梯度 P3:指标二,平均奖励)</small></h1>
+
+  <h2>§1 Why this lesson</h2>
+  <p>L2 给了<em>第一种</em> 指标 \(\bar v_\pi\)("<em>平均状态值</em>",discounted 视角,\(\gamma < 1\))。本节(教材 §9.2 第二部分,pp. 195-198)给<em>第二种</em>:<em>平均奖励 (average reward)</em> \(\bar r_\pi = \sum_s d_\pi(s) r_\pi(s) = \mathbb E_{S\sim d_\pi}[r_\pi(S)]\)。直观:<em>策略每步获得的 reward 的 long-run 平均值</em>。这一指标在<em>无折扣</em>(\(\gamma = 1\))或<em>无穷 horizon</em> 场景<em>更自然</em> —— 机器人持续运行、网络流控、广告竞价等"<em>没有终止</em>" 的任务,\(\sum \gamma^t R\) 收敛性可疑(\(\gamma = 1\) 时和发散),但每步均值<em>恒</em> 有限。本节<strong>三件事</strong>:<em>(a)</em> 给定义;<em>(b)</em> 证三种<em>等价表达</em>(求和、期望、Cesaro 极限);<em>(c)</em> 证<strong>Lemma 9.1</strong> \(\bar r_\pi = (1-\gamma)\bar v_\pi\) —— L2 与 L3 在 \(\gamma < 1\) 下<em>同向最优</em>。</p>
+  <p>核心 takeaway:<strong>(a) 定义</strong>:\(\bar r_\pi \doteq \sum_s d_\pi(s) r_\pi(s)\),其中 \(r_\pi(s) = \sum_a \pi(a|s; \theta) r(s, a) = \mathbb E_{A\sim\pi(s)}[r(s, A)]\) 是<em>状态 \(s\) 上的<em>期望即时</em> reward</em>(教材 (9.3))。<strong>(b) 三等价</strong>:\(\bar r_\pi = \sum_s d_\pi(s) r_\pi(s) = \mathbb E_{S\sim d_\pi}[r_\pi(S)] = \lim_{n\to\infty}\frac{1}{n}\mathbb E[\sum_{t=0}^{n-1} R_{t+1}]\)(教材 (9.4)-(9.5),Box 9.1 用 Cesaro 平均证)。<strong>(c) Lemma 9.1</strong>:\(\bar r_\pi = (1-\gamma)\bar v_\pi\),证用贝尔曼方程 \(v_\pi = r_\pi + \gamma P_\pi v_\pi\) 左乘 \(d_\pi^\top\) 化简。<strong>(d) 含义</strong>:\(\gamma < 1\) 下两 metric 只差<em>常数</em> 因子 \((1-\gamma)\) ⇒ \(\arg\max_\theta \bar r_\pi = \arg\max_\theta \bar v_\pi\),用谁优化都一样。\(\gamma = 1\) 时 \(\bar v_\pi\) 不存在(\(v_\pi\) 发散),只 \(\bar r_\pi\) 可用。<strong>(e) 桥到 L4</strong>:L4 PG 定理对<em>both</em> metric 各推一遍 —— Theorem 9.3 处理 \(\bar v_\pi\)(approximation),Theorem 9.5 处理 \(\bar r_\pi\)(strict equality 在 \(\gamma = 1\),更优雅)。\(\bar r_\pi\) 是 PG 定理的<em>最干净</em> 形式。</p>
+
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>状态期望 reward \(r_\pi(s)\)(教材 (9.3))</strong>:\(r_\pi(s) = \sum_a \pi(a|s; \theta) r(s, a) = \mathbb E_{A\sim\pi(s)}[r(s, A)]\)。<em>"<em>从 \(s\) 出发,按 \(\pi\) 取 \(a\),\(r(s, a)\) 的期望</em>"</em>。这是<em>即时</em>(one-step)reward,不含未来。\(r(s, a) = \mathbb E[R | s, a] = \sum_r r p(r|s, a)\)。</li>
+    <li><strong>平均奖励 \(\bar r_\pi\)(教材 (9.2))</strong>:\(\bar r_\pi = \sum_s d_\pi(s) r_\pi(s) = d_\pi^\top r_\pi\)(向量内积形式)。\(d_\pi\) 必须是<em>策略相关</em> stationary distribution(L2 的 \(d_0\) 在此<em>不</em> 适用 —— 平均奖励本质是<em>长期</em> 行为度量,起点早被遗忘)。</li>
+    <li><strong>Cesaro 平均(教材 Box 9.1)</strong>:\(\lim_{n\to\infty}\frac{1}{n}\sum_{k=1}^n a_k = \lim_{k\to\infty} a_k\)(若后者存在)。"<em>序列的平均极限 = 序列的极限</em>"。这是 \(\bar r_\pi\) 与 discounted return \(\frac{1}{n}\mathbb E[\sum R_{t+1}]\) 等价的<em>关键工具</em>。</li>
+    <li><strong>三种等价(教材 Table 9.2)</strong>:<em>(i)</em> 求和 \(\sum_s d_\pi(s) r_\pi(s)\);<em>(ii)</em> 期望 \(\mathbb E_{S\sim d_\pi}[r_\pi(S)]\);<em>(iii)</em> 长期平均 \(\lim_n \frac{1}{n}\mathbb E[\sum_{t=0}^{n-1} R_{t+1}]\)(教材 (9.4))。前两者形式改写,第三者用 Cesaro + stationary distribution 证(Box 9.1)。</li>
+    <li><strong>Lemma 9.1: \(\bar r_\pi = (1-\gamma) \bar v_\pi\)</strong>(教材 §9.2 末)</strong>:<em>(i)</em> 由贝尔曼 \(v_\pi = r_\pi + \gamma P_\pi v_\pi\) 左乘 \(d_\pi^\top\):\(d_\pi^\top v_\pi = d_\pi^\top r_\pi + \gamma d_\pi^\top P_\pi v_\pi\);<em>(ii)</em> 用 stationary 性质 \(d_\pi^\top P_\pi = d_\pi^\top\):右侧 = \(d_\pi^\top r_\pi + \gamma d_\pi^\top v_\pi\);<em>(iii)</em> 移项 \(\bar v_\pi - \gamma \bar v_\pi = \bar r_\pi\) ⇒ \(\bar r_\pi = (1-\gamma)\bar v_\pi\)。</li>
+    <li><strong>"<em>discounted</em> vs <em>undiscounted</em>"</strong>:\(\gamma < 1\) ⇒ 两 metric 只差常数,可互换;\(\gamma = 1\) ⇒ \(\bar v_\pi\) 发散(\(\sum 1 \cdot R\) 不收敛),只 \(\bar r_\pi\) 可定义。所以教材 §9.3.2 (L4 后半)<em>专门</em> 讲<em>无折扣</em> 情形 —— \(\bar r_\pi\) 是<em>更通用</em> 的指标。</li>
+    <li><strong>桥到 L4 PG 定理</strong>:Theorem 9.3 给 \(\bar r_\pi\) 在 \(\gamma < 1\) 下的梯度(approximation,丢一个量级 \(O(1)\) 项);Theorem 9.5 给 \(\bar r_\pi\) 在 \(\gamma = 1\) 下的梯度(<em>strict equality</em>,更优雅)。\(\bar r_\pi\) 这一指标在 PG 定理推导中<em>最干净</em>,这是教材教 \(\bar r_\pi\) 而非只 \(\bar v_\pi\) 的<em>结构</em> 原因。</li>
+  </ul>
+
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节核心是<strong>三种等价表达 + Lemma 9.1 证明</strong>。</p>
+
+  <p><strong>公式 1:平均奖励定义(教材 (9.2)-(9.3))</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\bar r_\\pi \\doteq \\sum_{s\\in\\mathcal S} d_\\pi(s) r_\\pi(s) = \\mathbb E_{S\\sim d_\\pi}[r_\\pi(S)] = d_\\pi^\\top r_\\pi, \\quad r_\\pi(s) = \\sum_{a\\in\\mathcal A}\\pi(a|s; \\theta) r(s, a)",
+    "annotations": [
+      {"key": "one_step", "label": "one-step reward", "description": "r_π(s) 只考虑&#39;从 s 走一步&#39; 的期望 reward,不含 γ 折扣未来。这与 v_π(s) = E[Σ γ^t R] 不同 —— v_π 看到底,r_π 只看一步。"},
+      {"key": "weight_d_pi", "label": "必须用 d_π 加权", "description": "L2 的 v̄_π 可用 d_0 或 d_π;但 r̄_π <em>必须</em> 用 d_π。原因:&#39;每步平均 reward&#39; 概念本质是&#39;长期&#39;,起点早被遗忘 ⇒ 加权一定是 long-run 频率 d_π。"},
+      {"key": "inner_prod", "label": "内积形式", "description": "r̄_π = d_π^T r_π,与 v̄_π = d_π^T v_π 几何同构(都是 R^|S| 内积)。L4 求 ∇_θ r̄_π 时同样&#39;线性化&#39; 推。"},
+      {"key": "interpretation", "label": "&#39;每步&#39; 含义", "description": "若 agent 每步收到 reward,r̄_π 是这些 reward 的&#39;长期平均&#39;。100 步累 R = 100 × r̄_π(approx)。所以 r̄_π 单位是 reward/step,而 v̄_π 单位是 total reward(无 step 分母)。"},
+      {"key": "no_gamma", "label": "无 γ 出现", "description": "r̄_π 的定义里<em>没有</em> γ ⇒ 适用 γ ∈ [0, 1] 包括 γ = 1。这是 r̄_π 比 v̄_π 更&#39;通用&#39; 的形式优势。"}
+    ]
+  }'></div>
+
+  <p><strong>公式 2:Cesaro-平均等价(教材 (9.4)-(9.5),Box 9.1)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "J(\\theta) = \\lim_{n\\to\\infty} \\frac{1}{n} \\mathbb E\\left[\\sum_{t=0}^{n-1} R_{t+1}\\right] = \\sum_{s\\in\\mathcal S} d_\\pi(s) r_\\pi(s) = \\bar r_\\pi",
+    "annotations": [
+      {"key": "literature_form", "label": "文献形式", "description": "RL 论文常写 J = lim (1/n) E[Σ R_{t+1}],&#39;每步平均 reward&#39;,n→∞。乍看与 d_π 无关,实则等价于 r̄_π。Cesaro 平均工具证(下方 Step)。"},
+      {"key": "no_gamma_again", "label": "无 γ", "description": "比 L2 的 E[Σ γ^t R] 少了 γ ⇒ 即使 γ = 1 也收敛(因有 1/n 分母)。这是&#39;average reward&#39; 在<em>无折扣</em> RL 的&#39;标配&#39; 目标(Sutton-Barto Ch.10 也用)。"},
+      {"key": "stationary_assumed", "label": "stationary 隐含", "description": "等式用了 lim_{t→∞} P^t(s|s_0) = d_π(s)(P 收敛到 stationary)。要求 P_π <em>遍历</em>(每状态可达)。否则 d_π 不唯一,r̄_π 也无定义。"},
+      {"key": "init_invariant", "label": "起点不影响", "description": "(9.4) 中没出现初始分布 d_0 —— Cesaro 平均把起点&#39;遗忘&#39; 了。这是&#39;长期&#39; 度量的特征:无论从哪起,长期平均都收敛到同一 r̄_π。这一性质让 r̄_π 比 v̄_π <em>更&#39;客观&#39;</em>(独立于初始)。"}
+    ]
+  }'></div>
+
+  <p><strong>公式 3:Lemma 9.1 — \(\bar r_\pi = (1-\gamma) \bar v_\pi\)(教材 §9.2 末)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "v_\\pi = r_\\pi + \\gamma P_\\pi v_\\pi \\;\\Longrightarrow\\; d_\\pi^\\top v_\\pi = d_\\pi^\\top r_\\pi + \\gamma (d_\\pi^\\top P_\\pi) v_\\pi = d_\\pi^\\top r_\\pi + \\gamma d_\\pi^\\top v_\\pi \\;\\Longrightarrow\\; \\bar v_\\pi - \\gamma \\bar v_\\pi = \\bar r_\\pi \\;\\Longrightarrow\\; \\bar r_\\pi = (1-\\gamma)\\bar v_\\pi",
+    "annotations": [
+      {"key": "bellman_start", "label": "起点:贝尔曼方程", "description": "Ch.2 的 v_π = r_π + γ P_π v_π(矩阵-向量形式)。这是 v_π 的<em>结构</em> 方程。"},
+      {"key": "left_mult_d", "label": "左乘 d_π^T", "description": "把 d_π^T 同时点到等号两边,得 d_π^T v_π = d_π^T r_π + γ d_π^T P_π v_π。左侧 d_π^T v_π 就是 v̄_π;右侧 d_π^T r_π 就是 r̄_π。"},
+      {"key": "stationary_use", "label": "用 d_π^T P_π = d_π^T", "description": "stationary distribution 的关键性质(Ch.6 / Ch.8 L4 / 本章都用)。这一步把 d_π^T P_π v_π 化简为 d_π^T v_π = v̄_π。"},
+      {"key": "rearrange", "label": "移项", "description": "v̄_π = r̄_π + γ v̄_π ⇒ v̄_π(1 - γ) = r̄_π ⇒ r̄_π = (1-γ) v̄_π。&#39;一行&#39; 完成。"},
+      {"key": "implication", "label": "含义:同向最优", "description": "γ < 1 ⇒ (1-γ) > 0 是<em>正</em> 常数 ⇒ r̄_π 与 v̄_π 严格同向。argmax_θ r̄_π = argmax_θ v̄_π,优化谁等价。最大化 r̄_π 自动最大化 v̄_π,反之亦然。L2 与 L3 在 γ < 1 下&#39;同一目标&#39;。"}
+    ]
+  }'></div>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>Cesaro 平均的<em>具体</em> 用法</em>。Box 9.1 第一步证 \(\bar r_\pi = \lim_{n\to\infty}\frac{1}{n}\mathbb E[\sum_{t=0}^{n-1} R_{t+1} | S_0 = s_0]\)(任意起点 \(s_0\))。关键:\(\frac{1}{n}\sum_{t=0}^{n-1} \mathbb E[R_{t+1}|S_0]\) 的<em>极限</em> 由 Cesaro 平均 \(=\) \(\lim_{t\to\infty} \mathbb E[R_{t+1}|S_0]\)。后者 \(=\) \(\sum_s r_\pi(s)\lim_{t\to\infty} P^{(t)}(s|s_0) = \sum_s r_\pi(s) d_\pi(s) = \bar r_\pi\)(stationary 性质)。<em>关键</em>:Cesaro 把"<em>每步期望的<em>序列</em></em>" 转成"<em>稳定后的<em>极限</em></em>",从而起点 \(s_0\) <em>被遗忘</em>。这是"<em>average reward 不依赖起点</em>" 的形式根。
+  </div>
+
+  <div class="callout">
+    <strong>Step 2.</strong> <em>"<em>\(\bar r_\pi\) 没有 \(\gamma\)</em>" 的<em>实际意义</em></em>。机器人控制:agent 持续运行 24 小时不停,无"<em>终止</em>" 概念。\(\sum \gamma^t R\) 在 \(\gamma = 1\) 下发散,在 \(\gamma < 1\) 下"<em>未来打折</em>" 与<em>"<em>每步同等重要</em>"</em> 的任务直觉不符;\(\bar r_\pi\) <em>每步同权</em>,直接对应"<em>持续高 reward</em>"。<em>另一例</em>:网络流控,目标是<em>长期</em> 吞吐率,正是"<em>每步 reward 平均</em>"。教材 §9.3.2 (L4 后半)在<em>\(\gamma = 1\)</em> 下推 PG 定理,得 Theorem 9.5(strict equality),数学上比 \(\bar v_\pi\) 的 Theorem 9.3(approximation)<em>更</em> 干净 —— 工程上反而 \(\bar r_\pi\) 是<em>首选</em> 形式。
+  </div>
+
+  <div class="callout">
+    <strong>Step 3.</strong> <em>"<em>\(\bar r_\pi = (1-\gamma)\bar v_\pi\)</em>" 之外的<em>"<em>不同点</em>"</em></em>。Lemma 9.1 让人误以为两 metric "<em>完全等价</em>";<em>但</em>:<em>(i)</em> 求<em>梯度</em> 时形式<em>不同</em>:\(\nabla \bar r_\pi\) 在 \(\gamma = 1\) 严格 = \(\mathbb E[\nabla \ln \pi \cdot q_\pi]\)(Theorem 9.5);\(\nabla \bar v_\pi\) 含一项 \((1-\gamma)^{-1}\) 系数 + 高阶残项(Theorem 9.3 是 \(\gamma \to 1\) 极限的近似)。<em>(ii)</em> 用<em>不同</em> 状态分布 \(\eta\):\(\bar v_\pi^0\) 的 PG 定理用 \(\rho_\pi\)(discounted total probability,(9.19));\(\bar r_\pi\) 用 \(d_\pi\)(stationary)。<em>(iii)</em> 数值上"<em>同向</em>" 不等于"<em>梯度同方向</em>" —— 实际工程选哪个目标 ⇒ 用哪个梯度公式。<em>结论</em>:Lemma 9.1 给了"<em>同最优</em>",但<em>怎么</em> 走到最优(梯度路径)在两 metric 下细节不同。
+  </div>
+
+  <h2>§4 数值演示:\(\bar r_\pi\) 与 \(\bar v_\pi\) 的比例验证</h2>
+  <p>用 L2 玩具 MDP:3 状态,\(v_\pi = [10, 5, 8]^\top\),\(d_\pi = [0.3, 0.4, 0.3]\)。设 \(r_\pi = [1.0, 0.5, 0.8]^\top\)(\(\pi\) 在三状态下 one-step 期望 reward),\(\gamma = 0.9\)。</p>
+
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\begin{array}{l|l|l} \\text{量} & \\text{计算} & \\text{值} \\\\ \\hline \\bar v_\\pi = d_\\pi^\\top v_\\pi & 0.3 \\cdot 10 + 0.4 \\cdot 5 + 0.3 \\cdot 8 & 7.4 \\\\ \\bar r_\\pi = d_\\pi^\\top r_\\pi & 0.3 \\cdot 1.0 + 0.4 \\cdot 0.5 + 0.3 \\cdot 0.8 & 0.74 \\\\ (1-\\gamma)\\bar v_\\pi & 0.1 \\cdot 7.4 & 0.74 \\\\ \\text{Lemma 9.1 验证} & \\bar r_\\pi \\stackrel{?}{=} (1-\\gamma)\\bar v_\\pi & ✓ \\end{array}",
+    "annotations": [
+      {"key": "compute_separately", "label": "独立计算两 metric", "description": "v̄_π 由 d_π^T v_π 直接给(本节未直接验,但 L2 算过 = 7.4)。r̄_π 由 d_π^T r_π 给 = 0.74。"},
+      {"key": "lemma_check", "label": "Lemma 9.1 数值检验", "description": "(1-γ) v̄_π = 0.1 × 7.4 = 0.74 = r̄_π,完全一致。这一玩具上 Lemma 9.1 严格成立(贝尔曼 + stationary 性质两条均满足)。"},
+      {"key": "scale_diff", "label": "尺度差 1/(1-γ)", "description": "v̄_π = 7.4 大,r̄_π = 0.74 小,比例 = 1/(1-γ) = 10。直观:v̄_π 是&#39;累积总回报&#39;(γ=0.9 下平均寿命 ~ 10 步),r̄_π 是&#39;每步平均&#39;,两者差&#39;寿命&#39; 因子。"},
+      {"key": "argmax_invariant", "label": "argmax 不变", "description": "由 r̄_π = 0.1 v̄_π,maxim r̄_π ⟺ maxim v̄_π。L2 的最优 θ* 与 L3 的最优 θ* <em>同一个 θ</em>。但梯度数值差 (1-γ) 因子,实际 SGD 步长需 calibrate。"}
+    ]
+  }'></div>
+
+  <p style="font-size:0.85rem; color:var(--color-muted);">观察:\(\bar v_\pi\) 与 \(\bar r_\pi\) <em>同号同向</em>,只差 \((1-\gamma)\) 因子(本例 \(=0.1\))。但<em>梯度</em> 的形式不同(L4 Theorem 9.3 vs Theorem 9.5),且<em>无折扣</em> (\(\gamma=1\)) 下只有 \(\bar r_\pi\) 可用。\(\bar r_\pi\) 是 PG 定理<em>更通用</em> 的入口。</p>
+
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"既然 \(\bar r_\pi = (1-\gamma)\bar v_\pi\),Ch.9 何必<em>两个</em> 都讲?直接用 \(\bar v_\pi\) 一个就够了。"<br>
+    <strong>实际上:</strong><strong>\(\gamma = 1\) 时 \(\bar v_\pi\) <em>不存在</em></strong>。Lemma 9.1 只在 \(\gamma < 1\) 下成立(证明用 \(I - \gamma P_\pi\) 可逆,要求 \(\gamma < 1\))。\(\gamma = 1\) ⇒ \(v_\pi(s) = \mathbb E[\sum_{t=0}^\infty R_{t+1}|s]\) 在<em>非吸收</em> 链上发散 ⇒ \(\bar v_\pi\) 无定义。<em>但</em> \(\bar r_\pi\) 在 \(\gamma = 1\) 仍有定义(Cesaro 平均收敛)。<em>无折扣</em> RL 任务(机器人持续控制)<em>必须</em> 用 \(\bar r_\pi\)。<br>
+    <strong>因为:</strong>"<em>等价</em>" 是<em>条件</em>(\(\gamma < 1\))下的等价。Ch.9 教<em>both</em> 是为<em>覆盖</em> 全场景:\(\gamma < 1\) 用 \(\bar v_\pi\)(传统 RL,episode 化任务),\(\gamma = 1\) 用 \(\bar r_\pi\)(continuing tasks)。L4 也<em>分</em> 9.3.1 (discounted) / 9.3.2 (undiscounted) 两小节推 PG 定理。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"\(\bar r_\pi\) 既然是<em>每步</em> 平均 reward,只看 immediate reward 即可,与<em>未来</em> 无关 ⇒ 应该比 \(\bar v_\pi\) 容易学。"<br>
+    <strong>实际上:</strong><strong>\(\bar r_\pi\) <em>仍隐含</em> 长期 dynamics</strong>。\(\bar r_\pi = d_\pi^\top r_\pi\) 中 \(d_\pi\) 是<em>长期</em> 访问频率,由 \(\pi\) 与 \(P\) <em>共同</em> 决定 ⇒ 改 \(\theta\) 改 \(\pi\) 改 \(d_\pi\)。即使 \(r_\pi\) 是 one-step,\(\bar r_\pi\) 通过 \(d_\pi\) 把"<em>长期 dynamics</em>" 引回。\(\nabla_\theta \bar r_\pi\) 仍含 \(\nabla_\theta d_\pi\) 项(L4 Theorem 9.5 推完,严格形式 \(\mathbb E[\nabla \ln \pi \cdot q_\pi]\) 中的 \(q_\pi\) 用 Poisson equation 定义,内涵<em>长期</em>)。<br>
+    <strong>因为:</strong>RL 的<em>长期</em> 与<em>即时</em> 不可分。\(\bar r_\pi\) 把"<em>长期</em>" 藏到 \(d_\pi\) 中,\(\bar v_\pi\) 把"<em>长期</em>" 藏到 \(v_\pi\) 中,本质都是<em>"<em>策略 + 转移</em>" 的耦合</em>。两者难度相当,选哪个看<em>形式便利</em> 与<em>任务设定</em>。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"Lemma 9.1 证明<em>左乘</em> \(d_\pi^\top\) 看起来像<em>魔法</em> 一步,有什么直觉?"<br>
+    <strong>实际上:</strong><strong>"<em>左乘 \(d_\pi^\top\)</em>" 是<em>把贝尔曼方程的<em>每行</em> 按 \(d_\pi\) 加权<em>求和</em></em></strong>。贝尔曼 \(v_\pi(s) = r_\pi(s) + \gamma \sum_{s&#39;} P_\pi(s, s&#39;) v_\pi(s&#39;)\) 是<em>每个</em> \(s\) 一行;左乘 \(d_\pi^\top\) 即<em>对所有 \(s\) 按 \(d_\pi\) 加权累加</em>,把<em>逐行</em> 等式合成<em>一个</em> 标量等式。这一<em>"<em>加权求和</em>"</em> 操作在 RL 推导中无处不在(Ch.8 L4 \(A \succ 0\) 证、Ch.9 L4 PG 定理),核心是<em>\(d_\pi^\top P_\pi = d_\pi^\top\)</em> 的 stationary 性质让 \(\sum_{s&#39;}\) 项<em>自身</em> 化简。<br>
+    <strong>因为:</strong>stationary distribution 是 \(P_\pi\) 的<em>左特征向量</em>(特征值 1),\(d_\pi^\top P_\pi = d_\pi^\top\) 让"<em>加权求和后再传一步</em>" 与"<em>加权求和</em>" 相等 ⇒ 任意<em>"<em>线性贝尔曼</em>"</em> 形式都可这一步<em>消化</em> \(P_\pi\)。这是 RL 矩阵分析的<em>万能 lever</em>。
+  </div>
+
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> 写出 \(\bar r_\pi\) 的<em>三种</em> 等价表达,并指出哪一种适合 \(\gamma = 1\) 场景。</summary>
+    <p><strong>A.</strong> <em>(i)</em> 求和 \(\bar r_\pi = \sum_s d_\pi(s) r_\pi(s)\)("<em>原生</em>" 定义);<em>(ii)</em> 期望 \(\bar r_\pi = \mathbb E_{S\sim d_\pi}[r_\pi(S)]\)(SGD 友好,样本估);<em>(iii)</em> Cesaro 长期平均 \(\bar r_\pi = \lim_n \frac{1}{n}\mathbb E[\sum_{t=0}^{n-1} R_{t+1}]\)(教材 (9.4),Box 9.1 用 Cesaro 平均证)。三者数学等价。<em>哪种适合 \(\gamma = 1\)</em>:三种<em>都</em> 适合(\(\bar r_\pi\) 定义里没 \(\gamma\)),区别仅是<em>形式</em>。前两者数学严格,第三者<em>更直观</em>(表达"<em>每步平均 reward</em>" 的物理直觉)。注意 \(\bar v_\pi\) 在 \(\gamma = 1\) 下<em>不存在</em>(发散),所以 continuing tasks <em>必须</em> 用 \(\bar r_\pi\)。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> 用贝尔曼方程证 Lemma 9.1: \(\bar r_\pi = (1-\gamma)\bar v_\pi\)。</summary>
+    <p><strong>A.</strong> <em>第一步</em>:贝尔曼方程 \(v_\pi = r_\pi + \gamma P_\pi v_\pi\)(矩阵-向量形式,Ch.2 L4)。<em>第二步</em>:左乘 \(d_\pi^\top\) ⇒ \(d_\pi^\top v_\pi = d_\pi^\top r_\pi + \gamma d_\pi^\top P_\pi v_\pi\)。<em>第三步</em>:用 stationary 性质 \(d_\pi^\top P_\pi = d_\pi^\top\) ⇒ 右侧第二项 = \(\gamma d_\pi^\top v_\pi\)。<em>第四步</em>:左侧 = \(\bar v_\pi\),右侧 = \(\bar r_\pi + \gamma \bar v_\pi\) ⇒ \(\bar v_\pi - \gamma \bar v_\pi = \bar r_\pi\) ⇒ \(\bar r_\pi = (1-\gamma)\bar v_\pi\)。<em>含义</em>:\(\gamma < 1\) 下两 metric 同向最优,任选一优化即可。\(\gamma = 1\) 下证明失效(\((1-\gamma) = 0\) 给 \(\bar r_\pi = 0\) 错误结论 —— 实际是 \(\bar v_\pi\) 发散导致 lim 不存在)。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> 为什么"<em>average reward</em>" 任务的<em>argmax</em> 在 \(\gamma < 1\) 与 \(\gamma = 1\) 下可能<em>不同</em>?</summary>
+    <p><strong>A.</strong> \(\gamma < 1\) 下 \(\bar r_\pi = (1-\gamma)\bar v_\pi\),最大化 \(\bar r_\pi\) 等价于最大化 \(\bar v_\pi\),解的形式上<em>同</em>。<em>但</em>:\(\bar v_\pi\) <em>偏向</em> "<em>近期高 reward</em>"(\(\gamma\) 折扣后期);\(\bar r_\pi\) (\(\gamma = 1\)) 等权所有时刻。例:agent 选"<em>立即拿 +1 然后 0</em>" vs "<em>10 步后拿 +10 持续</em>"。\(\gamma = 0.9\) 下前者 \(\bar v \approx 1\)、后者 \(\bar v \approx 10 \cdot 0.9^{10}/(1-0.9) \approx 35\) ⇒ 后者优;\(\gamma = 0.5\) 下后者 \(\bar v \approx 10 \cdot 0.5^{10}/(1-0.5) \approx 0.02\) ⇒ 前者优。<em>argmax</em> 在<em>同 \(\gamma\)</em> 下两 metric 等价(Lemma 9.1),但<em>不同 \(\gamma\)</em> 给不同最优。\(\gamma = 1\) 是"<em>无视折扣</em>" 的<em>极限</em> 选择,适合 continuing tasks。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=47&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=47" target="_blank">YouTube 备链</a></p>
+
+  <h3>下一节预告</h3>
+  <p>本节给了<em>第二种</em> 指标 \(\bar r_\pi\) 与 Lemma 9.1。L2 + L3 把<em>两种</em> 指标 \(J(\theta)\) 都<em>定义</em> 完毕。<strong>L4(教材 §9.3, pp. 198-209,40 分钟最长一节)</strong> 是 Ch.9 的<em>核心定理</em>:<em>对两种 metric 求 \(\nabla_\theta J\)</em>。<strong>policy gradient theorem</strong> 给出<em>统一</em> 形式 \(\nabla_\theta J(\theta) = \mathbb E_{S\sim\eta, A\sim\pi}[\nabla_\theta \ln\pi(A|S; \theta) \cdot q_\pi(S, A)]\)(教材 (9.9),Theorem 9.1)。L4 推 4 步:<em>(i)</em> 起 \(J(\theta) = \bar v_\pi\) 或 \(\bar r_\pi\);<em>(ii)</em> 取 \(\nabla_\theta\);<em>(iii)</em> 用 <em>log-derivative trick</em> \(\nabla \pi / \pi = \nabla \ln \pi\);<em>(iv)</em> 凑成 \(\mathbb E[\nabla \ln \pi \cdot q_\pi]\)。这是 PG 与 DQN 在<em>形式</em> 上的<em>分水岭</em>:DQN 学 \(\hat q\) 然后 max,PG 直接用 \(\nabla \ln \pi\) 不需 max。L5 把 \(q_\pi\) 用<em>样本回报</em> \(G_t\) 替代,得 REINFORCE。</p>
+
+  <nav class="lesson-nav">
+    <a href="lesson-02.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-04.html">Next →</a>
+  </nav>
+</div>
+
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>
