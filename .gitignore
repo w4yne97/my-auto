@@ -37,3 +37,6 @@ shares/
 # start-my-day platform additions
 *.zip
 /tmp/start-my-day/
+
+# Git worktrees (isolated workspaces for feature work)
+.worktrees/
