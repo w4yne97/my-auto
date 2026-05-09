@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>progress.js tests</title></head>
+<body>
+<h1>progress.js — assertion tests</h1>
+<p>Open DevTools console to see PASS/FAIL output.</p>
+<div id="results"></div>
+<script src="progress.js"></script>
+<script>
+function assertEq(actual, expected, msg) {
+  const pass = JSON.stringify(actual) === JSON.stringify(expected);
+  const div = document.createElement('div');
+  div.textContent = (pass ? '✓' : '✗') + ' ' + msg;
+  div.style.color = pass ? 'green' : 'red';
+  document.getElementById('results').appendChild(div);
+  if (!pass) console.error(msg, 'expected', expected, 'got', actual);
+}
+
+// Reset state for each test run
+localStorage.removeItem('rl-math-foundations:progress:v1');
+
+// Test 1: fresh state has empty completed array
+const fresh = Progress.read();
+assertEq(fresh.completed, [], 'fresh state has empty completed');
+assertEq(fresh.version, 1, 'fresh state has version=1');
+
+// Test 2: markComplete adds an id and updates lastVisited
+Progress.markComplete('ch01-l01', 25);
+const after1 = Progress.read();
+assertEq(after1.completed, ['ch01-l01'], 'markComplete adds to completed');
+assertEq(after1.estimatedMinutes['ch01-l01'], 25, 'estimatedMinutes recorded');
+assertEq(after1.lastVisited, 'ch01-l01', 'lastVisited updated');
+
+// Test 3: markComplete is idempotent (calling twice doesn't duplicate)
+Progress.markComplete('ch01-l01', 25);
+const after2 = Progress.read();
+assertEq(after2.completed, ['ch01-l01'], 'markComplete is idempotent');
+
+// Test 4: isComplete returns true for completed lesson
+assertEq(Progress.isComplete('ch01-l01'), true, 'isComplete true for completed');
+assertEq(Progress.isComplete('ch01-l02'), false, 'isComplete false for not completed');
+
+// Test 5: stats returns counts and total minutes
+Progress.markComplete('ch01-l02', 30);
+const s = Progress.stats();
+assertEq(s.totalCompleted, 2, 'stats.totalCompleted is 2');
+assertEq(s.totalMinutes, 55, 'stats.totalMinutes is 55');
+
+// Test 6: nextLessonId returns first id from list not in completed
+const order = ['ch01-l01', 'ch01-l02', 'ch01-l03', 'ch02-l01'];
+assertEq(Progress.nextLessonId(order), 'ch01-l03', 'nextLessonId returns first uncompleted');
+
+// Test 7: reset() clears state
+Progress.reset();
+const cleared = Progress.read();
+assertEq(cleared.completed, [], 'reset clears completed');
+</script>
+</body></html>
