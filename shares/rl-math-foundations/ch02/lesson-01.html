@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>贝尔曼方程(P1):动机示例 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch02-l01" data-est-minutes="20">
+<div class="container">
+
+  <!-- Top nav -->
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.2 / Lesson 1</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <!-- Header -->
+  <p class="kicker">Bilibili #4 · YouTube #4 · Book §2.1-2.2 pp. 15-19</p>
+  <h1>L1: Bellman Equation (P1 - Motivating examples)<small style="color:var(--color-muted); font-weight:400;">  (贝尔曼方程(P1):动机示例)</small></h1>
+
+  <!-- §1 Why this lesson -->
+  <h2>§1 Why this lesson</h2>
+  <p>第 1 章末尾,我们把"策略好坏"翻译成了一个数 —— 折现回报 \(G_t = \sum_{k=0}^\infty \gamma^k r_{t+k+1}\)。但 \(G_t\) 是<strong>随机变量</strong>:策略可能随机、环境也可能随机,从同一个状态出发,每次走出来的 trajectory 不一定一样,得到的 return 自然也不同。这就带来一个尴尬:如果想说"策略 \(\pi_1\) 比策略 \(\pi_2\) 好",到底拿哪条 trajectory 的 return 来比?</p>
+  <p>本节(教材 §2.1-2.2,pp. 15-19)用作者的两个最小例子把这件事钉死。<strong>§2.1</strong> 用三个三宫格策略告诉你"return 真的可以分出策略好坏";<strong>§2.2</strong> 接着用一个四格循环例子告诉你"return 之间可以互相递归 —— 一个状态的 return 能由<em>下一个</em>状态的 return 写出来"。这两个例子加在一起,就是后面三节(state value → Bellman equation → 矩阵-向量形式)的全部直觉来源:return 可以评估策略,而 return 之间靠 <strong>bootstrapping</strong> 自洽。把这两件事看明白,后面的公式只是把它们写成一般形式而已。</p>
+
+  <!-- §2 核心定义 -->
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>动机例 1(§2.1,p. 16,Figure 2.2)</strong>:三个 2×2 网格,target = \(s_4\)(蓝色,右下角),forbidden = \(s_2\)(橙色,右上角),reward 设定 \(r_\text{target} = +1\)、\(r_\text{forbidden} = -1\)、其他 \(= 0\)。三种策略只在 \(s_1\) 上不同:左图"\(s_1\) 向下走"(走 \(s_3\) 安全路);中图"\(s_1\) 向右走"(直接闯 \(s_2\));右图"\(s_1\) 一半向下一半向右"(随机策略)。</li>
+    <li><strong>三条 return 的对比(§2.1,p. 16-17)</strong>:写出每条策略下从 \(s_1\) 出发的 (折现) return,得到 \(\text{return}_1 = \dfrac{\gamma}{1-\gamma}\)、\(\text{return}_2 = -1 + \dfrac{\gamma}{1-\gamma}\)、\(\text{return}_3 = -0.5 + \dfrac{\gamma}{1-\gamma}\),从而 \(\text{return}_1 > \text{return}_3 > \text{return}_2\) 对<strong>任意</strong> \(\gamma \in (0,1)\) 成立 —— 数学上严格地复述了"避开 forbidden 的策略最优"这个直觉。</li>
+    <li><strong>动机例 2(§2.2,p. 17-18,Figure 2.3)</strong>:一个 2×2 循环网格,4 个状态都是普通格,策略让 agent 沿 \(s_1 \to s_2 \to s_3 \to s_4 \to s_1 \to \dots\) 永远绕圈。记 \(v_i\) 为"从 \(s_i\) 出发"得到的折现 return。<em>关键观察</em>:\(v_1, v_2, v_3, v_4\) 不是孤立的,它们之间有<strong>耦合关系</strong>。</li>
+    <li><strong>Bootstrapping(§2.2,p. 18)</strong>:从定义出发本可以一项项展开 \(v_1 = r_1 + \gamma r_2 + \gamma^2 r_3 + \dots\);但作者重写成 \(v_1 = r_1 + \gamma v_2\),把"无限项求和"压缩为"一步即时 reward + γ 倍下一状态的 return"。这种"用未知的 \(v_2\) 表达未知的 \(v_1\)"的写法,就是 <strong>bootstrapping(自举)</strong>:用同类未知量的关系网,绕开无穷展开。</li>
+    <li><strong>矩阵-向量预告(§2.2,p. 18 末)</strong>:把 4 条 \(v_i = r_i + \gamma v_{i+1 \bmod 4}\) 组合起来,得到 \(v = r + \gamma P v\),从而 \(v = (I - \gamma P)^{-1} r\)。这就是<strong>本章贝尔曼方程的"特例"</strong>:策略已确定、环境已确定,所以方程退化成一个线性方程组,直接闭式求解。后面 L4 会把这个特例升级成一般情况。</li>
+  </ul>
+
+  <!-- §3 关键公式 + 推导 -->
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节没有"全新公式",但有<strong>两条核心思想</strong>需要写下来 —— 它们是 §2.3 起所有公式的源头。</p>
+
+  <p><strong>公式 1:三策略 return 排序(教材 §2.1,公式 (2.1),p. 17)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\text{return}_1 = \\dfrac{\\gamma}{1-\\gamma}, \\quad \\text{return}_2 = -1 + \\dfrac{\\gamma}{1-\\gamma}, \\quad \\text{return}_3 = -0.5 + \\dfrac{\\gamma}{1-\\gamma}",
+    "annotations": [
+      {"key": "return_1", "label": "return₁ (走 s₃)", "description": "trajectory s₁→s₃→s₄→s₄→…,r₁=0、之后每步都拿 +1。折现 return = γ·1 + γ²·1 + … = γ/(1-γ)。"},
+      {"key": "return_2", "label": "return₂ (走 s₂ forbidden)", "description": "trajectory s₁→s₂→s₄→s₄→…,r₁=−1、之后每步 +1。折现 return = −1 + γ/(1-γ)。"},
+      {"key": "return_3", "label": "return₃ (随机策略)", "description": "0.5 概率走 s₃ 路、0.5 概率走 s₂ 路。注意它已经是&#39;期望&#39;,作者后面会指出:这正是 state value 的雏形。"},
+      {"key": "ordering", "label": "排序: 1 > 3 > 2", "description": "对任意 γ ∈ (0,1) 都成立 —— 数学上严格地把直觉&#39;避开 forbidden 最好&#39;变成定理。"}
+    ]
+  }'></div>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>为什么三策略只在 \(s_1\) 不同就够了:</em>因为 trajectory 的差异完全来自 \(s_1\) 的第一步动作 —— 一旦走到 \(s_3\) 或 \(s_2\) 之后,后续策略就一样了。这正是作者的"控制变量法":把策略差异压在<strong>一个状态</strong>上,return 的差异就直接归因到那一个动作。<br>
+    <strong>Step 2.</strong> <em>\(\text{return}_3\) 不是严格的 return,而是 return 的期望。</em>作者在 p. 17 末尾原话写"\(\text{return}_3\) does not strictly comply with the definition of returns because it is more like an expected value. It will become clear later that \(\text{return}_3\) is actually a state value."这就是下一节 \(v_\pi(s) \doteq \mathbb{E}_\pi[G_t \mid S_t = s]\) 的<strong>动机原型</strong>。
+  </div>
+
+  <p><strong>公式 2:bootstrapping 形式(教材 §2.2,公式 (2.3),p. 18)</strong></p>
+  <p>对图 2.3 的循环 4 格,把 \(v_i\) 展开后再"递归压缩":</p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "v_1 = r_1 + \\gamma v_2, \\quad v_2 = r_2 + \\gamma v_3, \\quad v_3 = r_3 + \\gamma v_4, \\quad v_4 = r_4 + \\gamma v_1",
+    "annotations": [
+      {"key": "v_i", "label": "v_i", "description": "从 s_i 出发的折现 return(本例策略和环境都确定,所以 return 就是一个数,不需要期望)。"},
+      {"key": "r_i", "label": "r_i", "description": "在 s_i 执行策略给出的动作后,环境立即给出的 immediate reward。"},
+      {"key": "gamma_v_next", "label": "γ · v_{next}", "description": "下一个状态的 return,被 γ 折扣一次。这就是 bootstrap:用 v_{next} 这个&#39;同类未知量&#39;表达 v_i,而不是无限展开。"},
+      {"key": "loop", "label": "v_4 → v_1", "description": "因为是循环 trajectory,v_4 又回到 v_1,4 个未知量首尾相接构成线性方程组。"}
+    ]
+  }'></div>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>从无穷级数到一步递推</em>。原始定义 \(v_1 = r_1 + \gamma r_2 + \gamma^2 r_3 + \dots\) 是无限项;按 \(\gamma\) 把第一项分出来,剩下的 \((r_2 + \gamma r_3 + \dots)\) 就是<strong>从 \(s_2\) 出发</strong>的同款定义,正好等于 \(v_2\)。所以 \(v_1 = r_1 + \gamma v_2\)。这一步换写法是整章的<strong>骨架</strong>:后面 §2.4 推 Bellman 方程时,我们会对随机情形重做一遍这件事(只是把 \(v_2\) 换成"对所有可能下一状态的期望")。<br>
+    <strong>Step 2.</strong> <em>线性代数视角。</em>把 4 个等式拼成 \(v = r + \gamma P v\)(具体矩阵 \(P\) 是把"\(s_i\) 后跟 \(s_{i+1}\)"那一对置 1 的循环置换矩阵)。整理为 \((I - \gamma P) v = r\),只要 \(I - \gamma P\) 可逆,就有 \(v = (I - \gamma P)^{-1} r\) —— 一步求解,没有迭代,没有近似。L4 会证明对任意策略 \(\pi\),\(I - \gamma P_\pi\) 都可逆。<br>
+    <strong>Step 3.</strong> <em>"用未知量算未知量"为什么不矛盾。</em>初学者容易卡在"我要算 \(v_1\),它依赖未知的 \(v_2\) ——这不是死循环吗?"答案是:\(v_1, v_2, v_3, v_4\) 不是<strong>一个个</strong>分别算,而是<strong>一起</strong>算 —— 它们是同一个线性方程组的 4 个未知数。这就是 bootstrap 的本质:把一组耦合未知量,放进一个矩阵方程里同时求解。
+  </div>
+
+  <!-- §4 Grid-world 例子 -->
+  <h2>§4 Grid-world 实例化</h2>
+  <p>把上面的两个动机例子放回我们贯穿全书的 5×5 网格,直观地看 <strong>"哪条 trajectory 对应哪个 return"</strong>。设定:target = \((3, 2)\),forbidden = \(\{(1,1), (2,1), (2,2), (1,3), (3,3)\}\),起点 \((0, 0)\),\(\gamma = 0.9\)。下图展示 <strong>策略 A:走外圈安全路</strong>,沿第 0 列下到 \((4,0)\),再沿第 4 行右到 \((4,2)\),最后向上一步到 target,共 7 步,完全不踩 forbidden:</p>
+  <div data-component="gridworld" id="gw-ch02-l01" data-config='{
+    "rows": 5, "cols": 5,
+    "target": [3, 2],
+    "forbidden": [[1,1],[2,1],[2,2],[1,3],[3,3]],
+    "agent": [0, 0],
+    "policy": [
+      ["↓","↓","↓","↓","↓"],
+      ["↓","","↓","","↓"],
+      ["↓","","","→","↓"],
+      ["↓","→","","","←"],
+      ["→","→","↑","←","←"]
+    ],
+    "trajectory": [[0,0],[1,0],[2,0],[3,0],[4,0],[4,1],[4,2],[3,2]]
+  }'></div>
+
+  <p><strong>策略 A 的 return(沿用书 §2.1 的口径,target 之后留在原地,每步 \(+1\)):</strong>前 6 步 reward 全是 0,从第 7 步起每步 \(+1\),所以</p>
+  <p>\(\text{return}_A = \gamma^6 \cdot 1 + \gamma^7 \cdot 1 + \dots = \dfrac{\gamma^6}{1-\gamma} = \dfrac{0.9^6}{0.1} \approx 5.314\)。</p>
+
+  <p><strong>把 §2.1 三策略的"控制变量"思想搬到这里:</strong>如果把 \((0,0)\) 处的动作从"↓"换成 "→"(直接面向墙)<strong>不会</strong>真撞,但会让<em>第一步 reward 变成 0</em> 后再被弹回原格(boundary 在书 §1.5 设为 \(-1\),但本系列前面用的是 \(0\),为内部一致仍记 \(0\))—— trajectory 长度 +1、target 到达延后 1 步,return 退化为 \(\dfrac{\gamma^7}{1-\gamma} \approx 4.783\)。这是 "→" 起步策略 A':<strong>同一目标、同一 forbidden、只有起步一步差异</strong>,return 立刻分得开。这正是 §2.1 的最小例子在 5×5 上的复现。</p>
+
+  <p><strong>"return 互相递归"的直觉。</strong>在策略 A 下,从 \((0,0)\) 出发的 return,可以写成"在 \((0,0)\) 收到的 \(r_1 = 0\) + \(\gamma\) 倍从 \((1,0)\) 出发的 return":\(v_{(0,0)} = 0 + 0.9 \cdot v_{(1,0)}\)。同理 \(v_{(1,0)} = 0 + 0.9 \cdot v_{(2,0)}\),一直传到 \(v_{(4,2)} = 1 + 0.9 \cdot v_{(3,2)}\) 和 \(v_{(3,2)} = 1 + 0.9 \cdot v_{(3,2)}\)(target 自环)。最后一条立刻给出 \(v_{(3,2)} = 1/(1-0.9) = 10\),回代得到 \(v_{(4,2)} = 1 + 9 = 10\)、\(v_{(4,1)} = 9\)、…、\(v_{(0,0)} = 0.9^6 \cdot 10 \approx 5.314\) —— 和上面无穷级数算的<strong>完全一致</strong>。这就是 bootstrap 的具体长相:沿 trajectory 倒着代,绕开无穷求和。</p>
+
+  <!-- §5 常见误解 -->
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"return₃ 是"两条 trajectory return 的平均",那直接对每条 trajectory 算 return、再求平均不就行了?何必引入 state value?"<br>
+    <strong>实际上:</strong>本节的 4 个例子<strong>策略和环境都是确定性的</strong>(或局部带 0.5 概率,trajectory 数有限),所以 return 还能"枚举 + 平均"。一旦策略或环境真正随机化,trajectory 是<strong>无穷</strong>的,枚举平均不可行 —— 必须升级到期望 \(v_\pi(s) = \mathbb{E}_\pi[G_t \mid S_t=s]\),才有计算路径(下一节就给定义)。<br>
+    <strong>因为:</strong>期望可以通过 Bellman 方程"求解",而枚举平均没有这种结构。这正是 §2.1 的 \(\text{return}_3\) 被作者特意标注"more like an expected value"的原因:它已经是 state value 的雏形了。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"\(v_1 = r_1 + \gamma v_2\) 这种式子是同义反复(把无穷级数换个写法),没有计算意义。"<br>
+    <strong>实际上:</strong>它把"<em>无限项求和</em>"问题变成了"<em>有限维线性方程组</em>"问题。前者只能数值近似,后者可以闭式求解或迭代收敛。教材在 p. 18 的矩阵化 \(v = r + \gamma P v\) 就是这一观点的具体兑现。<br>
+    <strong>因为:</strong>状态空间 \(\mathcal{S}\) 是有限的(本课统一 \(|\mathcal{S}| = 25\)),所以未知量也是有限的;无穷"是在时间维度上,而 bootstrap 把它折叠到状态维度上,后者天然有限。L4 会把这个想法推广到一般 Bellman 方程。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"\(v_1\) 依赖 \(v_2\)、\(v_2\) 依赖 \(v_3\)、…… 一定要按顺序解,不能并行。"<br>
+    <strong>实际上:</strong>没有"顺序",只有"联立"。\(v_1, v_2, v_3, v_4\) 是同一个线性方程组的<strong>四个未知数</strong>,联立求解;矩阵 \(I - \gamma P\) 可逆是关键(L4 会用 Gershgorin 圆盘定理证明)。<br>
+    <strong>因为:</strong>循环依赖在线性代数里是"自然"的,不可逆才麻烦。例如 \(v = v\) 这种(\(P = I\)、\(\gamma = 1\))就不可逆;\(\gamma < 1\) 是让 \(I - \gamma P\) 可逆的根本保证。
+  </div>
+
+  <!-- §6 自检 + 视频 + teaser -->
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> 在 §2.1 的图 2.2 三策略中,\(\text{return}_1 - \text{return}_3 = ?\) \(\text{return}_3 - \text{return}_2 = ?\) 它们对 γ 是单调的吗?</summary>
+    <p><strong>A.</strong> \(\text{return}_1 - \text{return}_3 = 0.5\),\(\text{return}_3 - \text{return}_2 = 0.5\) —— 都是常数,与 γ <strong>无关</strong>!这是 §2.1 这组例子的精妙之处:三策略 return 的差完全由"是否踩 forbidden / 踩多少次"决定,γ 只决定 return 的<strong>绝对量级</strong>(\(\gamma/(1-\gamma)\) 那项),不决定<strong>排序</strong>。所以排序 \(\text{return}_1 > \text{return}_3 > \text{return}_2\) 对任意 γ ∈ (0,1) 都成立。这与 Ch.1 L2 的"γ flip"故事不同:那里 γ 影响排序,因为两条 trajectory<strong>到达 target 的时刻不同</strong>。本节三策略到达 target 时刻都一样(都是 \(t=2\) 起每步 +1),只在第一步 reward 上有差异。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> 在 §2.2 的循环例 \(v_i = r_i + \gamma v_{i+1 \bmod 4}\) 中,如果 \(r_1 = r_2 = r_3 = r_4 = 1\),把 \(v_i\) 解出来。</summary>
+    <p><strong>A.</strong> 由对称性 \(v_1 = v_2 = v_3 = v_4 = v\)。代回任意一条得 \(v = 1 + \gamma v\),即 \(v = 1/(1-\gamma)\)。这正是"无限循环、每步 +1"的几何级数和,bootstrap 的写法直接给出闭式,<em>无须</em>展开 \(\sum_{k=0}^\infty \gamma^k\)。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> 为什么 \(I - \gamma P\) 在 \(\gamma \in [0, 1)\) 时一定可逆?(只需直觉,严格证明放到 L4。)</summary>
+    <p><strong>A.</strong> 直觉一:\(P\) 是行随机矩阵(每行和为 1),它的所有特征值绝对值 \(\le 1\)。所以 \(\gamma P\) 的特征值绝对值 \(\le \gamma < 1\),故 \(I - \gamma P\) 的特征值都 \(\ne 0\),可逆。直觉二(物理):\(\gamma < 1\) 把"无限远的未来"压缩到有限值,几何级数 \(I + \gamma P + \gamma^2 P^2 + \dots\) 收敛到 \((I - \gamma P)^{-1}\),正好是逆矩阵的 Neumann 级数表达。L4 会用 Gershgorin 圆盘定理把这个直觉变成严格证明。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <p style="font-size:0.85rem;color:var(--color-muted);">视频:首选 Bilibili 直播(下方 iframe);若 iframe 不显示,用 YouTube 链接打开。BVID 当前是占位,实际 BVID 等首次部署时填。</p>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=4&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=4" target="_blank"><strong>▶ YouTube 备链(建议优先点这个)</strong></a></p>
+
+  <h3>下一节预告</h3>
+  <p>这一节我们看到 \(\text{return}_3\) 是"对随机策略下两条 trajectory return 的平均",而作者明确点出"它其实是个 state value"。下一节(L2,Book §2.3)就把这件事正面写下来:<strong>状态值函数</strong> \(v_\pi(s) \doteq \mathbb{E}_\pi[G_t \mid S_t = s]\) —— 从状态 \(s\) 出发、按策略 \(\pi\) 走出来的随机 return 的期望。一旦有了这个定义,本节"return 互相递归"的直觉就能升级为 state value 之间的递归 —— 那就是<strong>贝尔曼方程</strong>。</p>
+
+  <!-- Bottom nav -->
+  <nav class="lesson-nav">
+    <a href="../ch01/lesson-02.html">← Prev (Ch.1)</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-02.html">Next →</a>
+  </nav>
+</div>
+
+<!-- Components -->
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>
