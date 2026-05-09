@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>随机近似与 SGD(P2):RM 算法介绍 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch06-l02" data-est-minutes="20">
+<div class="container">
+
+  <!-- Top nav -->
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.6 / Lesson 2</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <!-- Header -->
+  <p class="kicker">Bilibili #23 · YouTube #23 · Book §6.2.1 pp. 103-105</p>
+  <h1>L2: Robbins-Monro Algorithm — Introduction<small style="color:var(--color-muted); font-weight:400;">  (Robbins-Monro 算法:看不见全貌也能解方程)</small></h1>
+
+  <!-- §1 Why this lesson -->
+  <h2>§1 Why this lesson</h2>
+  <p>L1 把均值估计写成 \(w_{k+1} = w_k - \alpha_k(w_k - x_k)\),并暗示这是<em>解 \(g(w) = w - \mathbb E[X] = 0\) 用带噪样本</em>。本节(教材 §6.2.1,pp. 103-105)把这个观察做<em>正式定义</em>:给定一个未知函数 \(g\),只能拿到带噪观测 \(\tilde g(w, \eta) = g(w) + \eta\),如何用迭代算法找根 \(g(w^*) = 0\)?<strong>Robbins-Monro 算法 (RM,1951)</strong> 给出标准答案,并奠定整个<em>随机近似</em> 学科。</p>
+  <p>关键洞察(教材 §6.2 + (6.5)):<strong>(a)</strong> "<em>看不见 \(g\),只能在你递入 \(w\) 时拿到带噪输出</em>" —— 这是<em>黑箱 root-finding</em>(Figure 6.2)。<strong>(b)</strong> RM 算法 \(w_{k+1} = w_k - a_k \tilde g(w_k, \eta_k)\)(教材 (6.5)) —— 与 L1 (6.4) 同结构,但 \(g\) 不再限定为 \(w - \mathbb E[X]\),而是<em>任意</em> 满足条件的函数。<strong>(c)</strong> RM 不需要 \(g\) 的<em>解析表达</em>、不需要梯度、不需要 \(g\) 的概率分布 —— <em>只需要"<em>递入 \(w\) 取一次带噪输出</em>" 的能力</em>。这是 RM 比传统 root-finding(Newton 法、bisection)<em>更强</em> 的地方。<strong>(d)</strong> 教材 \(g(w) = w^3 - 5\) 的例子(Figure 6.3):真根 \(5^{1/3} \approx 1.71\),起点 \(w_1 = 0\),用 \(a_k = 1/k\) 跑 50 步,\(w_k\) 在噪声中<em>平稳逼近</em> 1.71。<strong>(e)</strong> 朴素直觉(教材 \(g = \tanh(w-1)\) 例,Figure 6.4):\(w_k > w^*\) ⇒ \(g(w_k) > 0\) ⇒ 更新让 \(w\) 下降;\(w_k < w^*\) ⇒ \(g(w_k) < 0\) ⇒ \(w\) 上升。<em>这是"<em>负反馈</em>" 的最朴素形式</em>。<strong>(f)</strong> "<em>为什么能扛住噪声</em>" 是 L3 RM 收敛性 + Dvoretzky 定理的工作 —— 本节先不证,先把<em>动力学直觉</em> 立住。</p>
+
+  <!-- §2 核心定义 -->
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>Stochastic approximation (随机近似,教材 §6.2 开头)</strong>:一类<em>用带噪样本迭代解 root-finding 或优化问题</em> 的算法的总称。<em>共同结构</em>:\(w_{k+1} = w_k - a_k \cdot \text{(关于 } g(w_k) \text{ 的带噪估计)}\)。RM 是它的<em>开山之作</em>(1951),SGD 是它的<em>明星特例</em>(L4-L7)。</li>
+    <li><strong>RM problem statement (教材 §6.2)</strong>:已知方程 \(g(w) = 0\),其中 \(w \in \mathbb R\)、\(g: \mathbb R \to \mathbb R\) 但<em>函数表达未知</em>。可观测:递入任意 \(w\),拿到 \(\tilde g(w, \eta) = g(w) + \eta\)(\(\eta\) 是观测噪声)。求 \(w^*\) 使 \(g(w^*) = 0\)。</li>
+    <li><strong>RM algorithm (教材 (6.5))</strong>:\(w_{k+1} = w_k - a_k \tilde g(w_k, \eta_k),\ k = 1, 2, 3, \dots\)。\(w_k\) 是第 \(k\) 步估计;\(\tilde g(w_k, \eta_k)\) 是<em>用 \(w_k\) 取一次</em> 带噪观测;\(a_k > 0\) 是步长(coefficient)。<em>注意</em>:RM 用的是<em>当前 \(w_k\) 的观测</em>,不是<em>固定的初始观测</em> —— 这是它能"<em>跟着估计走</em>" 的关键。</li>
+    <li><strong>RM 不需要什么(教材 §6.2 中段)</strong>:<strong>(i)</strong> 不需要 \(g\) 的解析表达(可以是黑箱、神经网络);<strong>(ii)</strong> 不需要 \(\nabla g\)(grad-free);<strong>(iii)</strong> 不需要 \(\eta\) 的分布(non-Gaussian 也行);<strong>(iv)</strong> 不需要 \(\eta\) 与 \(w_k\) 独立(允许 \(\eta\) 依赖历史 \(\mathcal H_k\),L3 给条件)。<em>需要的只是"<em>递入 \(w\) 取输出</em>" 的接口</em>。</li>
+    <li><strong>把优化转成 root-finding(教材 §6.2)</strong>:若目标是 \(\min_w J(w)\),设 \(g(w) \doteq \nabla_w J(w)\) ⇒ 最优解 \(w^* = \arg\min J\) 满足 \(g(w^*) = 0\)。RM 用"<em>带噪梯度估计</em>"\(\tilde g(w, x) = \nabla_w f(w, x)\)(\(J(w) = \mathbb E_X[f(w, X)]\)) ⇒ 直接退化成 SGD(L4 详谈)。</li>
+    <li><strong>"负反馈" 朴素直觉(教材 Figure 6.4,\(g = \tanh(w-1)\))</strong>:\(g\) 单增,\(g(w^*) = g(1) = 0\)。设无噪声 \(\eta_k \equiv 0\),起点 \(w_1 = 3\):\(g(3) = \tanh(2) \approx 0.96\) ⇒ \(w_2 = 3 - 1 \cdot 0.96 \approx 2.04\);\(g(2.04) \approx \tanh(1.04) \approx 0.78\) ⇒ \(w_3 = 2.04 - 0.5 \cdot 0.78 \approx 1.65\)…逐步逼近 1。<em>无噪声版的 RM = 普通 fixed-point iteration</em>。</li>
+    <li><strong>RM 与梯度下降的关系(教材 §6.2 末段提示)</strong>:若 \(g(w) = \nabla J(w)\)、\(\tilde g\) 是 \(\nabla J\) 的带噪估计,则 RM ≡ SGD。<em>反过来不真</em>:RM 可以解<em>非梯度</em> 的根问题(如 \(g(w) = w^3 - 5\),无明显的"<em>对应优化目标</em>")。<strong>RM ⊃ SGD</strong>(集合包含)。</li>
+  </ul>
+
+  <!-- §3 关键公式 + 推导 -->
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节核心是 (6.5) 一行公式 + "<em>为什么能逼近 \(w^*\)</em>" 的<em>无噪声直觉证明</em>。</p>
+
+  <p><strong>公式 1:RM 算法(教材 (6.5))</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "w_{k+1} = w_k - a_k \\, \\tilde g(w_k, \\eta_k), \\quad \\tilde g(w, \\eta) = g(w) + \\eta",
+    "annotations": [
+      {"key": "w_k", "label": "w_k 当前估计", "description": "第 k 步对根 w* 的估计。RM 不要求 w_1 接近 w*,但若 g 不是&#39;全局单调&#39;(L3 第一条件),初始化敏感(教材 g = w³ - 5 例需要&#39;adequately selected initial guess&#39;)。"},
+      {"key": "tilde_g", "label": "g̃ 带噪观测", "description": "把当前 w_k 递入&#39;黑箱&#39;,拿到&#39;真值 + 噪声&#39;。RM 的&#39;唯一接口&#39;。在 RL 里,&#39;递入 w 取观测&#39; 对应&#39;用当前策略 / 价值函数与环境交互一次,得到带噪样本&#39;。"},
+      {"key": "a_k", "label": "a_k 步长", "description": "正系数,决定&#39;每步走多远&#39;。L3 给出 Σa_k=∞ 与 Σa_k²<∞ 两条收敛条件。a_k = 1/k 是经典选择(L1 已验)。"},
+      {"key": "eta_k", "label": "η_k 噪声", "description": "观测误差。L3 要求 E[η_k|H_k]=0(零均值,允许依赖历史)与 E[η_k²|H_k]<∞(方差有界)。无需 Gaussian。"},
+      {"key": "minus_sign", "label": "为什么是 −a_k g̃", "description": "若 g 单增、w_k > w*,则 g(w_k) > 0,−a_k g̃ < 0(忽略噪声),w_{k+1} < w_k 朝 w* 走。这就是&#39;负反馈&#39; 的代数化。"}
+    ]
+  }'></div>
+
+  <p><strong>公式 2:把 \(\min J(w)\) 转成 \(g(w) = 0\)(教材 §6.2)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\min_w J(w) \\iff g(w) \\doteq \\nabla_w J(w) = 0",
+    "annotations": [
+      {"key": "convex_assumption", "label": "凸假设", "description": "若 J 凸,则 ∇J(w*) = 0 与 w* = argmin J 等价。L3 第一条件 0 < c_1 ≤ ∇g(w) 等价于 J 强凸,所以 RM 默认凸优化场景。非凸时 RM 仍可能收敛到&#39;某个&#39; 局部最优,但理论保证弱化。"},
+      {"key": "rm_to_sgd", "label": "RM → SGD", "description": "若 J(w) = E_X[f(w, X)],则 ∇J(w) = E_X[∇_w f(w, X)]。带噪估计取 g̃(w, x) = ∇_w f(w, x)(单样本),代入 (6.5) 得 SGD: w_{k+1} = w_k - a_k ∇_w f(w_k, x_k)。L4 详谈。"},
+      {"key": "general_root", "label": "更一般场景", "description": "RM 还能解&#39;非梯度&#39; 根问题:固定点方程 w = T(w) 改写成 g(w) = w - T(w) = 0;PDE 数值解;均衡问题…… 在 Ch.7+ 我们看到 TD 是把 Bellman 算子 T_π 的固定点方程 v = T_π v 写成 g(v) = v - T_π v = 0,再用 RM 解 —— 完全是这个思路。"}
+    ]
+  }'></div>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>无噪声版 RM = fixed-point iteration(教材 Figure 6.4 直观)</em>。设 \(\eta_k \equiv 0\),则 \(w_{k+1} = w_k - a_k g(w_k)\) 是<em>常微分方程 \(\dot w = -g(w)\)</em> 的离散化(Euler 法)。\(g\) 单增 ⇒ \(w^*\) 是<em>稳定不动点</em>(\(g&#39;(w^*) > 0\) ⇒ 线性化系统稳定)。所以<em>无噪声版 RM 的收敛性就是 ODE 的稳定性</em>,不需要"<em>新数学</em>"。<em>新数学要等 \(\eta\) 来添麻烦后才登场</em>。
+  </div>
+
+  <div class="callout">
+    <strong>Step 2.</strong> <em>带噪声为什么不会"<em>放大</em>"?</em>关键在 \(a_k \to 0\)。每步带噪扰动量 \(= a_k \eta_k\),\(a_k \to 0\) ⇒ <em>新加入的噪声越来越小</em>。同时 \(\sum a_k = \infty\)(L3 第二条件)保证<em>累积学习能力不被早期消耗光</em>。"<em>越走越稳 + 累积能力够</em>" 这两个矛盾诉求被 \(\sum a = \infty, \sum a^2 < \infty\) 同时满足 —— 这是 \(a_k = 1/k\) 这类调度的<em>魔法所在</em>。L3 用 Dvoretzky 定理形式化。
+  </div>
+
+  <div class="callout">
+    <strong>Step 3.</strong> <em>RM 算法的<em>黑箱</em> 视角</em>(教材 Figure 6.2)。把 \(g\) 看成<em>不可见的黑盒</em>:你递入 \(w\),它返回 \(g(w) + \eta\)。RM 不<em>查看</em> \(g\) 的内部结构,只<em>调用</em> 它的输出。这与<em>梯度下降</em> 不同 —— 后者要求 \(\nabla J\) 已知或可解析求得。RM 的<em>黑箱</em> 性质让它在两个场景特别强:<strong>(i)</strong> \(g\) 来自<em>真实物理 / 随机系统</em>(无解析式);<strong>(ii)</strong> RL —— 我们不知道 \(p(s&#39;|s,a)\),但能"<em>取样</em>"\(s&#39;\),正是 RM 的<em>调用接口</em>。
+  </div>
+
+  <!-- §4 RM 在 g(w)=tanh(w-1) 上跑 -->
+  <h2>§4 RM 算法的轨迹(用 \(g = \tanh(w-1)\) 演示)</h2>
+  <p>本章<strong>不用 grid-world</strong>。我们用教材 Figure 6.4 的具体例子 \(g(w) = \tanh(w-1)\),\(w^* = 1\),\(w_1 = 3\),\(a_k = 1/k\),\(\eta_k \equiv 0\)(简化,只看 RM 的<em>动力学骨架</em>)。逐步跟踪 \(w_k\) 的演化。</p>
+
+  <div data-component="iteration-stepper" data-config='{
+    "steps": [
+      {
+        "label": "k=1  w_1 = 3.000  g(w_1) = tanh(2) ≈ 0.964",
+        "note": "起点远离 w* = 1。g(w_1) > 0 ⇒ 更新方向 −a_1 g(w_1) = −0.964 < 0 ⇒ w 下降。a_1 = 1/1 = 1,所以 w_2 = 3 − 0.964 ≈ 2.036。&#39;一步走近&#39; 一大段。"
+      },
+      {
+        "label": "k=2  w_2 ≈ 2.036  g ≈ tanh(1.036) ≈ 0.776",
+        "note": "g 仍 > 0,继续 w 下降。a_2 = 1/2 ⇒ w_3 = 2.036 − 0.5×0.776 ≈ 1.648。&#39;距离 w* = 1 还有 0.65&#39;,但步长已经减小,所以单步收益递减。"
+      },
+      {
+        "label": "k=5  w_5 ≈ 1.16  g ≈ tanh(0.16) ≈ 0.158",
+        "note": "已经很接近 w* = 1。g 减小到 0.16,a_5 = 1/5 = 0.2 ⇒ w_6 = 1.16 − 0.2×0.158 ≈ 1.128。&#39;近处步小,远处步大&#39; —— 这正是 L6 SGD 性质里的&#39;远处快、近处慢&#39; 模式。"
+      },
+      {
+        "label": "k=10  w_10 ≈ 1.05",
+        "note": "误差从 |3−1| = 2 降到 0.05。前 10 步靠 g 大、a 大双重&#39;远处加速&#39;。后续 a_k → 0 + g(w_k) → 0 双衰减,收敛速率变成 O(1/√k) (i.i.d. 平稳噪声下的标准 RM 速率)。"
+      },
+      {
+        "label": "k=50  w_50 ≈ 1.005  误差 0.005",
+        "note": "无噪声版 50 步达到 ‖w−w*‖ ≈ 5e−3。带噪声版(σ=1)后期由噪声 a_k η_k 主导,误差稳定在 O(σ/√k) 量级 —— 教材 Figure 6.3 上图&#39;w_k 在 1.71 附近的小幅振荡&#39; 就是这个噪声残量。"
+      }
+    ]
+  }'></div>
+
+  <p><strong>关键观察</strong>:<em>(a)</em> 远处更新大、近处更新小,自动调节,无需手动调参;<em>(b)</em> 步长 \(a_k = 1/k\) 既保证"<em>不跑飞</em>"(\(\sum a^2 < \infty\),后期噪声衰减),又保证"<em>能持续学</em>"(\(\sum a = \infty\),累积步长无界);<em>(c)</em> 本节<em>没证</em> 收敛 —— L3 用 Dvoretzky 定理给严证。但<em>动力学</em> 已经直观了。</p>
+
+  <!-- §5 常见误解 -->
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"RM 算法不就是<em>梯度下降</em>?\(\tilde g\) 就是带噪梯度。"<br>
+    <strong>实际上:</strong><strong>RM 比梯度下降更广</strong>。RM 解的是 \(g(w) = 0\) 的<em>任意</em> root-finding 问题,\(g\) 不必是<em>某个 \(J\) 的梯度</em>。例如 \(g(w) = w^3 - 5\) 没有"<em>对应的标量目标 \(J\)</em>"(\(\int g \, dw = w^4/4 - 5w\) 不是优化目标,无<em>下界</em>)。\(g(w) = w - \mathbb E[X]\) 在 L1 中也是"<em>定义出来的</em>" 而非"<em>梯度</em>"。<em>RM ⊃ SGD(集合包含)</em>:SGD 是 RM 在"<em>\(g = \nabla J\) + \(J = \mathbb E[f]\)</em>" 这个特例上的表现。<br>
+    <strong>因为:</strong>"<em>解方程</em>" 与"<em>优化</em>" 本是不同问题:前者要找"<em>0 点</em>",后者要找"<em>极小值</em>"。两者关联但不等价 —— 凸优化的极小值是梯度的零点,但<em>解方程</em> 不需要凸结构。Ch.7 TD 学习就是 RM 的<em>非梯度</em> 应用 —— Bellman 算子的固定点 \(v_\pi\) 是 \(g(v) = v - T_\pi v = 0\) 的根,这<em>不是</em> 任何 \(J\) 的梯度的根(原始 TD 学习并<em>没有</em> 一个全局损失函数,这是 deadly-triad 问题的源头之一,Ch.8 详谈)。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"RM 既然是 <em>1951 年</em> 的老算法,直接换成现代 Newton 法或 Adam 不就<em>全面更优</em>?"<br>
+    <strong>实际上:</strong><strong>RM 在<em>黑箱</em> 设定下仍是 SOTA</strong>。Newton 法要 \(g\) 与 \(\nabla g\) 都已知,不能用于"<em>只能取一次带噪输出</em>" 的场景。Adam / RMSProp 等 <em>自适应步长</em> 算法是<em>SGD 的改进</em>(优化梯度方差),仍属于 RM 大家族(\(\tilde g\) = 带噪梯度),只是把固定 \(a_k\) 换成<em>逐参数自适应</em> 的步长。它们和 RM 本质<em>不冲突</em>,而是<em>RM 的工程优化</em>。<br>
+    <strong>因为:</strong>RM 的<em>价值</em> 在于"<em>定义了正确的接口与收敛条件</em>",而不是"<em>给出最快的算法</em>"。Adam 算法的<em>收敛证明</em> 仍然要走 RM 框架(在原 paper 中通过 Dvoretzky-style 论证)。Ch.8 deep RL 用 Adam,但<em>能用</em> 是因为 RM 框架兜底。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"RM 必须用 \(a_k = 1/k\),其他步长都不行。"<br>
+    <strong>实际上:</strong><strong>RM 接受<em>任意</em> 满足两条件的步长(L3)</strong>。\(a_k = 1/k\) 是<em>经典默认</em>,但 \(c/k\)、\(c/k^\beta\)(\(\beta \in (0.5, 1]\))、\(c/(k+k_0)\) 都满足条件。常步长 \(a_k \equiv 0.1\) <em>违反</em> \(\sum a^2 < \infty\),不能<em>严格</em> 收敛到 \(w^*\),但能"<em>稳定在 \(w^*\) 附近振荡</em>",L1 §4 (C) 已演示。<em>实操</em>:<strong>(i)</strong> 平稳分布 + 求精确 \(w^*\) ⇒ 用衰减 \(a_k\);<strong>(ii)</strong> 非平稳 + 跟踪移动 target ⇒ 用常 \(a_k\)(Q-learning、SARSA)。<br>
+    <strong>因为:</strong>"<em>收敛到固定点</em>" 与"<em>跟踪移动目标</em>" 是<em>对立</em> 诉求(L1 §5 已述)。RM 的两条件只<em>保证前者</em>;放弃前者换得后者,是 RL 实操的<em>常态</em>。L3 给的是<em>下界</em>,不是<em>实操菜单</em>。
+  </div>
+
+  <!-- §6 自检 + 视频 + teaser -->
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> RM 算法 \(w_{k+1} = w_k - a_k \tilde g(w_k, \eta_k)\) 与 fixed-point iteration \(w_{k+1} = T(w_k)\) 的关系?</summary>
+    <p><strong>A.</strong> RM 是 fixed-point iteration 的<em>带噪 + 步长</em> 推广。设 \(T(w) \doteq w - g(w)\),则无噪声版 RM(\(\eta = 0\))在 \(a_k \equiv 1\) 时变成 \(w_{k+1} = w_k - g(w_k) = T(w_k)\),即 fixed-point iteration。<em>RM 的两个新东西</em>:<strong>(i)</strong> 步长 \(a_k\) 可<em>变</em>(衰减或常数);<strong>(ii)</strong> 用<em>带噪</em> \(\tilde g\) 替代 \(g\)。这两个推广让 RM 能解 fixed-point iteration 不能解的问题(噪声采样、未知函数)。Ch.4 VI 就是<em>纯 fixed-point iteration</em>(\(v_{k+1} = T v_k\)),Ch.7 TD 就是<em>带噪 + 步长</em> 的版本(\(V \leftarrow V + \alpha[T V - V]_\text{sample}\))—— 后者本质是 RM。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> 若 \(g\) 是<em>下降</em> 函数(\(\nabla g(w) < 0\) 而非 \(> 0\)),RM (6.5) 还能用吗?如何改?</summary>
+    <p><strong>A.</strong> <em>不能直接用</em>。\(g\) 下降时 \(w_k > w^*\) 推出 \(g(w_k) < 0\),则更新 \(-a_k g(w_k) > 0\),\(w\) 反而<em>远离</em> \(w^*\) —— "<em>正反馈</em>" 发散。<em>修正</em>:把 \(g\) 替换成 \(-g\),即用 \(\tilde g&#39; \doteq -\tilde g\) 跑 RM,等价于把更新写成 \(w_{k+1} = w_k + a_k \tilde g(w_k, \eta_k)\)(注意符号翻转)。教材 §6.2.2 第一条件直接要求 \(\nabla g > 0\),就是为了避免这个歧义 —— 实操中遇到下降函数,人工翻号即可。<em>这就像梯度下降 vs 梯度上升</em>:本质是同一算法,符号约定不同。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> 教材 \(g(w) = w^3 - 5\) 例子(Figure 6.3)说"<em>初始猜 \(w_1\) 必须 properly selected</em>"。为什么?\(\tanh(w-1)\) 例(Figure 6.4)却没这条要求?</summary>
+    <p><strong>A.</strong> 关键差别在<em>\(\nabla g\) 是否全局有界</em>。\(g = \tanh(w-1)\):\(\nabla g = \text{sech}^2(w-1) \in (0, 1]\),全局上下有界,满足 L3 第一条件 \(0 < c_1 \le \nabla g \le c_2\) ⇒ <em>任意</em> 初始 \(w_1\) 都能收敛。\(g = w^3 - 5\):\(\nabla g = 3w^2\),在 \(w \to \pm \infty\) 时 \(\nabla g \to \infty\),<em>不</em> 满足 L3 第一条件 ⇒ 若 \(w_1\) 太远(如 \(w_1 = 100\)),则 \(\tilde g(w_1) \approx 10^6\),\(a_1 \tilde g \approx 10^6\) 把 \(w_2\) 弹到极远处,数值上"<em>炸开</em>"。<em>实操</em>:<strong>(i)</strong> 用合理初始(如 \(w_1 = 0\)),让 \(g(w_1)\) 有界;<strong>(ii)</strong> 加 gradient clipping(\(\tilde g\) 截断到 \([-G, G]\)),把"<em>不满足 L3 第一条件</em>" 改造成"<em>满足</em>"。后者是 deep RL 标配技术。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <p style="font-size:0.85rem; color:var(--color-muted);">视频:首选 Bilibili 直播(下方 iframe);若 iframe 不显示,用 YouTube 链接打开。BVID 当前是占位,实际 BVID 等首次部署时填。</p>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=23&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=23" target="_blank"><strong>▶ YouTube 备链(建议优先点这个)</strong></a></p>
+
+  <h3>下一节预告</h3>
+  <p>L2 给了 RM 算法的<em>形态</em> 与<em>动力学直觉</em>,但<em>没证</em> 它真的能收敛 —— 直观上"<em>负反馈 + 步长衰减</em>" 听起来对,但严格证明要回答:<em>哪些 \(g\) 可以用 RM?哪些 \(\{a_k\}\) 是合法步长?哪种噪声 \(\eta_k\) 能扛?</em><strong>L3(教材 §6.2.2 + §6.3)</strong> 给出标准答案 —— Robbins-Monro 收敛定理(Theorem 6.1)的<em>三条件</em>:<strong>(a)</strong> \(0 < c_1 \le \nabla g \le c_2\)(单调有界);<strong>(b)</strong> \(\sum a_k = \infty\) 且 \(\sum a_k^2 < \infty\)(步长两条件);<strong>(c)</strong> \(\mathbb E[\eta_k|\mathcal H_k] = 0,\ \mathbb E[\eta_k^2|\mathcal H_k] < \infty\)(噪声零均值方差有界)。证明依靠<em>Dvoretzky 收敛定理</em>(Theorem 6.2),它进一步给出"<em>任意 \(\Delta_{k+1} = (1-\alpha_k)\Delta_k + \beta_k \eta_k\) 形式的随机过程</em>" 的收敛性。L3 把"<em>步长两条件</em>" 的几何意义讲透 —— \(\sum \alpha = \infty\) 防止"<em>太早停步</em>",\(\sum \alpha^2 < \infty\) 防止"<em>噪声累积</em>"。这是 Ch.7 TD 收敛证明的核心工具,也是 Ch.8 DQN deadly triad 分析的起点。</p>
+
+  <!-- Bottom nav -->
+  <nav class="lesson-nav">
+    <a href="lesson-01.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-03.html">Next →</a>
+  </nav>
+</div>
+
+<!-- Components -->
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>
