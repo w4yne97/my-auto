@@ -50,7 +50,7 @@ chapters:
     title_en: "State Values and Bellman Equation"
     title_zh: "状态值与贝尔曼方程"
     pdf: "3 - Chapter 2 State Values and Bellman Equation.pdf"
-    role: "把第 1 章的 return 概念升级成可计算的 state value,并推导 Bellman 方程——这是后续策略评估、价值迭代、TD 学习共同依赖的核心方程。"
+    role: "把第 1 章的 return 概念升级成可计算的 state value,并推导 Bellman 方程。这是后续策略评估、价值迭代、TD 学习共同依赖的核心方程,也是把 RL 真正变成数学问题的转折点。"
     lessons:
       - id: ch02-l01
         lesson_number: 1
