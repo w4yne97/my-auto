@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>基本概念(P2):奖励、回报与马尔可夫决策过程 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch01-l02" data-est-minutes="20">
+<div class="container">
+
+  <!-- Top nav -->
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.1 / Lesson 2</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <!-- Header -->
+  <p class="kicker">Bilibili #3 · YouTube #3 · Book §1.5-1.9 pp. 6-14</p>
+  <h1>L2: Basic Concepts (P2 - Reward, return, Markov decision process)<small style="color:var(--color-muted); font-weight:400;">  (基本概念(P2):奖励、回报与马尔可夫决策过程)</small></h1>
+
+  <!-- §1 Why this lesson -->
+  <h2>§1 Why this lesson</h2>
+  <p>上一节我们告诉了 agent <strong>"在哪里、能做什么、怎么决定做什么"</strong> —— 但还没有任何"对错"的概念。现在你给 agent 任意配一个策略,它都会很认真地按手册行动,可哪怕这个策略让它满地图乱撞、永远也走不到 target,我们也无从指责。<strong>因为我们还没给"好坏"下定义。</strong></p>
+  <p>本节就是来补这个缺口。教材 §1.5–1.8 一口气抛出 4 个新词:<strong>reward</strong>(单步反馈)、<strong>trajectory</strong>(状态–动作–奖励链)、<strong>return</strong>(整条轨迹的累计打分)、<strong>discount factor γ</strong>(对未来的折现率),最后用 <strong>MDP</strong> 把前两节所有符号收进同一个五元组里。这一节最关键的一跳是 <em>reward → return</em>:为什么单步反馈不够、为什么必须看"整条路加起来",以及 γ 到底在调什么。教材中"先抛出 reward,再用 return 否定单看 reward"的写法,跟课程视频 P3 里"贪婪 vs 远视"的演示是同一个逻辑,务必跟着走完。</p>
+
+  <!-- §2 核心定义 -->
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>奖励 (reward)</strong>:agent 在状态 \(s_t\) 下执行动作 \(a_t\) 之后,环境立刻吐出的一个<strong>标量实数</strong> \(r_{t+1}\)(注意下标:做的是 \(a_t\),收到的奖励标作 \(r_{t+1}\),"动作打在 t、回报落在 t+1")。它可以为正、为负、为零;教材的 grid-world 约定 \(r_\text{target} = +1\)、\(r_\text{forbidden} = -1\)、\(r_\text{boundary} = -1\)、\(r_\text{other} = 0\)(p. 7)。<em>关键认知</em>:reward 是<strong>单步</strong>的、<strong>瞬时</strong>的,绝不是已经"加好"的总分。</li>
+    <li><strong>轨迹 (trajectory)</strong>:从某个起始状态出发,agent 按策略实际走出来的一串"状态–动作–奖励"链,形式为 \((s_0, a_0, r_1, s_1, a_1, r_2, s_2, a_2, r_3, \dots)\)。教材 §1.6 用箭头表示:\(s_1 \xrightarrow[r=0]{a_2} s_2 \xrightarrow[r=0]{a_3} s_5 \xrightarrow[r=0]{a_3} s_8 \xrightarrow[r=1]{a_2} s_9\)。回到上一节的 grid-world 直觉,trajectory 就是橙色那条折线,只不过现在每条边上都贴了一个 reward 标签。</li>
+    <li><strong>回报 (return,又称 total reward 或 cumulative reward)</strong>:把一条 trajectory 上的所有 reward 加起来,得到的总分。无折现版本:\(G = r_1 + r_2 + r_3 + \dots\)。教材 §1.6 用它来横向比较两条策略 —— "穿过 forbidden 那条 return 更小" —— 这是 RL 里"评估策略"的最原始动作。</li>
+    <li><strong>折扣因子 γ (discount factor / discount rate)</strong>:γ ∈ [0, 1) 的一个实数,用来给未来的 reward 打折。<strong>本节首次出现,且贯穿后面所有公式</strong>。直觉:γ 越接近 0,agent 越只看眼前(myopic / 短视);γ 越接近 1,agent 越看长远(far-sighted)。数学上,它保证"无限长 trajectory 的折现回报"是个有限值(几何级数收敛)。</li>
+    <li><strong>折现回报 (discounted return)</strong>:\(G_t = r_{t+1} + \gamma r_{t+2} + \gamma^2 r_{t+3} + \dots = \sum_{k=0}^\infty \gamma^k r_{t+k+1}\)。这个量是后面"价值函数 \(v_\pi(s)\)"的内核 —— 价值就是<em>对 \(G_t\) 取期望</em>。</li>
+    <li><strong>马尔可夫决策过程 (Markov decision process, MDP)</strong>:把 \(\mathcal{S}, \mathcal{A}, P, R, \gamma\) 这五个东西打包成一个数学对象 \(M = (\mathcal{S}, \mathcal{A}, P, R, \gamma)\)。再加一条<strong>马尔可夫性 (Markov property)</strong>:下一状态/奖励只依赖<em>当前</em>的 \((s_t, a_t)\),不依赖更久远的历史。这条无记忆性是后面贝尔曼方程能写出来的根基。</li>
+  </ul>
+
+  <!-- §3 关键公式 + 推导 -->
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节有两条必须记牢的公式:折现回报的求和形式,以及 MDP 的五元组定义。</p>
+
+  <p><strong>公式 1:折现回报 \(G_t\)(教材 §1.6 公式 (1.3),p. 9)</strong></p>
+  <p>从时刻 \(t\) 起,把后续所有 reward 用 \(\gamma\) 的幂次加权求和:</p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "G_t = r_{t+1} + \\gamma r_{t+2} + \\gamma^2 r_{t+3} + \\cdots = \\sum_{k=0}^{\\infty} \\gamma^k \\, r_{t+k+1}, \\qquad \\gamma \\in [0, 1)",
+    "annotations": [
+      {"key": "G_t", "label": "G_t", "description": "从 t 时刻开始的折现回报。注意它是&#39;从 t 往后看&#39;的累计,不是从 0 开始的总和;后面的价值函数 v_π(s) 就是对 G_t 取期望。"},
+      {"key": "r_{t+k+1}", "label": "r_{t+k+1}", "description": "下标错位的关键:agent 在 t 时刻做了 a_t,环境在 t+1 时刻给出 r_{t+1};所以 t 时刻往后看的第一个 reward 是 r_{t+1},不是 r_t。"},
+      {"key": "gamma^k", "label": "γ^k", "description": "对第 k 步未来的折现权重。k=0 是当下的下一步(权重 1),k=1 折一次(权重 γ),k=2 折两次(权重 γ²)…… 越远的 reward 权重越小。"},
+      {"key": "sum", "label": "Σ_{k=0}^∞", "description": "求和取到无穷,意味着我们允许 trajectory 无限长(continuing task)。教材 §1.6 把 episodic 任务也统一转成这种形式。"},
+      {"key": "gamma_range", "label": "γ ∈ [0, 1)", "description": "γ 严格小于 1 是收敛的必要条件:若每步 reward 上界为 R_max,则 |G_t| ≤ R_max·(1+γ+γ²+…) = R_max/(1−γ),有限。γ=1 在无限长 trajectory 下会发散。"}
+    ]
+  }'></div>
+  <div class="callout">
+    <strong>Step 1.</strong> <em>为什么必须引入折现:</em> 教材 §1.6 给了一个最直白的反例 —— 让 agent 走到 \(s_9\) 后停下不动并每步收 +1,无折现回报就是 \(0+0+0+1+1+1+\dots = \infty\),根本没法比较两条策略。引入 \(\gamma < 1\) 后,这条无穷 trajectory 的折现回报变成 \(\gamma^3 (1 + \gamma + \gamma^2 + \dots) = \gamma^3 / (1-\gamma)\),立刻收敛。<br>
+    <strong>Step 2.</strong> <em>γ 的"调旋钮"含义:</em> γ 不只是技术性收敛工具,更是一个"远见参数"。γ → 0 时,\(G_t \approx r_{t+1}\),agent 只看下一步,变成贪婪策略;γ → 1 时,远期 reward 几乎不打折,agent 愿意为遥远的回报忍受短期惩罚。本节末尾我们会用 grid-world 把这件事画出来。<br>
+    <strong>Step 3.</strong> <em>下标错位再次提醒:</em> 写成 \(\sum_{k=0}^\infty \gamma^k r_{t+k+1}\) 是为了让"第一个 reward 的折现权重恰好是 \(\gamma^0 = 1\)"。后面写贝尔曼方程时这个错位会反复出现 —— 看到 \(r_{t+1}\) 就要想到"它是 \(a_t\) 的产物"。
+  </div>
+
+  <p><strong>公式 2:MDP 五元组(教材 §1.7,p. 11)</strong></p>
+  <p>把上一节的状态/动作/转移、本节的 reward/discount 一并打包:</p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "M = \\langle \\mathcal{S},\\, \\mathcal{A},\\, P,\\, R,\\, \\gamma \\rangle",
+    "annotations": [
+      {"key": "S", "label": "𝒮", "description": "状态空间,从上一节继承。grid-world 里 |𝒮| = 25。"},
+      {"key": "A", "label": "𝒜", "description": "动作空间。教材里写作 𝒜(s),允许每个状态有不同的动作集;本课统一假设 𝒜(s) ≡ 𝒜 = {a_1,…,a_5}。"},
+      {"key": "P", "label": "P = p(s&#39;|s,a)", "description": "状态转移概率,从上一节继承。也称 dynamics 的一部分。"},
+      {"key": "R", "label": "R = p(r|s,a)", "description": "奖励的概率分布(本书统一写成条件概率,即使奖励是确定的也用这种记号,p. 7)。教材有时也写作 r(s,a) 或 r(s,a,s&#39;)。"},
+      {"key": "gamma", "label": "γ ∈ [0, 1)", "description": "折扣因子。它是 MDP 自身的一部分,而不是&#39;算法超参数&#39; —— γ 一变,&#39;最优策略&#39;的定义就变。"}
+    ]
+  }'></div>
+  <div class="callout">
+    <strong>Step 1.</strong> <em>马尔可夫性是 MDP 的"灵魂":</em> 教材 §1.7 公式 (1.4) 写道 \(p(s_{t+1} \mid s_t, a_t, s_{t-1}, a_{t-1}, \dots, s_0, a_0) = p(s_{t+1} \mid s_t, a_t)\) 以及 reward 同理。意思是"未来只取决于当下,不取决于历史" —— 这是为什么我们可以用一个不带历史的 \(v_\pi(s)\) 来描述价值,而不需要写成 \(v_\pi(\text{whole history})\)。<br>
+    <strong>Step 2.</strong> <em>MDP vs MP:</em> 教材 §1.8 提到"一旦策略 π 固定,MDP 就退化为马尔可夫过程 (MP)"。直觉是:MDP 的不确定性有两个源头 —— 策略 \(\pi(a\mid s)\) 和环境 \(p(s&#39;\mid s,a)\);把策略固定后,只剩环境一个源头,系统就只是一条带状态转移的 Markov chain。<br>
+    <strong>Step 3.</strong> <em>为什么把 γ 写进 MDP:</em> 不同的 γ 对应不同的"什么是最优"的定义。同一个环境 \((\mathcal{S}, \mathcal{A}, P, R)\),把 γ 从 0.5 调到 0.99,最优策略可能完全不一样(下面 §4 给出实例)。所以 γ 是问题定义的一部分,不是算法选项。
+  </div>
+
+  <!-- §4 Grid-world 例子 -->
+  <h2>§4 Grid-world 实例化</h2>
+  <p>用上一节那张 5×5 网格,我们看一个最直观的"两条路 + 两个 γ"的对比。设定与上一节完全一致:target = \((3, 2)\),forbidden = \(\{(1,1), (2,1), (2,2), (1,3), (3,3)\}\),起点 \((0, 0)\)。下面这张图展示了一个新的策略 —— 它选择<strong>从左侧绕远路</strong>避开禁区,走出 trajectory \((0,0) \to (1,0) \to (2,0) \to (3,0) \to (3,1) \to (3,2)\),共 5 步:</p>
+  <div data-component="gridworld" id="gw-ch01-l02" data-config='{
+    "rows": 5, "cols": 5,
+    "target": [3, 2],
+    "forbidden": [[1,1],[2,1],[2,2],[1,3],[3,3]],
+    "agent": [0, 0],
+    "policy": [
+      ["↓","↓","↓","↓","↓"],
+      ["↓","","↓","","↓"],
+      ["↓","","","→","↓"],
+      ["→","→","","","←"],
+      ["→","→","↑","←","←"]
+    ],
+    "trajectory": [[0,0],[1,0],[2,0],[3,0],[3,1],[3,2]]
+  }'></div>
+
+  <p><strong>奖励标注。</strong>沿这条 trajectory 一步步收 reward(用本书 §1.5 的标准约定 \(r_\text{target} = +1\),其余 = 0):</p>
+  <ul>
+    <li>\((0,0) \xrightarrow{\downarrow} (1,0)\):\(r_1 = 0\)(普通格)</li>
+    <li>\((1,0) \xrightarrow{\downarrow} (2,0)\):\(r_2 = 0\)</li>
+    <li>\((2,0) \xrightarrow{\downarrow} (3,0)\):\(r_3 = 0\)</li>
+    <li>\((3,0) \xrightarrow{\rightarrow} (3,1)\):\(r_4 = 0\)</li>
+    <li>\((3,1) \xrightarrow{\rightarrow} (3,2)\):\(r_5 = +1\)(到达 target)</li>
+    <li>到达后按教材 §1.6 的"target 视为普通状态、可继续行动"约定,设 agent 留在 target 上每步都拿 \(+1\):\(r_6 = r_7 = \dots = +1\)。</li>
+  </ul>
+
+  <p><strong>路径 A(上图,绕远路 5 步)的折现回报。</strong>从 \(t = 0\) 开始算:</p>
+  <p>\(G_0^A = 0 + \gamma \cdot 0 + \gamma^2 \cdot 0 + \gamma^3 \cdot 0 + \gamma^4 \cdot 1 + \gamma^5 \cdot 1 + \gamma^6 \cdot 1 + \dots = \dfrac{\gamma^4}{1-\gamma}\)。</p>
+
+  <p><strong>路径 B(假想:走中间,3 步到 target,但中间一步穿过 forbidden \((2,2)\))。</strong>设这条 trajectory 是 \((0,0) \to (1,0) \to (2,1)_\text{forb} \to (2,2)_\text{forb} \to (3,2)\)(4 个箭头,3 个中间格,其中 2 个是 forbidden;教材 §1.5 明确"forbidden 可达,只是有 -1 的负 reward")。reward 序列:\(r_1 = 0,\, r_2 = -1,\, r_3 = -1,\, r_4 = +1\),之后留在 target 上每步 \(+1\)。所以</p>
+  <p>\(G_0^B = 0 + \gamma \cdot (-1) + \gamma^2 \cdot (-1) + \gamma^3 \cdot 1 + \gamma^4 \cdot 1 + \dots = -\gamma - \gamma^2 + \dfrac{\gamma^3}{1-\gamma}\)。</p>
+
+  <p><strong>把数代进去 —— 同一对路径,γ 一变,最优就翻转:</strong></p>
+  <ul>
+    <li><strong>γ = 0.5(短视):</strong> \(G_0^A = 0.5^4 / 0.5 = 0.0625 / 0.5 = 0.125\);\(G_0^B = -0.5 - 0.25 + 0.5^3/0.5 = -0.75 + 0.25 = -0.5\)。<strong>A 完胜 B</strong> —— 因为 γ 小、未来几乎不算分,B 头两步的 -1 直接把它打成负数。</li>
+    <li><strong>γ = 0.9(远视):</strong> \(G_0^A = 0.9^4 / 0.1 = 0.6561 / 0.1 = 6.561\);\(G_0^B = -0.9 - 0.81 + 0.9^3/0.1 = -1.71 + 7.29 = 5.58\)。<strong>A 仍然赢 B</strong>,差距只有约 1。</li>
+    <li><strong>γ = 0.99(极远视):</strong> \(G_0^A = 0.99^4 / 0.01 \approx 96.06\);\(G_0^B = -0.99 - 0.9801 + 0.99^3/0.01 \approx -1.97 + 97.03 \approx 95.06\)。差距继续缩小到约 1 —— "早 1 步到 target 拿 +1" 的好处几乎被两步 forbidden 的代价吃完。</li>
+  </ul>
+
+  <p><strong>怎么读这组数?</strong>关键看趋势。γ → 0 时,即时奖励权重大,B 头两步的 -1 直接把它打成负数;γ → 1 时,远期奖励几乎不打折,A 与 B 的差距迅速缩小 —— 把 B 改成 2 步而非 4 步,或弱化 forbidden 惩罚,B 在大 γ 下就可能反超 A。这正是教材 p. 9 的核心:"γ 接近 0 → 短视;γ 接近 1 → 远视、敢于冒短期负奖励的风险"。<strong>同一对路径、同一个环境,γ 一旋,最优策略就换</strong> —— 这是 reward 单步看不出来、必须升级到 return 才讲得清的事。</p>
+
+  <!-- §5 常见误解 -->
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong> "选 reward 最大的动作就是好策略,贪婪算法就行了。"<br>
+    <strong>实际上:</strong> 教材 §1.5 末尾就在防这一点 —— "能不能直接拿 reward 表挑最大值?答:不能。"reward 只是 immediate reward,真正决定策略好坏的是 <strong>total reward = return</strong>。<br>
+    <strong>因为:</strong> 一个动作的"贪心 reward"高,可能把 agent 推进一条后续 reward 都很烂的死胡同;反过来,一个当下 reward = 0 甚至 -1 的动作,如果它通向高回报的远期路径,长期看反而更优。这正是为什么 §1.6 紧接着就引入 return。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong> "γ 是算法超参数,随便调一下就行。"<br>
+    <strong>实际上:</strong> γ 是 MDP 五元组 \(M = \langle \mathcal{S}, \mathcal{A}, P, R, \gamma \rangle\) <strong>本身的一部分</strong>。换 γ 等于换问题:同一个环境在 \(\gamma = 0.5\) 下的最优策略,在 \(\gamma = 0.99\) 下未必最优(§4 已经看到趋势)。<br>
+    <strong>因为:</strong> γ 决定了"未来奖励折现多少",而最优策略是定义在"最大化期望折现回报"上的 —— 优化目标变了,argmax 自然变。所以选 γ 是<strong>建模决策</strong>,不是<strong>调参</strong>。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong> "Markov 性就是说环境没有随机性。"<br>
+    <strong>实际上:</strong> Markov 性说的是<strong>无记忆</strong>,跟随机性正交。环境完全可以随机(\(p(s_{t+1}\mid s_t, a_t)\) 是真正的概率分布),但只要"下一状态/奖励只依赖当下 \((s_t, a_t)\)",它就是马尔可夫的。<br>
+    <strong>因为:</strong> 这条性质让我们能用一个 \(s\) 的函数 \(v_\pi(s)\) 完整描述价值,而不必以整段历史为条件 —— 这是贝尔曼方程能成立的根本。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong> "做 \(a_t\) 就拿 \(r_t\),下标一致才整齐。"<br>
+    <strong>实际上:</strong> 教材通篇约定是"做 \(a_t\) 之后,环境给出 \(r_{t+1}\)" —— 动作打在 t,reward 落在 t+1。<br>
+    <strong>因为:</strong> reward 是动作落地后才能观测到的;这种错位让 \(G_t = \sum_{k=0}^\infty \gamma^k r_{t+k+1}\) 中"k = 0 对应 \(\gamma^0 r_{t+1}\)"自然顺手,后面贝尔曼公式都吃这个约定。
+  </div>
+
+  <!-- §6 自检 + 视频 + teaser -->
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> agent 沿一条无限长 trajectory 每步都拿 \(r = +1\)。当 \(\gamma = 0.9\) 时,\(G_0\) 等于多少?当 \(\gamma = 0\) 呢?</summary>
+    <p><strong>A.</strong> 由公式 \(G_0 = \sum_{k=0}^\infty \gamma^k r_{k+1} = \sum_{k=0}^\infty \gamma^k \cdot 1 = \dfrac{1}{1-\gamma}\)。代入:\(\gamma = 0.9 \Rightarrow G_0 = 10\);\(\gamma = 0 \Rightarrow G_0 = 1\)(只看 \(r_1\),后续都被 \(0^k\) 抹平,\(0^0 = 1\) 是约定)。<em>教学点:</em> γ 越大、累积上限越高,这是 γ 在"放大未来"的直观体现。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> 在 §4 的两条路径中,我们算出 \(\gamma = 0.5\) 时 \(G_0^A = 0.125\)、\(G_0^B = -0.5\)。如果保持 reward 设计不变,但把 \(\gamma\) 降到 0,A 和 B 的回报分别等于多少?这给最优策略带来什么影响?</summary>
+    <p><strong>A.</strong> γ = 0 时,\(G_0 = r_1 + 0 + 0 + \dots = r_1\)。两条路径的 \(r_1\) 都是 \(0\)(从 \((0,0)\) 出发到下一格都是普通格),所以 \(G_0^A = G_0^B = 0\),<strong>两条路径无法区分</strong>。这正暴露了纯短视(γ = 0)的弊病:agent 看不到 target 在哪儿,任何"开局第一步 reward 相同"的策略都被判为等价。要真正分辨 A、B,必须 γ &gt; 0。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> 教材 §1.7 把 Markov 性写成 \(p(s_{t+1} \mid s_t, a_t, s_{t-1}, a_{t-1}, \dots, s_0, a_0) = p(s_{t+1} \mid s_t, a_t)\)。如果某天我们引入"上一格的格类型也会影响下一格转移"的环境,这条性质还成立吗?该怎么修复?</summary>
+    <p><strong>A.</strong> 不成立 —— 因为下一状态显式依赖了 \(s_{t-1}\),违反了"只依赖当前 \((s_t, a_t)\)"。修复办法是<strong>扩状态</strong>:把 \((s_{t-1}, s_t)\) 重新打包成一个新状态 \(\tilde s_t\),那么 \(\tilde s_t\) 就重新满足 Markov 性。代价是状态空间从 \(|\mathcal{S}|\) 暴涨到 \(|\mathcal{S}|^2\)。这种"用扩状态换 Markov 性"的技巧,会在后面 POMDP / N-step 方法里反复出现。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <p style="font-size:0.85rem;color:var(--color-muted);">视频:首选 Bilibili 直播(下方 iframe);若 iframe 不显示,用 YouTube 链接打开。BVID 当前是占位,实际 BVID 等首次部署时填。</p>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=3&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=3" target="_blank"><strong>▶ YouTube 备链(建议优先点这个)</strong></a></p>
+
+  <h3>下一节预告</h3>
+  <p>这一节我们把"策略好坏"翻译成了一个数 —— 折现回报 \(G_t\)。但 \(G_t\) 是<strong>随机变量</strong>(策略和环境都可能有随机性),要比较两个策略,真正该看的是 \(G_t\) 的<strong>期望</strong>。下一章(Ch.2)就在这里登场:它定义状态价值函数 \(v_\pi(s) = \mathbb{E}_\pi [G_t \mid S_t = s]\),并推导出大名鼎鼎的 <strong>Bellman 方程</strong> —— 一旦能对每个状态算出"期望折现回报",我们就能正面回答"哪个策略最优"这个问题。本章到此结束,带着 reward / return / γ / MDP / Markov 性这五个零件出门吧。</p>
+
+  <!-- Bottom nav -->
+  <nav class="lesson-nav">
+    <a href="lesson-01.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="../index.html">Next →</a>
+  </nav>
+</div>
+
+<!-- Components -->
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>
