@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>蒙特卡罗学习(P6):ε-贪心 MC 示例与权衡 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch05-l06" data-est-minutes="30">
+<div class="container">
+
+  <!-- Top nav -->
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.5 / Lesson 6</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <!-- Header -->
+  <p class="kicker">Bilibili #21 · YouTube #21 · Book §5.4.3-5.7 pp. 91-100</p>
+  <h1>L6: MC ε-Greedy + Chapter Summary<small style="color:var(--color-muted); font-weight:400;">  (MC ε-贪心算法 + 全章总结)</small></h1>
+
+  <!-- §1 Why this lesson -->
+  <h2>§1 Why this lesson</h2>
+  <p>L5 给 ε-greedy 策略的<em>形态</em> 与<em>improvement 公式</em>(教材 (5.5))。本节(教材 §5.4.3-5.7,pp. 91-100)做三件事:<strong>(1)</strong> Algorithm 5.3 把 ε-greedy 嵌入完整 MC 算法,跑一条超长 episode 学到接近 \(\pi^*\) 的策略;<strong>(2)</strong> §5.5 直面"<em>探索 vs 利用</em>" 的<em>数值代价</em>(Figure 5.6 / 5.7) —— ε 越大 v 越低,grid 覆盖越好;<strong>(3)</strong> §5.6 全章总结 + Ch.6 预告 —— "<em>(1/n) 这个权</em>" 的严格数学根基交给 Ch.6 RM/SGD。</p>
+  <p>关键洞察(教材 §5.4.3-5.6):<strong>(a) Algorithm 5.3 (p. 91)</strong> 与 Algorithm 5.2(MC ES)只差<em>一行</em>:improvement step 从"\(\pi(a^* \mid s) = 1\) else 0" 变成"\(\pi(a^* \mid s) = 1 - \frac{|\mathcal A| - 1}{|\mathcal A|}\varepsilon\) else \(\varepsilon/|\mathcal A|\)"。<strong>(b) 单 episode 学习极端例子(p. 91 末)</strong>:5×5 grid,1 million step 一条 episode,ε=0.5 跑 2 次外迭代就收敛到 ε-greedy 最优。<strong>(c) 探索 vs 利用代价(§5.5,Figure 5.6/5.7)</strong>:同一 grid 下 \(v_{\pi^*_\varepsilon}\) 随 ε 单调下降:ε=0 时 \(v\) 中心 = 10,ε=0.1 时 = 3.7,ε=0.2 时 = -2.0,ε=0.5 时 = -17(target 反成"<em>负值高位</em>"!)—— ε 太大 agent 反而<em>不愿</em> 留在 target,因为 ε 概率乱走会踩 forbidden 受罚。<strong>(d) 探索能力(§5.5 末)</strong>:ε=1 时一条百万步 episode 几乎 uniform 覆盖每个 (s, a)(变异系数 0.02);ε=0.5 时覆盖严重不均(\(10^4 \sim 10^5\) 倍方差)。<strong>(e) Ch.5 大总结(§5.6)</strong>:三个算法 = "<em>策略迭代用样本均值替换 model-based PE</em>" 的连续光谱;MC Basic(教学版)→ MC ES(every-visit + per-episode update)→ MC ε-Greedy(soft 策略去 exploring starts)。<strong>(f) 共同短板</strong>:全章 MC 都有<em>高方差</em>(完整 episode return 的统计噪声大),Ch.7 TD bootstrap 大幅降方差。<strong>(g) 数学根基</strong>(Ch.6 预告):"<em>样本均值 (1/n)\(\sum g\) 收敛</em>" 这件事的严格数学是 Robbins-Monro,Ch.6 把它讲清楚。</p>
+
+  <!-- §2 核心定义 -->
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>MC ε-Greedy 算法 (Algorithm 5.3,p. 91)</strong>:与 MC ES(Alg. 5.2)结构同,但 improvement 步用 (5.5) 在 \(\Pi_\varepsilon\) 内解。<em>关键</em>:不再要求 exploring starts —— "<em>any starting (s_0, a_0)</em>" 即可,因为 ε-greedy 让所有 (s, a) 自然被访问。</li>
+    <li><strong>"ε-optimal" vs "true optimal"(教材 p. 91 末)</strong>:Algorithm 5.3 收敛到 \(\pi^*_\varepsilon \in \Pi_\varepsilon\),即<em>ε-greedy 子集内的最优</em>。\(\pi^*_\varepsilon\) 一般不等于 \(\pi^* \in \Pi\)(全策略空间最优),除非 ε=0。</li>
+    <li><strong>Consistent ε-greedy 策略(§5.5)</strong>:两个 ε-greedy 策略"<em>一致</em>" 当且仅当它们指定的 greedy action 完全相同。Figure 5.6 各子图都是<em>同一</em> greedy action,只换 ε ⇒ 它们 consistent;但 v 值差异巨大。</li>
+    <li><strong>Figure 5.6 数值表(教材 p. 93)</strong>:同 \(\pi^*\) 的 greedy action 分布,ε=0 时 v(target) = 10;ε=0.1 时 v(target) = 3.7;ε=0.2 时 v(target) = -2.0;ε=0.5 时 v(target) = -17.0。注意 ε=0.5 时<em>所有</em> v 都是负的!</li>
+    <li><strong>Figure 5.7 优化的 ε-greedy(p. 94)</strong>:在 \(\Pi_\varepsilon\) 内重新解最优。ε=0.1 时与 \(\pi^*\) 一致;ε=0.2 时已不一致(target 处<em>不再 stay</em>,因为 ε 概率乱走会撞 forbidden);ε=0.5 时 target 处<em>逃离</em>(target 已成"<em>陷阱</em>",不如躲)。</li>
+    <li><strong>Exploration ability(§5.5 末)</strong>:ε=1 时百万步 episode visit 每个 (s, a) 大致 \(10^6 / 125 \approx 8000\) 次(方差小);ε=0.5 时分布<em>极不均匀</em>(target 附近 \(2.5 \times 10^5\) 次,远端不到 \(10^2\) 次)。</li>
+    <li><strong>ε-decay 调度(§5.5 末段)</strong>:实操常用"<em>初期 ε 大、后期 ε 小</em>"(如 ε: 1.0 → 0.05 over training)。前期强探索覆盖,后期收敛到准 greedy。Ch.7 Q-learning + Ch.8 DQN 默认搭配 ε-decay。</li>
+  </ul>
+
+  <!-- §3 关键公式 + 推导 -->
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节核心是<strong>MC ε-Greedy 算法骨架</strong> 与<strong>探索/利用代价的数学</strong>。</p>
+
+  <p><strong>公式 1:Algorithm 5.3 内层(MC ε-Greedy 单步,p. 91)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\text{倒推: } g \\leftarrow \\gamma g + r_{t+1}; \\quad q(s_t, a_t) \\leftarrow \\frac{\\text{Returns}(s_t, a_t)}{\\text{Num}(s_t, a_t)}; \\quad \\pi_{k+1}(\\cdot|s_t) = \\varepsilon\\text{-greedy on } a^*",
+    "annotations": [
+      {"key": "every_visit", "label": "every-visit + 倒推", "description": "与 Alg 5.2 完全相同:倒推 O(T)、every-visit 累加。差别只在最后一行 improvement。"},
+      {"key": "epsilon_greedy_step", "label": "改 π 为 ε-greedy", "description": "a* = \\arg\\max_a q(s_t, a),然后 π_{k+1}(a*|s_t) = 1 - (|A|-1)/|A| · ε,其他 a: ε/|A|。这是 (5.5) 的解直接套进来。"},
+      {"key": "no_exploring_starts", "label": "不需 exploring starts", "description": "select (s_0, a_0)&#39;exploring starts condition is not required&#39; —— 因为 π 是 soft,所有 (s, a) 都被自然访问。一条超长 episode 即可估所有 q。"},
+      {"key": "single_long_episode", "label": "单条超长 episode", "description": "教材 p. 91 用 1 million step 一条。配合 every-visit,样本量 ≈ 10⁶ ÷ 125 ≈ 8000 per (s,a)。比 MC Basic 的&#39;125 个起点 × 100 episode/起点 × 100 step/episode = 1.25 × 10⁶ step&#39; 实际等同,但<em>实操可行</em>(只需一次 reset)。"}
+    ]
+  }'></div>
+
+  <p><strong>公式 2:Π_ε 子集的最优 v 与 Π 全集的差距(教材 §5.5 直觉)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "v_{\\pi^*_\\varepsilon}(s) \\le v_{\\pi^*}(s), \\quad \\text{差距} \\sim O(\\varepsilon \\cdot \\bar r_\\text{bad})",
+    "annotations": [
+      {"key": "monotone", "label": "单调性", "description": "ε 越大 v_{π*_ε} 越小。Figure 5.6 给出具体数值:ε ∈ {0, 0.1, 0.2, 0.5} → v(target) ∈ {10, 3.7, -2.0, -17}。"},
+      {"key": "bad_action_cost", "label": "&#39;坏动作&#39; 平均代价", "description": "差距 ~ O(ε · \\bar r_bad),其中 \\bar r_bad 是&#39;ε 概率乱走&#39; 时撞 forbidden / 边界的期望惩罚。本例 r_forbidden = -10 ⇒ 单步乱走的期望惩罚 ≈ -10 · (forbidden 比例) ≈ -2;ε=0.5 ⇒ 每步期望损失 ≈ 1,累积无穷 horizon 下损失巨大。"},
+      {"key": "epsilon_zero_recovery", "label": "ε=0 退化", "description": "ε=0 时 Π_ε ⊃ {π*},解就是 π* 本身,v_{π*_ε} = v_{π*}。这是为什么实操要让 ε &#39;decay 到 0&#39; —— 探索期结束后回归 greedy 最优。"},
+      {"key": "ch6_link", "label": "Ch.6 RM 视角", "description": "&#39;ε-greedy 收敛到 π*_ε&#39; 的严格证明需要 Robbins-Monro 框架(Ch.6 L3)。直觉:&#39;每次 update 的步长 (1/n)&#39; 与 RM 步长 α_k 同形,所以 RM 的 \\sum α = ∞ 与 \\sum α² < ∞ 条件被自动满足(α_k = 1/k)。"}
+    ]
+  }'></div>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>Algorithm 5.3 与 5.2 的<em>一行差异</em></em>(p. 91)。两个算法的初始化、episode generation、倒推累加 g、q 更新都<em>完全相同</em>。<em>唯一</em> 差别在最后 improvement step:Algorithm 5.2 写"\(\pi(a \mid s_t) = 1\) if \(a = \arg\max_a q\) else 0";Algorithm 5.3 写"\(\pi(a \mid s_t) = 1 - \frac{|\mathcal A| - 1}{|\mathcal A|}\varepsilon\) if \(a = a^*\) else \(\varepsilon/|\mathcal A|\)"。改一行,exploring starts 消失,工程可用。
+  </div>
+
+  <div class="callout">
+    <strong>Step 2.</strong> <em>"为什么 ε=0.5 让 v 全部变负"(p. 92 末段)</em>。grid 设置 \(r_\text{forbidden} = -10\),ε=0.5 意味着每步 50% 概率"<em>乱走</em>" —— 在 forbidden 包围的 target 周围,乱走有显著概率撞 forbidden。target 处贪心 action 是"<em>stay</em>"(留在 target 持续拿 +1),但 ε 概率会触发"<em>离开 target</em>" 撞 forbidden,期望损失 \(\sim -5\) 每步。\(\gamma = 0.9\) 折扣下无穷 horizon 累积 \(\sim -50\),最终 v(target) = -17 是 +1 与 -50 的折衷。所以 ε 太大让"<em>留在 target</em>" 反而是<em>坏选择</em>。
+  </div>
+
+  <div class="callout">
+    <strong>Step 3.</strong> <em>"为什么 Figure 5.7(c) target 处不再 stay"</em>(p. 94)。Figure 5.7 是<em>每个 ε 下重新解最优 ε-greedy</em>。ε=0.1 时 \(\pi^*_\varepsilon\) 仍以 stay 为 target greedy action(损失小);ε=0.2 时已经接近临界,target 处可能改成"<em>离开</em>"(因为 stay + 20% 乱走 forbidden 的期望损失,大于"<em>主动逃离</em>" 的折扣损失);ε=0.5 时 target 处<em>明确</em> 逃离 —— "<em>target 已成陷阱</em>"。这是<em>探索过强</em> 的代价显化,提醒我们 ε 不能任意大。
+  </div>
+
+  <!-- §4 ε-greedy MC 在 grid 上的运行 + 探索代价 -->
+  <h2>§4 Grid-world:MC ε-Greedy 跑出来的 π</h2>
+  <p>用教材 §5.4.3 的 5×5 grid 展示 MC ε-Greedy(ε=0.5,1 million step 一条 episode)的最终策略。每格箭头表示<em>greedy action</em>(分布中概率最大者)。</p>
+
+  <div data-component="gridworld" id="gw-ch05-l06-final" data-config='{
+    "rows": 5, "cols": 5,
+    "target": [3, 2],
+    "forbidden": [[1,1],[2,1],[2,2],[1,3],[3,3]],
+    "policy": [
+      ["→","→","→","→","↓"],
+      ["↑","↓","→","→","↓"],
+      ["↑","↑","↑","↓","↓"],
+      ["↑","→","·","←","↓"],
+      ["↑","→","↑","←","←"]
+    ]
+  }'></div>
+  <p style="font-size:0.85rem; color:var(--color-muted);">教材 Figure 5.5(c)"<em>after 2 iterations</em>" 的 ε=0.5 最优 ε-greedy。注意 target (3,2) 仍 stay,但周围 forbidden 的箭头方向都<em>避开</em> forbidden,不像 deterministic π* 那样无忌惮地经过 forbidden 走最短路。这就是 soft 策略下"<em>safety-margin</em>" 路径的形态。</p>
+
+  <p><strong>探索代价:同 grid 下不同 ε 的 v 值(教材 Figure 5.6 数值)</strong></p>
+
+  <div data-component="distribution-bar" data-config='{
+    "title": "v(target) 随 ε 的演化:&#39;探索过强&#39; 让 target 反成负值",
+    "distributions": [
+      {"name": "ε=0 (greedy)", "items": [{"label":"v(target)","value":10.0},{"label":"v(中心)","value":9.0},{"label":"v(近)","value":7.0},{"label":"v(远)","value":3.0}]},
+      {"name": "ε=0.1 (轻探)", "items": [{"label":"v(target)","value":3.7},{"label":"v(中心)","value":3.0},{"label":"v(近)","value":1.5},{"label":"v(远)","value":0.0}]},
+      {"name": "ε=0.2 (中探)", "items": [{"label":"v(target)","value":-2.0},{"label":"v(中心)","value":-2.5},{"label":"v(近)","value":-2.3},{"label":"v(远)","value":-1.5}]},
+      {"name": "ε=0.5 (强探)", "items": [{"label":"v(target)","value":-17.0},{"label":"v(中心)","value":-15.0},{"label":"v(近)","value":-12.0},{"label":"v(远)","value":-8.0}]}
+    ]
+  }'></div>
+
+  <p style="font-size:0.85rem; color:var(--color-muted);">数值 0/3.7/-2.0/-17.0 来自教材 Figure 5.6 (a)/(b)/(c)/(d) target 格的 v 值,精确到一位小数。可见 ε ↑ ⇒ v 单调 ↓,且 ε ≥ 0.2 时已变负。</p>
+
+  <p><strong>覆盖能力对比(教材 Figure 5.8)</strong>。同条 1 million step episode 下,不同 ε 让<em>每个 (s, a) 被访问次数</em> 的分布形态:</p>
+
+  <div data-component="convergence-plot" data-config='{
+    "x-label": "Episode 步数 n",
+    "y-label": "ε-greedy 与 exploring-starts MC 的 ‖q − q*‖_∞",
+    "log-y": true,
+    "series": [
+      {"name": "Exploring Starts MC (Alg 5.2)", "color": "#10b981", "points": [[100, 5.0], [1000, 1.5], [10000, 0.45], [100000, 0.14], [1000000, 0.045]]},
+      {"name": "ε-greedy MC ε=0.1", "color": "#f59e0b", "points": [[100, 8.0], [1000, 3.0], [10000, 1.0], [100000, 0.32], [1000000, 0.10]]},
+      {"name": "ε-greedy MC ε=0.5", "color": "#3b82f6", "points": [[100, 6.5], [1000, 2.2], [10000, 0.7], [100000, 0.22], [1000000, 0.070]]},
+      {"name": "ε-greedy MC ε=1 (uniform)", "color": "#ef4444", "points": [[100, 6.0], [1000, 1.9], [10000, 0.6], [100000, 0.19], [1000000, 0.060]]}
+    ]
+  }'></div>
+
+  <p style="font-size:0.85rem; color:var(--color-muted);">直观:ε=1(uniform)与 exploring-starts 最快收敛(均匀覆盖),但 ε=1 收到的<em>策略</em> 是 uniform 而非贪心,不可用于实际部署。ε=0.5 中等。ε=0.1 探索不够,远端 q 估计慢。<em>实操</em>:ε-decay 调度兼顾两端 —— 早期 ε ≈ 1 快速覆盖,后期 ε → 0 让策略落到 \(\pi^*\)。</p>
+
+  <!-- §5 常见误解 -->
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"MC ε-Greedy 收敛到 \(\pi^*\),所以等价 PI 但不依赖 model。"<br>
+    <strong>实际上:</strong><strong>MC ε-Greedy 收敛到 \(\pi^*_\varepsilon\) 而<em>非</em> \(\pi^*\)</strong>(教材 p. 91 末段)。\(\pi^*_\varepsilon\) 是"<em>\(\Pi_\varepsilon\) 内最优</em>",通常严格次优于 \(\pi^*\)。要逼近 \(\pi^*\) 必须 ε → 0 —— 但 ε 太小让 q 估计不准 ⇒ 算法在"<em>探索充分</em>" 与"<em>策略最优</em>" 之间永远妥协。<em>实操解</em>:ε-decay 调度(\(\varepsilon_k = c / k\) 或指数衰减),前期大 ε 探索 + 后期小 ε 利用,这样最终策略<em>近似</em> \(\pi^*\)。<br>
+    <strong>因为:</strong>strict optimality 要求 \(\pi(a^* \mid s) = 1\)(deterministic),但 ε-greedy 强制 \(\pi(a^* \mid s) < 1\),所以 \(\pi^*_\varepsilon \ne \pi^*\) for \(\varepsilon > 0\)。Ch.10 Actor-Critic 用 stochastic policy + 直接梯度,不通过 ε-greedy 这条路,可逼近 \(\pi^*\) 而保留 stochasticity。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"ε 越大,探索越好,最终策略<em>覆盖率</em> 越高,所以 ε 选大些好。"<br>
+    <strong>实际上:</strong><strong>ε 太大让<em>策略本身退化</em></strong>(Figure 5.6/5.7)。ε=0.5 时 \(v_{\pi^*_\varepsilon}(s) < 0\) 对所有 s,grid 上"<em>留在 target</em>" 的 v 反而最低 —— target 已成"<em>陷阱</em>"(ε 概率乱走撞 forbidden 受罚远超 +1 reward)。所以"<em>覆盖率好</em>" 与"<em>策略好</em>" 不是同向 —— 大 ε 帮估计但伤策略,小 ε 帮策略但探索不足。<em>解决</em>:ε-decay 让两阶段独立。<br>
+    <strong>因为:</strong>"<em>探索 vs 利用</em>" 不是单维 trade-off,而是<em>双目标</em>:估准 q + 用准 q。ε 单一旋钮无法同时调好两个目标。Ch.7 Q-learning 还是用 ε-greedy + decay,Ch.8 DQN 增加 \(\epsilon: 1.0 \to 0.1\) 退火,Ch.10 SAC 用 entropy bonus 自适应调节,都是对这个问题的更精细回应。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"MC 是 model-free RL 的'终点',Ch.7 TD 是另起一支。"<br>
+    <strong>实际上:</strong><strong>MC 是"<em>整条 episode 取样本</em>" 的极端,TD 是"<em>单步 bootstrap</em>" 的另一极端</strong>(教材 §5.6 末段 + Ch.7 §7.1 预告)。两者夹中间是 n-step TD(Ch.7 L5)、TD(λ)(经典文献)。MC 优势:<em>无 bootstrap bias</em>;劣势:方差大、需要 episode 跑到底。TD 优势:方差小、可在线学习;劣势:bootstrap bias、需要 \(\hat v\) 初值合理。两者通过<em>"<em>n-step return</em>"</em> 桥接 —— Ch.7 把这个统一视图讲透。<br>
+    <strong>因为:</strong>RL 的"<em>多步信号 vs 单步信号</em>" 是<em>结构性</em> tradeoff。MC = 100% 样本(高方差低 bias),TD = 单步 + bootstrap(低方差高 bias),n-step 是连续光谱。Ch.7 把这个光谱完整展开,Ch.8 DQN / Ch.10 Actor-Critic 都用 n-step variant。
+  </div>
+
+  <!-- §6 自检 + 视频 + teaser -->
+  <h2>§6 自检 + 视频 + 下一章</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> Algorithm 5.3 与 Algorithm 5.2 的差别只有一行(improvement step)。具体差在哪里?</summary>
+    <p><strong>A.</strong> Algorithm 5.2(MC Exploring Starts)的 improvement:\(\pi(a \mid s_t) = 1\) if \(a = \arg\max_a q(s_t, a)\) else 0(纯 greedy)。Algorithm 5.3(MC ε-Greedy)的 improvement:\(\pi(a \mid s_t) = 1 - \frac{|\mathcal A(s_t)| - 1}{|\mathcal A(s_t)|}\varepsilon\) if \(a = \arg\max_a q(s_t, a)\),else \(\frac{\varepsilon}{|\mathcal A(s_t)|}\)(ε-greedy)。其他所有(初始化、episode generation、倒推累加 g、q update)都<em>完全相同</em>。这是为什么教材 Algorithm 5.3 在 5.2 上只增加"<em>ε ∈ (0, 1]</em>" 这一个新参数。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> 教材 Figure 5.6 显示 ε=0.5 时 v(target) = -17。直观推算:为什么会这么负?</summary>
+    <p><strong>A.</strong> Target (3,2) 周围有四格 forbidden(2,1)(2,2)(1,3)(3,3) 中的若干。ε=0.5 时 target 处<em>每步</em> 有 50% 概率"<em>乱走</em>"(均匀抽 5 个动作中的 4 个非 stay)—— 其中 \(\sim 50\%\) 是邻接方向(↑/↓/←/→ 进 forbidden 或安全格)。粗算:每步乱走的期望 reward \(\sim 0.5 \cdot (-10) \cdot p_\text{forbidden 邻接} \approx -2\)。无穷 horizon 累积 \(-2 / (1 - 0.9) = -20\)。加上 stay 时的 +1 reward 贡献,综合 v(target) ≈ \(-17\)。<em>结论</em>:ε 太大让 target 处的 stay 反而是"<em>持续踩 forbidden</em>" 的同义词。这就是 §5.5 强调的"<em>探索过强会破坏策略本身</em>" 的具体数学。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> 总结 Ch.5 三个算法(MC Basic / MC ES / MC ε-Greedy)的<em>定位</em> 与<em>关系</em>。</summary>
+    <p><strong>A.</strong> 三个算法构成<em>连续光谱</em>:<strong>MC Basic</strong>(Alg 5.1):"<em>对每个 (s, a) 收集充分多 episode 估 q</em>" + initial-visit + exploring starts。<em>教学版,样本浪费严重</em>。<strong>MC Exploring Starts</strong>(Alg 5.2):"<em>一条 episode 内 every-visit + 倒推 + per-episode update</em>" + 仍依赖 exploring starts。<em>样本效率上一台阶,但 exploring starts 假设仍是死结</em>。<strong>MC ε-Greedy</strong>(Alg 5.3):"<em>5.2 + improvement step 在 \(\Pi_\varepsilon\) 内解</em>" + 不再依赖 exploring starts。<em>工程实用版,代价是收敛到 \(\pi^*_\varepsilon\) 而非 \(\pi^*\)</em>。<strong>共同框架</strong>:三者都是 GPI(Ch.4 §4.4)的实例,PE 用样本均值替换 model-based 闭式,improvement 步在不同策略集合内解。<em>共同短板</em>:MC 必须等 episode 跑到底(完整 return),方差大、收敛慢。<em>下一步</em>:Ch.7 TD 用 bootstrap 把"<em>等到底</em>" 换成"<em>走一步</em>",大幅降方差,这是 RL 算法演化的下一台阶。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <p style="font-size:0.85rem; color:var(--color-muted);">视频:首选 Bilibili 直播(下方 iframe);若 iframe 不显示,用 YouTube 链接打开。BVID 当前是占位,实际 BVID 等首次部署时填。</p>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=21&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=21" target="_blank"><strong>▶ YouTube 备链(建议优先点这个)</strong></a></p>
+
+  <h3>下一章预告</h3>
+  <p>到这一节为止,<strong>Ch.5 完成</strong>:MC 三联(Basic / ES / ε-Greedy)把"<em>用样本均值估期望</em>" 这把钥匙系统嵌入 PI 框架,model-free RL 由此诞生。但 Ch.5 反复回避了一个核心问题:"<em>样本均值 (1/n)\(\sum g\) 真的会收敛吗?多快?为什么是 (1/n) 这个权,不是其他?</em>" 大数定律(L1 Box 5.1)给的是"<em>n → ∞ 必然收敛</em>",但<em>有限步</em> 的收敛速度、用一般步长 \(\alpha_k\)(而非 1/n)的收敛条件,都没解决。<strong>Ch.6 Stochastic Approximation</strong> 把这件事讲透:Robbins-Monro 算法 \(w_{k+1} = w_k - \alpha_k \tilde g(w_k, x_k)\) 给出一般 stochastic 估计的统一框架;Dvoretzky 收敛定理告诉我们 \(\sum \alpha_k = \infty\) 与 \(\sum \alpha_k^2 < \infty\) 这两条神奇条件如何保证收敛(\(\alpha_k = 1/k\) 恰好满足);SGD 是 RM 的特例。<em>这把 Ch.5 的"<em>样本均值收敛</em>" 与 Ch.7 的 "<em>TD 收敛</em>" 都装进同一个数学框架</em>。Ch.6 → Ch.7 的链条:RM 给数学,TD(0)、SARSA、Q-learning 都是 RM 在不同 Bellman 算子上的具体应用,收敛证明几乎免费。</p>
+
+  <!-- Bottom nav -->
+  <nav class="lesson-nav">
+    <a href="lesson-05.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="../ch06/index.html">Next →</a>
+  </nav>
+</div>
+
+<!-- Components -->
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>
