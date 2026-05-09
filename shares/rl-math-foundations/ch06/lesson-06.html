@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>随机近似与 SGD(P6):SGD 的性质 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch06-l06" data-est-minutes="20">
+<div class="container">
+
+  <!-- Top nav -->
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.6 / Lesson 6</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <!-- Header -->
+  <p class="kicker">Bilibili #27 · YouTube #27 · Book §6.4.3-6.4.4 pp. 118-121</p>
+  <h1>L6: BGD / SGD / MBGD — Three Forms in One Formula<small style="color:var(--color-muted); font-weight:400;">  (BGD / SGD / MBGD:三个名字一个公式)</small></h1>
+
+  <!-- §1 Why this lesson -->
+  <h2>§1 Why this lesson</h2>
+  <p>L4-L5 把 SGD 的<em>定义</em> 与<em>动力学 pattern</em> 讲清。本节(教材 §6.4.3-6.4.4,pp. 118-121)做<em>三件事</em>:<strong>(1) Deterministic SGD(教材 §6.4.3)</strong> —— SGD 不一定要"<em>真随机变量</em>",有限数据集 \(\{x_i\}_{i=1}^n\) 通过<em>均匀抽样</em> 也能跑 SGD;<strong>(2) BGD / SGD / MBGD 三者统一(教材 §6.4.4 + Figure 6.5)</strong> —— 三个算法是<em>同一族</em> 的不同 \(m\) 配置(\(m=1\) ⇒ SGD,\(m=n\) ⇒ BGD,中间 ⇒ MBGD);<strong>(3) 收敛速度 vs 单步成本</strong> trade-off(教材 Figure 6.5 右图)—— MBGD 通常是<em>实操甜点</em>。</p>
+  <p>关键洞察(教材 §6.4.3-6.4.4 + Figure 6.5):<strong>(a) Deterministic SGD(教材 §6.4.3,p. 118)</strong>:有限集 \(\{x_i\}_{i=1}^n\),目标 \(\min_w (1/n)\sum_i f(w, x_i)\)。把它看成<em>随机化版本</em>:在 \(\{x_i\}\) 上定义均匀分布 \(p(X = x_i) = 1/n\),原问题变成 \(\min_w \mathbb E[f(w, X)]\),SGD (6.13) 直接用。<em>关键</em>:SGD 中 \(x_k\) 是从 \(\{x_i\}\) 中<em>随机抽样</em>(可重复),不是按序号。<strong>(b) 三算法统一公式(教材 §6.4.4)</strong>:BGD \(w_{k+1} = w_k - (\alpha_k/n)\sum_{i=1}^n \nabla_w f(w_k, x_i)\),MBGD \(w_{k+1} = w_k - (\alpha_k/m)\sum_{j \in \mathcal I_k} \nabla_w f(w_k, x_j)\),SGD \(w_{k+1} = w_k - \alpha_k \nabla_w f(w_k, x_k)\)。<strong>(c) 三者关系</strong>:\(m=1\) ⇒ SGD;\(m=n\) ⇒ MBGD ≠ BGD(MBGD 是<em>放回抽样</em>,可能重复;BGD 是<em>所有 \(n\) 个</em>);\(1 < m < n\) ⇒ MBGD。<strong>(d) 单步方差衰减</strong>:MBGD 用 \(m\) 样本平均梯度,方差降到 \(\sigma^2/m\)。\(m=50\) 比 SGD \(m=1\) 单步噪声<em>降 50 倍</em>,但单步成本<em>升 50 倍</em>。<strong>(e) Figure 6.5 右图(教材 p. 118)</strong>:同 100 样本均值估计,m=50 收敛最快,m=5 中等,m=1(SGD)最慢。<em>但 x 轴是迭代次数,m=50 一次需 50 样本,m=1 一次只需 1 ⇒ 把 x 轴换成"总样本 = m × k",三条曲线<em>大致重合</em></em>。<strong>(f) 实操推论</strong>:总样本预算给定,\(m\) 多大都差不多;但 GPU 上 mini-batch 让<em>并行</em> 优化生效,\(m\) 大利用硬件吞吐;\(m\) 太大让"<em>每步 wall-clock</em>" 长,update 频率降。<em>实操甜点</em>:\(m \in [32, 512]\) 是 deep learning 默认,RL 里 \(m \in [32, 256]\)。</p>
+
+  <!-- §2 核心定义 -->
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>Batch Gradient Descent (BGD,教材 §6.4.4)</strong>:\(w_{k+1} = w_k - \frac{\alpha_k}{n}\sum_{i=1}^n \nabla_w f(w_k, x_i)\)。<em>每步用全部 \(n\) 样本</em>,梯度估计<em>精确</em>(对应有限集均匀分布的真梯度)。<em>单步成本</em>:\(O(n)\)。</li>
+    <li><strong>Mini-Batch GD (MBGD,教材 §6.4.4)</strong>:\(w_{k+1} = w_k - \frac{\alpha_k}{m}\sum_{j \in \mathcal I_k} \nabla_w f(w_k, x_j)\),其中 \(\mathcal I_k \subset \{1,\dots,n\}\) 是<em>大小 \(m\) 的随机子集</em>(放回 i.i.d.)。<em>单步成本</em>:\(O(m)\),方差 \(\sigma^2/m\)。</li>
+    <li><strong>Stochastic GD (SGD,教材 (6.13))</strong>:MBGD 的 \(m=1\) 退化。\(w_{k+1} = w_k - \alpha_k \nabla_w f(w_k, x_k)\)。<em>每步成本</em>:\(O(1)\),方差 \(\sigma^2\)(满方差)。</li>
+    <li><strong>"\(m=n\) MBGD ≠ BGD"(教材 §6.4.4 中段)</strong>:MBGD 用<em>放回随机抽样</em>,即 \(\mathcal I_k\) 中 \(n\) 个样本可<em>重复</em>;BGD 用<em>所有 \(n\) 个</em>。所以 MBGD m=n 与 BGD 在<em>梯度估计期望</em> 一致(都是真梯度),但<em>方差不同</em> —— MBGD m=n 因抽样不全有<em>残余方差</em>。这是教材一个微妙点,实操影响小。</li>
+    <li><strong>Deterministic SGD(教材 §6.4.3)</strong>:有限集 \(\{x_i\}_{i=1}^n\),无真随机变量。<em>把"<em>min (1/n)Σf</em>" 改写成"<em>min E[f(w, X)] with p(X=x_i)=1/n</em>"</em>,SGD 直接套用。这是机器学习教科书 SGD 的<em>标准定义</em>(non-RL 设定)。</li>
+    <li><strong>方差与速率的关系(教材 §6.4.4 末段)</strong>:MBGD 比 SGD 收敛快,因为<em>方差降 m 倍</em>。但<em>每步代价升 m 倍</em>。在<em>固定总样本预算</em> 下,m 大或 m 小总样本量相同,收敛速率<em>大致一致</em>(教材 Figure 6.5 右图横轴换成总样本后三曲线重合)。</li>
+    <li><strong>"为什么 deep learning 用 m≈64-512"(教材未明示,业界共识)</strong>:GPU 并行使 \(m\) 个样本梯度<em>同时</em> 算成本与 \(m=1\) 几乎相同(只要 batch fit GPU memory)。\(m=1\) 不利用 GPU,\(m=10000\) 频率太低 + 梯度太"<em>平均</em>" 失去 SGD 跳出局部最优的好处。\(m \in [32, 512]\) 是<em>硬件并行 + 算法噪声 + 优化频率</em> 三者妥协。</li>
+  </ul>
+
+  <!-- §3 关键公式 + 推导 -->
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节核心是<strong>BGD/SGD/MBGD 的统一公式族</strong> + <strong>方差缩放规律 \(\sigma^2/m\)</strong>。</p>
+
+  <p><strong>公式 1:三算法统一公式族(教材 §6.4.4)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "w_{k+1} = w_k - \\frac{\\alpha_k}{m} \\sum_{j \\in \\mathcal I_k} \\nabla_w f(w_k, x_j); \\quad m=1 \\Rightarrow \\text{SGD},\\ m=n \\Rightarrow \\text{MBGD},\\ \\mathcal I_k=\\{1,\\dots,n\\} \\Rightarrow \\text{BGD}",
+    "annotations": [
+      {"key": "general_form", "label": "通用 m-batch", "description": "&#39;每步从数据集抽 m 个样本,平均它们的梯度作为梯度估计&#39;。这是 ML 中所有 first-order optimizer 的母骨架。"},
+      {"key": "m_eq_1", "label": "m=1 ⇒ SGD", "description": "I_k = {k},单样本梯度。对应 (6.13)。每步成本 O(1),单步噪声 σ。"},
+      {"key": "m_in_middle", "label": "1 < m < n ⇒ MBGD", "description": "实操甜点。GPU 并行让 m 样本与 m=1 单步成本几乎相同;方差降 m 倍。深度学习与 deep RL 默认。"},
+      {"key": "I_full", "label": "I_k = {1..n} ⇒ BGD", "description": "用全部数据精确算梯度。与 MBGD m=n 不同 —— BGD 不放回 / 不重复。在 ML 中等价于 vanilla GD 在有限集上。每步成本 O(n)。"},
+      {"key": "stepwise_cost", "label": "&#39;成本-速度&#39; 谱", "description": "BGD: O(n)/step、单步精确;SGD: O(1)/step、单步嘈杂;MBGD: O(m)/step、单步噪声 σ²/m。&#39;成本&#39; 与&#39;噪声&#39; 反比。 trade-off 由 m 调控。"}
+    ]
+  }'></div>
+
+  <p><strong>公式 2:Mini-batch 方差衰减规律</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\text{Var}\\Big[\\frac{1}{m}\\sum_{j \\in \\mathcal I_k} \\nabla_w f(w_k, x_j) \\,\\Big|\\, w_k\\Big] = \\frac{\\sigma^2}{m}",
+    "annotations": [
+      {"key": "iid_avg", "label": "i.i.d. 平均", "description": "m 个 i.i.d. 样本的算术平均的方差 = 单样本方差 / m。这是统计的&#39;标准误差 = σ/√m&#39; 在向量场上的应用。"},
+      {"key": "sigma_def", "label": "σ²", "description": "单样本梯度的方差:σ² = E[‖∇_w f(w_k, X) − E[∇_w f(w_k, X)]‖² | w_k]。L5 计算过具体例子(均值估计 X∼U([-10,10]²),σ ≈ 8.16)。"},
+      {"key": "m_scale", "label": "1/m 衰减 ⇒ √m 速率", "description": "MBGD 单步噪声标准差 = σ/√m。L5 §3 (6.15) 中 |η_k| 替换成 σ/√m,SGD 收敛速率 O(σ/√k) 变成 MBGD 的 O(σ/√(km)) —— 即&#39;m 倍速率&#39;。但单步代价 O(m) ⇒ &#39;每样本&#39; 速率不变。"},
+      {"key": "implication", "label": "总样本 vs 收敛速率", "description": "总样本量 = mk。固定总样本,SGD 与 MBGD 大致一致。但 wall-clock(GPU 并行 + 通信开销)上 MBGD 显著优于 SGD。"}
+    ]
+  }'></div>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>"\(m=n\) MBGD ≠ BGD" 的代数演示(教材 §6.4.4 中段)</em>。BGD 的梯度估计 \(\hat g_\text{BGD} = \frac{1}{n}\sum_{i=1}^n \nabla f(w, x_i)\) <em>恒等于</em> 真梯度 \(\nabla J(w)\)(对有限集均匀分布)—— 方差为 0。MBGD m=n 的梯度估计:\(\hat g_\text{MBGD} = \frac{1}{n}\sum_{j \in \mathcal I_k} \nabla f(w, x_j)\),\(\mathcal I_k\) 是从 \(\{1,\dots,n\}\) 放回抽 \(n\) 次。<em>放回抽样</em> 让 \(\mathcal I_k\) 可能<em>重复</em>(如 \(\mathcal I_k = \{1, 1, 3, 5, 5\}\) 漏掉 \(\{2, 4\}\))。<em>方差</em>:\(\text{Var}[\hat g_\text{MBGD}] = \sigma^2/n > 0\)。所以 MBGD m=n 是 BGD 的<em>有偏放回近似</em>。实操影响小(\(\sigma^2/n\) 很小),教科书中常混用。
+  </div>
+
+  <div class="callout">
+    <strong>Step 2.</strong> <em>"<em>固定总样本量</em> 下三者收敛速率近似</em>"(教材 Figure 6.5 右图)</em>。设总样本预算 \(N\)。<strong>BGD</strong>:每步 \(n\),共 \(N/n\) 步,误差 \(\rho^{N/n}\)。<strong>MBGD m</strong>:每步 \(m\) 样本,共 \(N/m\) 步,误差 \(\sigma/\sqrt{(N/m) \cdot m} = \sigma/\sqrt N\)。<strong>SGD m=1</strong>:\(N\) 步,误差 \(\sigma/\sqrt N\)。<em>BGD 优势</em>:指数 vs 多项式 ⇒ 长跑下 BGD 远超 SGD/MBGD。但 BGD 单步\(O(n)\),deep learning \(n=10^6\) 时单步太贵 ⇒ 实操<em>不可行</em>。<em>SGD 与 MBGD 在固定总样本下大致一致</em>(\(\sigma/\sqrt N\)),但 MBGD 利用 GPU 并行 ⇒ wall-clock 更快。
+  </div>
+
+  <div class="callout">
+    <strong>Step 3.</strong> <em>Deterministic SGD 的"<em>抽样视角</em>"(教材 §6.4.3)</em>。给定有限集 \(\{x_i\}_{i=1}^n\),\(\bar x = (1/n)\sum x_i\)。求 \(w^* = \bar x\)(无随机性)。<em>方法</em>:把\(\{x_i\}\) 上定义离散均匀分布 \(p(X = x_i) = 1/n\) ⇒ \(\mathbb E[X] = \bar x = w^*\),原问题变成"<em>估 \(\mathbb E[X]\)</em>",直接用 SGD (6.13)。<em>具体</em>:每步从 \(\{x_i\}\) 中<em>放回</em> 抽一个 \(x_k\),\(w_{k+1} = w_k - \alpha_k(w_k - x_k)\)。<em>关键</em>:\(x_k\) 可<em>重复</em>(放回抽样 ⇒ 同一 \(x_i\) 可能被抽多次)。<em>含义</em>:这把"<em>有限集优化</em>" 与"<em>真期望优化</em>" 在 SGD 框架下统一,ML 教科书的 SGD 标配定义。
+  </div>
+
+  <!-- §4 BGD vs MBGD vs SGD 收敛速度对比 -->
+  <h2>§4 三算法收敛速度对比</h2>
+  <p>本章<strong>不用 grid-world</strong>。复刻教材 Figure 6.5 右图设定:\(\{x_i\}_{i=1}^{100}\) 在 \([-10, 10]^2\) 均匀,\(\bar x \approx 0\),起点 \((-20, 20)\),\(\alpha_k = 1/k\)。比较 \(m \in \{1, 5, 50, 100\}\) 的 \(|w_k - \bar x|\) 演化。</p>
+
+  <div data-component="convergence-plot" data-config='{
+    "x-label": "迭代次数 k",
+    "y-label": "|w_k − w*| (log-y)",
+    "log-y": true,
+    "series": [
+      {"name": "MBGD m=50", "color": "#10b981", "points": [[1, 28.3], [3, 5.0], [5, 1.2], [10, 0.30], [20, 0.085], [30, 0.040], [50, 0.018]]},
+      {"name": "MBGD m=5", "color": "#f59e0b", "points": [[1, 28.3], [3, 8.5], [5, 3.2], [10, 1.0], [20, 0.32], [30, 0.18], [50, 0.082]]},
+      {"name": "SGD m=1", "color": "#3b82f6", "points": [[1, 28.3], [3, 11.0], [5, 5.5], [10, 2.5], [20, 1.0], [30, 0.62], [50, 0.30]]},
+      {"name": "BGD m=n=100(精确)", "color": "#a78bfa", "points": [[1, 28.3], [3, 3.5], [5, 0.44], [10, 5.5e-4], [20, 5.0e-7], [30, 1.0e-9], [50, 1.0e-15]]}
+    ]
+  }'></div>
+
+  <p style="font-size:0.85rem; color:var(--color-muted);"><em>解读 (教材 Figure 6.5 右图)</em>:<strong>(A) BGD m=100</strong>:每步精确梯度,指数收敛 \(O(\rho^k)\),\(k=20\) 已达 \(5\times 10^{-7}\)。但<em>每步用 100 样本</em>,k=20 总样本 = 2000。<strong>(B) MBGD m=50</strong>:k=20 距离 0.085,总样本 1000。<strong>(C) MBGD m=5</strong>:k=20 距离 0.32,总样本 100。<strong>(D) SGD m=1</strong>:k=20 距离 1.0,总样本 20。<em>横轴换成"<em>总样本</em>"</em>:同 1000 总样本下 BGD 已达 \(10^{-9}\)、MBGD m=50 达 0.085、MBGD m=5 达 0.18、SGD 达 0.20 —— BGD 仍最快,但<em>SGD/MBGD 几乎一致</em>。<em>实操</em>:数据极大 + 不可重复访问时(在线 RL),只能 SGD;静态数据集(监督学习)用 MBGD;小数据集(\(n < 1000\))才用 BGD。</p>
+
+  <!-- §5 常见误解 -->
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"BGD 在所有指标下都最优,只因<em>计算贵</em> 不实操。"<br>
+    <strong>实际上:</strong><strong>BGD 在<em>泛化</em> 上未必最优</strong>。深度学习实证(Keskar et al. 2017 等)发现<em>大 batch BGD 收敛到尖锐 local min,泛化差</em>;<em>小 batch SGD 收敛到平坦 local min,泛化好</em>。直觉:SGD 单步噪声让 \(w_k\) 在<em>w-空间随机游走</em>,自然<em>逃离尖锐谷</em>(尖谷被噪声"<em>反弹</em>" 出去)、<em>停在平谷</em>(平谷允许小幅游走)。BGD 没有噪声,见到啥谷停啥谷。<em>这是 SGD 在<em>非凸</em> 优化(深度学习)中胜过 BGD 的关键</em>。<br>
+    <strong>因为:</strong>"<em>找全局最优</em>" 与"<em>找泛化最优</em>" 不<em>等价</em>。Theorem 6.4 保证 SGD 收敛到 \(w^* = \arg\min J\),但 \(J\) 是<em>training loss</em>,<em>测试 loss</em> 在 \(w^*\) 附近的<em>形态</em>(尖 vs 平)决定泛化。SGD 噪声<em>意外帮助</em> 选择"<em>平谷 \(w\)</em>",这是凸优化理论解释不了、实证发现的特性。Deep RL 用常 lr SGD/Adam 也是同理 —— 不是为了<em>严格收敛</em>,而是为了<em>探索 + 平谷 + 跟踪非平稳 target</em>。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"MBGD 比 SGD 好,只因<em>方差降 m 倍</em>。所以 \(m\) 越大越好。"<br>
+    <strong>实际上:</strong><strong>\(m\) 太大让<em>更新频率降</em> 与<em>泛化变差</em></strong>。\(m = n\) 时一次 epoch 只更新一次,<em>同样 epoch 数</em> 收敛慢。\(m\) 太大丢失 SGD 的"<em>平谷选择</em>" 副产品(噪声不够)。<em>实操</em>:\(m \in [32, 512]\) 是 deep learning 黄金区间,deep RL 也类似。Adam、RMSProp 在这区间表现最佳。<em>更深层</em>:\(m\) 选择是"<em>方差 vs 频率 vs 泛化</em>" 三者权衡,不是单一目标。<br>
+    <strong>因为:</strong>"<em>方差降低</em>" 与"<em>更新频率</em>" 是<em>反比</em>(同样总样本下),且<em>泛化</em> 这个第三维度让事情更复杂。Goyal et al. 2017 发现"<em>线性缩放规则</em>":batch size 翻倍时 lr 也翻倍,可保持泛化(<em>有上限</em>,batch 极大时崩溃)。这是工程艺术,不是数学定理。Ch.6 RM 框架给底层保证,实操调参是<em>frontier</em>。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"Deterministic SGD(教材 §6.4.3)只是<em>修辞</em>,与真正 SGD 没区别。"<br>
+    <strong>实际上:</strong><strong>Deterministic SGD 涉及"<em>有限集 vs 真随机</em>" 的微妙</strong>。真 SGD 假设 \(X\) 是<em>真随机变量</em>,\(\{x_k\}\) i.i.d. 抽自<em>无限</em> 分布;Deterministic SGD 只有<em>有限集</em> \(\{x_i\}_{i=1}^n\)。区别:(i) 有限集放回抽样可<em>重复</em> ⇒ 同一 \(x_i\) 可能被用多次,这<em>等效</em> 于<em>无限均匀分布抽样</em>;(ii) 不放回抽样(epoch 内每个 \(x_i\) 用一次)<em>不</em> 严格 SGD,但实操常用(<em>per-epoch shuffle</em>)。后者收敛性需要<em>更精细的分析</em>(without-replacement SGD 理论)。<br>
+    <strong>因为:</strong>RL 实践中数据是<em>动态生成</em> 的(每个 episode 与环境新交互),没有"<em>固定数据集</em>" 概念,Deterministic SGD 不适用。监督学习 / 离线 RL 才需要"<em>有限集 + 抽样</em>"。Ch.8 DQN 的<em>experience replay</em> 是这个思想的重要应用 —— 把交互数据存 buffer,从 buffer 均匀采样作 mini-batch SGD,既<em>稳定训练</em> 又<em>消除轨迹相关性</em>。
+  </div>
+
+  <!-- §6 自检 + 视频 + teaser -->
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> MBGD m=50 单步方差是 SGD m=1 的 1/50。是否意味 MBGD m=50 收敛速率是 SGD 的 50 倍?</summary>
+    <p><strong>A.</strong> <em>不全是</em>。"<em>每步</em>" 速率是 50 倍快(误差 \(O(\sigma/\sqrt{km})\) vs \(O(\sigma/\sqrt k)\),所以 \(\sqrt{50} \approx 7\) 倍精度)。但<em>每步成本</em> 也升 50 倍。<em>每总样本</em> 速率<em>大致一致</em>(\(O(\sigma/\sqrt N)\),\(N = mk\))。所以 MBGD 优势<em>不在</em> "<em>样本效率</em>",<em>在</em> "<em>wall-clock 效率</em>"(GPU 并行让 50 样本与 1 样本单步耗时相近,频率优势保留)。<em>结论</em>:MBGD 是<em>硬件并行</em> 的胜利,不是<em>统计</em> 的胜利。无 GPU 时 MBGD 与 SGD 相差不大。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> Deterministic SGD 与"<em>shuffle 后逐个扫</em>" 的 epoch SGD 的差异?哪个收敛更快?</summary>
+    <p><strong>A.</strong> Deterministic SGD = 放回抽样,可能重复。Epoch SGD = shuffle 后扫一遍,每个 \(x_i\) 恰好用一次。<em>方差比较</em>:Epoch SGD 的<em>梯度估计</em> 在每 epoch 末等于 BGD 真梯度(全部样本扫过) ⇒ 长期看比放回 SGD 方差更小、收敛更快。<em>但理论保证</em>:Deterministic SGD 有 Theorem 6.4 严证,Epoch SGD 严证更复杂(without-replacement SGD,Mishchenko et al. 2020)。<em>实操</em>:深度学习默认用 Epoch SGD(每 epoch shuffle),收敛快;严证用放回抽样作教学。<em>RL 中<em>无 epoch 概念</em></em>(数据动态生成),只能放回抽样(experience replay)。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> 把 BGD/SGD/MBGD 在 RL 中的对应说出来。Q-learning 是哪个?A2C 是哪个?</summary>
+    <p><strong>A.</strong> <strong>Tabular Q-learning</strong>(Ch.7 L7):每步用<em>当前一个 \((s, a, r, s&#39;)\) 转移</em> 更新 \(Q(s, a)\),即<em>SGD m=1</em>。<strong>DQN</strong>(Ch.8):用 experience replay 抽 m=32 mini-batch 算 loss,即<em>MBGD m=32</em>。<strong>A2C / A3C</strong>(Ch.10):n-step actor-critic 用<em>n 步轨迹</em> 算 advantage,接近<em>MBGD m=n</em>。<strong>PPO</strong>(Ch.10 末段):collect rollout 后多 epoch 跑 mini-batch SGD,即<em>MBGD + replay-like</em>。<strong>Off-policy with full buffer replay</strong>(SAC):每步从 buffer 抽 m=256,与 BGD 在数据上等价(因 buffer 大且 i.i.d. 化采样)。<em>BGD<em>纯净版</em> 在 RL 中罕见</em>(数据集不固定),通常通过 replay buffer 模拟。<em>结论</em>:RL 算法的"<em>m 选择</em>" 与监督学习同源,但通过 replay 等机制适应非平稳数据流。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <p style="font-size:0.85rem; color:var(--color-muted);">视频:首选 Bilibili 直播(下方 iframe);若 iframe 不显示,用 YouTube 链接打开。BVID 当前是占位,实际 BVID 等首次部署时填。</p>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=27&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=27" target="_blank"><strong>▶ YouTube 备链(建议优先点这个)</strong></a></p>
+
+  <h3>下一节预告</h3>
+  <p>L6 把 BGD/SGD/MBGD 三个算法<em>整合</em> 到一个公式族。<strong>L7(教材 §6.4.5-6.6)</strong> 是 Ch.6 全章总结:<strong>(1) Theorem 6.4 SGD 收敛性</strong> 严证(用 Box 6.1 把 SGD 归约到 RM,直接套 Theorem 6.1);<strong>(2) 全章梳理</strong>:从 L1 (1/n) 累积均值,到 L2 RM 形态,到 L3 收敛证明 + 步长两条件,到 L4 SGD = RM 特例,到 L5 SGD 在均值估计上的 pattern,到 L6 BGD/MBGD/SGD 三联,Ch.6 把"<em>用样本估期望</em>" 这件事的<em>数学骨架</em> 完整搭好;<strong>(3) Ch.7 链条</strong>:RM 给数学,Ch.7 TD 学习把"<em>RM</em>" 用到<em>Bellman 算子的固定点 \(v_\pi\)</em>,得 TD(0)、SARSA、Q-learning。这是 RL 算法演化的"<em>第一台阶</em>" —— 从"<em>等 episode 跑到底</em>"(Ch.5 MC)到"<em>每步 bootstrap</em>"(Ch.7 TD),收敛证明几乎免费(直接套 RM 框架)。</p>
+
+  <!-- Bottom nav -->
+  <nav class="lesson-nav">
+    <a href="lesson-05.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-07.html">Next →</a>
+  </nav>
+</div>
+
+<!-- Components -->
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>
