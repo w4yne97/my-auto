@@ -2,7 +2,9 @@
 
 - **日期**:2026-05-09
 - **作者**:WayneWong97 + Claude (brainstorming session)
-- **状态**:Draft（等待用户审阅）
+- **状态**:Plan 1 已实施完成(M0~M5),等待 Plan 2(M6~M7)
+- **Plan 1 status (M0~M5):** ✅ Complete as of 2026-05-09 — 静态站骨架、5 个可视化组件、Ch.1 双 lesson、Master dashboard、10 章 chapter index、Validator 全部产出并通过审计;`python -m scripts.rl_math_foundations.validate` 返回 `OK: no issues`
+- **Plan 2 status (M6~M7):** 未开始 — 待写实施计划,覆盖 Ch.2~Ch.10 共 51 节 lesson 内容产出 + 附录页扩充 + 最终交叉链接复审
 - **类型**:一次性内容工程（Content project, not tooling）
 - **目标产出位置**:`shares/rl-math-foundations/`
 - **源教材**:S. Zhao,《Mathematical Foundations of Reinforcement Learning》, Springer Nature Press, 2025
