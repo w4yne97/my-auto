@@ -89,6 +89,8 @@
       可保留 forbidden 格的箭头,只要 §4 narrative 体现该意图(本约定 Ch.3 audit 后弹性化)
     - trajectory 必须真正与 policy 一致:trajectory 第 k 步 = (s_k 处 policy 给的方向)
     - "stay" 动作要画在格里时用 "·";不要把 → 等指向 forbidden 格(除非该课就在讲 forbidden 是"可达的负 reward")
+    - **policy 矩阵每格的值必须是字符串** "↓"/"↑"/"←"/"→"/"·"/""(原 ASCII arrow → unicode arrow);
+      不要写成 `{"a":"down"}` 这种对象格式 —— gridworld.js 期望字符串,对象会渲染成空格(L7 audit 栽过此坑)
     - 几何不可压缩:4-action grid 上从 (r1,c1) 到 (r2,c2) 的最短步数 = |r1-r2|+|c1-c2|(Manhattan 距离),
       不能少。任何"短路径"必须通过踩 forbidden 拿负 reward 来换取(且步数不变),
       不能通过"对角"动作(grid 没有对角)。L2 §4 audit 就栽过这个坑。
