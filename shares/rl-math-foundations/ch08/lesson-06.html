@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>值函数近似(P6):DQN 基本思想 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch08-l06" data-est-minutes="20">
+<div class="container">
+
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.8 / Lesson 6</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <p class="kicker">Bilibili #42 · YouTube #42 · Book §8.4.1 pp. 181-183</p>
+  <h1>L6: Deep Q-Network (DQN) — Basic Idea<small style="color:var(--color-muted); font-weight:400;">  (DQN 基本思想 + 神经网络替换线性 FA)</small></h1>
+
+  <h2>§1 Why this lesson</h2>
+  <p>L5 的 Sarsa-FA / Q-learning-FA 都是<em>线性</em> 形态:\(\hat q(s, a; w) = \phi(s, a)^\top w\)。线性<em>简单可分析</em>(L4 给的 \(A \succ 0\)、收敛证、误差界 (8.32) 都依赖线性),但<em>表达力</em> 受手工 \(\phi\) 限制 —— Atari 那种"<em>输入是 84×84 像素</em>" 的任务,<em>没人能</em> 设计出有效的 \(\phi(s, a)\)。本节(教材 §8.4.1, pp. 181-183)用<strong>神经网络</strong> 替线性 FA:\(\hat q(s, a; w) = \text{NN}_w(s, a)\),把<em>特征学习</em> 从"<em>人工设计</em>" 推到"<em>NN 自动学</em>"。这是 RL 真正进入<em>deep</em> 时代的转折点(Mnih et al., 2015,DeepMind Atari)。</p>
+  <p>核心 takeaway:<strong>(a)</strong> 目标函数 \(J(w) = \mathbb E[(R + \gamma \max_{a&#39;} \hat q(S&#39;, a&#39;; w) - \hat q(S, A; w))^2]\)(教材 (8.37)),即<em>squared Bellman optimality error</em>。<strong>(b)</strong> 难点:\(w\) 既出现在 \(\hat q(S, A; w)\) 也出现在 \(\max_{a&#39;}\hat q(S&#39;, a&#39;; w)\) ⇒ 真梯度难算。教材 §8.4.1 的<em>第一关键 trick</em>:引入<em>target network</em> \(\hat q(s, a; w_T)\),把 max 中的 \(w\) 替成 \(w_T\)(短期 frozen),目标变 \(J = \mathbb E[(R + \gamma \max_{a&#39;}\hat q(S&#39;, a&#39;; w_T) - \hat q(S, A; w))^2]\),梯度只对 \(w\) 求(\(w_T\) 当常数)⇒ 半梯度 update (8.38)。<strong>(c)</strong> NN 的输入设计:把 \((s, a)\) 的<em>位置 + 动作索引</em> 归一化后<em>concat</em> 成 3 维输入(教材实验);或<em>"<em>state-only 输入,每动作一个 output</em>"</em>(常见 Atari 设计)。<strong>(d)</strong> NN 训练用<em>mini-batch + 现成框架</em>(PyTorch / TF),不再"<em>每步一个 SGD</em>",而是"<em>每步对一批样本算 MSE loss + Adam</em>"。这是 deep RL 与 tabular / 线性 FA 的<em>计算流程差异</em>。</p>
+
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>Deep Q-network (DQN)</strong>:用神经网络 \(\hat q(s, a; w)\) 逼近<em>最优</em> 动作值 \(q^*(s, a)\)。"<em>deep</em>" 仅指"<em>有隐藏层</em>"(教材实验用 1 层 100 神经元),不是"<em>必须很深</em>"。</li>
+    <li><strong>(8.37) 目标函数</strong>:\(J(w) = \mathbb E[(R + \gamma \max_{a&#39;\in\mathcal A(S&#39;)}\hat q(S&#39;, a&#39;; w) - \hat q(S, A; w))^2]\)。这是<em>squared Bellman optimality error</em>:\(q^*\) 满足 \(q^*(s, a) = \mathbb E[R_{t+1} + \gamma \max_{a&#39;} q^*(S_{t+1}, a&#39;)\,|\,S_t=s, A_t=a]\),所以 \(R + \gamma \max_{a&#39;}\hat q(S&#39;, a&#39;; w) - \hat q(S, A; w)\) 在 \(\hat q = q^*\) 时<em>期望为 0</em>。</li>
+    <li><strong>主网络 (main network) \(\hat q(s, a; w)\)</strong>:每步 update 的网络。提供"<em>当前估</em>" \(\hat q(s, a; w)\)。</li>
+    <li><strong>目标网络 (target network) \(\hat q(s, a; w_T)\)</strong>:与主网络<em>同结构</em> 但参数 \(w_T\) <em>短期 frozen</em>。每隔 \(C\) 步("<em>每 C iterations</em>",教材 Algorithm 8.3)同步 \(w_T \leftarrow w\)。它的<em>唯一作用</em>:在算 target \(y_T = R + \gamma \max_{a&#39;}\hat q(S&#39;, a&#39;; w_T)\) 时把 \(w\) 替成 \(w_T\),让 target 在 \(C\) 步内是<em>常数</em>(不依赖当前 \(w\))。</li>
+    <li><strong>(8.38) 半梯度</strong>:\(\nabla_w J = -\mathbb E[(R + \gamma \max_{a&#39;}\hat q(S&#39;, a&#39;; w_T) - \hat q(S, A; w))\nabla_w \hat q(S, A; w)]\)(\(w_T\) frozen,梯度只对 \(w\) 求)。这是 L3 半梯度概念<em>在 NN 下的具体化</em>。</li>
+    <li><strong>NN 训练流程</strong>:不直接用 (8.38) 单样本 update;而用<em>mini-batch + MSE loss</em>:从 buffer 抽 \(B\) 条样本 \(\{(s_i, a_i, r_i, s&#39;_i)\}\),算 \(y_{T,i} = r_i + \gamma \max_{a&#39;}\hat q(s&#39;_i, a&#39;; w_T)\),loss \(= \frac{1}{B}\sum_i (y_{T,i} - \hat q(s_i, a_i; w))^2\),用 PyTorch / TF 自动梯度 + Adam update \(w\)。</li>
+    <li><strong>NN 输入设计(教材实验)</strong>:三种常见<em>(i)</em> \((\text{row}, \text{col}, a) \to \text{scalar}\)(教材 grid 实验,3 输入 1 输出);<em>(ii)</em> \((\text{row}, \text{col}) \to (\hat q(s, a_1), \ldots, \hat q(s, a_5))\)(2 输入 5 输出,Atari 标准);<em>(iii)</em> \(\text{image} \to \text{action values}\)(Atari conv-net)。设计依任务<em>状态结构</em>。</li>
+  </ul>
+
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节核心是<strong>(a) 目标函数 (8.37) 的语义</strong>,以及<strong>(b) target network 引入 + (8.38) 半梯度</strong> 的工程动机。</p>
+
+  <p><strong>公式 1:DQN 目标函数(教材 (8.37))</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "J(w) = \\mathbb E\\!\\left[\\Big(R + \\gamma \\max_{a&#39;\\in\\mathcal A(S&#39;)} \\hat q(S&#39;, a&#39;; w) - \\hat q(S, A; w)\\Big)^2\\right]",
+    "annotations": [
+      {"key": "boe_squared", "label": "Bellman optimality error 的平方", "description": "q*(s, a) = E[R + γ max q*(S&#39;, a&#39;) | S=s, A=a] ⇒ 内层 (R + γ max q̂(S&#39;,·;w) - q̂(S,A;w)) 在 q̂=q* 时期望为 0。所以 J 的最小是 q̂ → q*。"},
+      {"key": "uniform_S_A", "label": "(S, A) 的分布", "description": "教材 §8.4.1 假设 (S, A) ~ Uniform。这是&#39;最简&#39; 选择,让 J 期望良定。实操中 (S, A) 来自 replay buffer 均匀抽样 ≈ uniform。R 与 S&#39; 的分布由系统模型(MDP 转移)给定。"},
+      {"key": "two_w", "label": "为什么 w 同时出现两次", "description": "q̂(S,A;w) 是&#39;当前估&#39;,max q̂(S&#39;,·;w) 是&#39;target 内的估&#39;。两处共用 w ⇒ 梯度 ∇_w J 会展成两项之和(链式法则),含 ∇_w max q̂(S&#39;,·;w),计算困难且不稳定。"},
+      {"key": "fix_attempt", "label": "解决方案:freeze 一份 w 当 target", "description": "把 target 中的 w 替成 frozen w_T:J → E[(R + γ max q̂(S&#39;,·;w_T) - q̂(S,A;w))²]。此时 ∇_w J 只对前面的 q̂(S,A;w) 求导,公式 2(8.38)。语义:&#39;target 在短期内当常数,主网络追它&#39;。"}
+    ]
+  }'></div>
+
+  <p><strong>公式 2:DQN 半梯度(教材 (8.38))</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\nabla_w J = -\\mathbb E\\!\\left[\\Big(R + \\gamma \\max_{a&#39;\\in\\mathcal A(S&#39;)} \\hat q(S&#39;, a&#39;; w_T) - \\hat q(S, A; w)\\Big)\\, \\nabla_w \\hat q(S, A; w)\\right]",
+    "annotations": [
+      {"key": "frozen_target", "label": "w_T frozen ⇒ ∇_w 不动 target", "description": "target = R + γ max q̂(S&#39;,·;w_T) 中 w_T 不参与求导。结果是&#39;target 当常数&#39; 的语义形式化。"},
+      {"key": "semi_gradient", "label": "半梯度(L3 概念的 NN 版)", "description": "扔掉了 ∇_w max q̂(S&#39;,·;w) 项(因 target 不依赖 w)。这是 L3 &#39;半梯度&#39; 思想的工程版:不仅扔掉项,还&#39;真把 target 网络冻住几千步&#39;。"},
+      {"key": "nn_grad", "label": "∇_w q̂ 由 backprop 算", "description": "线性 FA 时 ∇_w q̂ = φ(s, a)(常向量);NN 时 ∇_w q̂ 需 backward pass。这是 deep RL 单步 update 比线性 FA 贵 ~100× 的主因。"},
+      {"key": "no_direct_use", "label": "实操不直接用 (8.38)", "description": "教材明确:&#39;Updating w in the main network does not explicitly use the gradient in (8.38).&#39; 而用 mini-batch + MSE loss + 现成 NN 训练框架。(8.38) 是&#39;数学等价&#39; 表达,工程上不直接实现。"}
+    ]
+  }'></div>
+
+  <p><strong>NN 架构(教材 §8.4.2 实验,grid 任务)</strong>。把"<em>(row, col, action_index)</em>" 三维归一化到 \([0, 1]\) 输入,1 隐藏层 100 神经元 + ReLU,1 维输出 = \(\hat q(s, a; w)\):</p>
+
+  <pre class="mermaid">
+graph LR
+  S[s = row, col<br/>归一化 ∈ [0,1]] --> H[hidden layer<br/>100 neurons, ReLU]
+  A[action a<br/>归一化索引] --> H
+  H --> Q[q̂s, a; w<br/>scalar output]
+  </pre>
+
+  <p style="font-size:0.85rem; color:var(--color-muted);">教材 grid 实验的 NN 架构(§8.4.2):3 输入 + 1 隐藏层 100 神经元 + 1 输出。<em>每次</em> 算 \(\hat q(s, a)\) 都做一次 forward pass。算 \(\max_{a&#39;}\hat q(s&#39;, a&#39;; w_T)\) 需对所有 \(a&#39; \in \mathcal A(s&#39;)\) <em>各一次</em> forward(本任务 \(|\mathcal A|=5\) ⇒ 5 次)。Atari 标准设计是<em>"<em>state-only 输入,每动作一个 output</em>"</em>(2 输入 \(|\mathcal A|\) 输出),一次 forward 拿全部 \(\hat q(s, \cdot)\),算力更省。</p>
+
+  <p>下图是教材 Fig. 8.11 的 loss + state value error 实测收敛(1000 iter,batch 100):</p>
+
+  <div data-component="convergence-plot" data-config='{
+    "title": "DQN loss + value error vs iteration(教材 Fig. 8.11d, 8.11e)",
+    "xlabel": "iteration index",
+    "ylabel": "loss / value error",
+    "series": [
+      {"name": "TD loss", "data": [[0,4.5],[100,2.5],[200,1.5],[300,1.0],[400,0.6],[600,0.3],[800,0.15],[1000,0.08]]},
+      {"name": "value error (RMSE)", "data": [[0,9.5],[100,5.5],[200,3.0],[300,1.8],[400,1.0],[600,0.5],[800,0.25],[1000,0.12]]}
+    ]
+  }'></div>
+
+  <p style="font-size:0.85rem; color:var(--color-muted);">读法:loss 与 value error <em>同步</em> 下降,1000 iter 都到 0 附近 ⇒ 主网络<em>充分</em> 拟合 buffer 数据 + \(\hat q\) <em>充分</em> 接近 \(q^*\) ⇒ 提取 greedy 即得最优策略。注意 batch=100、buffer=1000 步、iter=1000 ⇒ 每条样本平均用 100 次,体现 replay 的<em>data efficiency</em>。如果 buffer 只有 100 步(L8 ablation),loss 仍可降到 0(网络拟合 buffer),但 value error <em>不降</em> —— 数据不足,拟合的 \(\hat q\) 偏 \(q^*\)(教材 Fig. 8.12)。</p>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>"<em>NN 替线性 FA</em>" 的<em>三层差异</em></em>:<em>(i) 表达力</em>:NN 是 universal approximator(给足神经元能拟合任何连续函数),线性 FA 受 \(\phi\) 限制;<em>(ii) 可分析性</em>:线性 FA 有谱条件 + \(A \succ 0\) + 收敛证,NN 完全没有(损失面非凸);<em>(iii) 算力</em>:线性 \(\nabla_w \hat q = \phi\) 是常向量,NN \(\nabla_w \hat q\) 需 backward pass。<em>表达力↑</em>、<em>可分析↓</em>、<em>算力↑</em>。RL 工程"<em>用算力 + 数据换可分析性</em>" 是核心交换。
+  </div>
+
+  <div class="callout">
+    <strong>Step 2.</strong> <em>target network 的<em>引入动机</em></em>。如果不用 target net,梯度 \(\nabla_w (R + \gamma \max_{a&#39;}\hat q(S&#39;, a&#39;; w))^2\) 含<em>两部分</em>:\(-2\delta \nabla_w \hat q(S, A; w) + 2\delta \cdot \gamma \nabla_w \max_{a&#39;}\hat q(S&#39;, a&#39;; w)\)。第二部分让 target <em>跟着</em> \(w\) 移动 ⇒ "<em>追自己影子</em>" ⇒ 实测发散(尤其 NN 谱条件差时)。Target net 把第二部分<em>断掉</em>(\(w_T\) 当常数 ⇒ 梯度为 0),只剩第一部分 ⇒ 主网络追<em>固定</em> target。每 \(C\) 步同步 \(w_T \leftarrow w\) ⇒ "<em>固定 target</em>" 不会永远 stale,会缓慢跟进。这是 L3 半梯度概念的<em>工程极致版</em>:不只扔掉<em>项</em>,还冻住<em>整个网络</em>。
+  </div>
+
+  <div class="callout">
+    <strong>Step 3.</strong> <em>(8.38) <em>不</em> 直接被 NN 训练用</em>。教材明确:NN update 用<em>mini-batch + MSE loss + 自动微分</em>,把 (8.38) 当数学等价描述。原因:<em>(i)</em> 单样本 SGD 在 NN 上方差极大,几乎不收敛;<em>(ii)</em> mini-batch 平滑 + Adam 自适应步长是工业标准;<em>(iii)</em> PyTorch / TF 自动给 \(\nabla_w \hat q\),手写 (8.38) 没必要。所以"<em>实操 DQN</em>" 与"<em>(8.38) 数学</em>" 在<em>形式上</em> 不一致 —— (8.38) 是<em>解释为什么 mini-batch MSE 在做对的事</em>,不是<em>计算指令</em>。
+  </div>
+
+  <h2>§4 从线性 FA 到 NN 的<em>具体改动</em></h2>
+  <p>把 L5 Q-learning-FA 的 6-step 流程拿来,看哪些 step 因 NN 而改:</p>
+
+  <div data-component="iteration-stepper" data-config='{
+    "steps": [
+      {"label": "Step 1: 算 q̂(s, a; w)", "note": "线性 FA: φ(s, a)^T w 一行点积。NN: forward pass 整个网络(可能含 conv + dense + ReLU)。算力 ~10^4× 线性。"},
+      {"label": "Step 2: 算 target", "note": "线性: max_{a&#39;} φ(s&#39;, a&#39;)^T w。NN-DQN: max_{a&#39;} q̂(s&#39;, a&#39;; w_T),用 frozen w_T(关键改动)。Atari 设计:state-only 输入,一次 forward 拿全部 a&#39; 的 q̂,取 max。"},
+      {"label": "Step 3: 算 δ_t = target - q̂(s, a; w)", "note": "形式不变,数值上 NN 误差更大(初期 q̂ 远离 q*)。"},
+      {"label": "Step 4: 算 ∇_w q̂(s, a; w)", "note": "线性: ∇ = φ(s, a)(常向量,免费)。NN: backward pass(贵)。这是 deep RL 主要算力消耗。"},
+      {"label": "Step 5: w ← w + α δ_t ∇_w q̂", "note": "线性: 直接 update。NN: 用 PyTorch optimizer(Adam, lr=10^-4),mini-batch B 样本平均梯度后 step。"},
+      {"label": "Step 6: 每 C iter 同步 w_T ← w", "note": "新加的步骤(线性 FA 无)。C 典型值 100-10000。这是 target net 的&#39;周期同步&#39; 机制。"}
+    ]
+  }'></div>
+
+  <p style="font-size:0.85rem; color:var(--color-muted);">直观:6 步流程<em>主体不变</em>,但 Step 2 加了"<em>用 \(w_T\)</em>"、Step 4 改 backprop、Step 5 改 mini-batch + Adam、Step 6 是<em>新加</em> 的 target sync。L7 还会在<em>样本来源</em> 上加 replay buffer(替 Step 0 的"<em>online sample</em>" 为"<em>uniform sample from buffer</em>")。</p>
+
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"<em>DQN = Q-learning + 神经网络</em>,所以 DQN 在<em>纯 Q-learning 公式</em> 上跑就行。"<br>
+    <strong>实际上:</strong><strong>DQN 必须配 target network + experience replay 才稳</strong>。Mnih 2015 的 ablation 实验明确显示:去掉 target net,Atari 训练曲线<em>剧烈震荡</em> 甚至发散;去掉 replay,样本相关性 + off-policy 加权失配让<em>多数任务训不起来</em>。"<em>NN + Q-learning</em>" 在 1990s 已被尝试(Tesauro TD-Gammon 用了类似想法,但是 on-policy + 表式扩展),<em>没人</em> 在 Atari 这种规模上跑通,直到 DeepMind 2013/2015 加了两件 trick。所以"<em>DQN</em>" 这个名字 = "<em>NN + Q-learning + target net + replay</em>" 一组合,不是<em>单</em> NN-Q-learning。<br>
+    <strong>因为:</strong>L4 deadly triad 三联(FA + bootstrap + off-policy)在 NN 下<em>真</em> 触发,不是理论 paranoid。Target net 削弱 bootstrap 自反馈;replay 让加权<em>近</em> 均匀(削弱 off-policy 失配);两者合力把"<em>三联可发散</em>" 缓解到"<em>三联实操稳</em>"。L7 详谈两者的数学动机。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"<em>target network 同步频率 C</em> 越大越稳(target 更不动)。"<br>
+    <strong>实际上:</strong><strong>C 太大也有害</strong>。\(C\) 太小("<em>每 1 步同步</em>")⇒ 退化为<em>无</em> target net,<em>追自己影子</em> ⇒ 不稳。\(C\) 太大("<em>每 10⁵ 步同步</em>")⇒ \(w_T\) 长期 stale,target 远离<em>最新</em> 估计 ⇒ 主网络<em>追旧 target</em>,信息延迟 ⇒ 收敛慢且学到<em>旧</em> \(q^*\)(若任务非平稳更糟)。Atari 标准 \(C \in [10^3, 10^4]\),教材 grid 实验 \(C \approx 100\)。这是<em>"<em>稳 vs 速</em>" 的工程 trade-off</em>,无理论最优值,凭实测调。<br>
+    <strong>因为:</strong>target net 引入了"<em>w 与 \(w_T\) 同步周期</em>" 这一新超参。\(C\) 控制"<em>主网络追的 target 有多旧</em>"。物理上像<em>低通滤波</em>:\(C\) 越大,target 越平滑越慢;\(C\) 越小,target 越响应但越噪。Atari 论文(Mnih 2015)选 \(C=10^4\) 是大量调参后的值。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"既然 (8.38) 是 DQN 的<em>核心梯度公式</em>,代码实现就该<em>直接</em> 写它。"<br>
+    <strong>实际上:</strong><strong>实操代码<em>不</em> 直接写 (8.38),用<em>MSE loss + autograd</em> 替</strong>。流程是:<em>(i)</em> 算 \(y_T = r + \gamma \max_{a&#39;}\hat q(s&#39;, a&#39;; w_T)\)(detach <em>w_T</em>);<em>(ii)</em> 算 \(\hat q(s, a; w)\)(从主网络);<em>(iii)</em> loss = \((y_T - \hat q(s, a; w))^2\)(对 batch 求平均);<em>(iv)</em> loss.backward() + optimizer.step()。autograd 自动只对主网络的 \(w\) 求梯度,target net 因 detach 不传播 ⇒ 数学上<em>等价</em> 于 (8.38),但代码上<em>更通用</em>(任何 NN 框架都支持 MSE + autograd)。<br>
+    <strong>因为:</strong>(8.38) 是<em>"<em>用一阶展开理解 SGD on MSE 在做什么</em>"</em>,不是"<em>怎么实现</em>"。NN 训练框架已封装"<em>给 loss 自动算梯度</em>",不需要手写梯度。"<em>(8.38) 等价于 MSE backward</em>" 这条<em>洞察</em> 让 RL 与 supervised learning 共用同一套 NN 训练栈,这是 DQN 工程价值的一半(另一半是 trick)。
+  </div>
+
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> 写出 DQN 的目标函数 (8.37) 与半梯度 (8.38),并解释 \(w_T\) 起什么作用。</summary>
+    <p><strong>A.</strong> (8.37): \(J(w) = \mathbb E[(R + \gamma \max_{a&#39;}\hat q(S&#39;, a&#39;; w) - \hat q(S, A; w))^2]\)。直接对 \(w\) 求梯度<em>难</em>:\(w\) 出现两次,链式法则给两项,target 跟着 \(w\) 移 ⇒ "<em>追自己影子</em>" 不稳。引入 target net \(w_T\)(短期 frozen)替 max 中的 \(w\):\(J = \mathbb E[(R + \gamma \max_{a&#39;}\hat q(S&#39;, a&#39;; w_T) - \hat q(S, A; w))^2]\),梯度只对 \(w\) 求 ⇒ (8.38)。\(w_T\) 的作用:<em>截断 bootstrap 反馈</em>,让主网络追<em>固定</em> target,稳定收敛;每 \(C\) 步 \(w_T \leftarrow w\) 同步,target 缓慢跟进新估。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> NN 替线性 FA <em>带来什么<em>实际</em> 好处</em>,代价是什么?</summary>
+    <p><strong>A.</strong> 好处:<em>(i)</em> 表达力:NN universal approximator,可拟合任意连续函数 ⇒ 高维状态(图像、连续 control)可学;<em>(ii)</em> 自动特征:不再手工设计 \(\phi(s, a)\),NN 自学;<em>(iii)</em> 工业框架:PyTorch/TF 提供成熟训练栈,RL 与 SL 共用。代价:<em>(i)</em> 算力:每步 forward + backward,~10^2-10^4× 线性 FA;<em>(ii)</em> 可分析性:线性 FA 有 \(A \succ 0\) + 收敛证 + 误差界 (8.32);NN 完全没有,损失面非凸,只有<em>实证</em>;<em>(iii)</em> 调参:lr / batch / target sync \(C\) / replay size 都需调,且互相耦合。这是<em>"<em>表达力换可分析性</em>"</em> 的 deep RL 工程哲学。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> 为什么实操 DQN 用<em>mini-batch MSE + autograd</em>,不直接用 (8.38)?</summary>
+    <p><strong>A.</strong> 三个原因:<em>(i)</em> 单样本 SGD 在 NN 上方差极大,几乎不收敛;mini-batch 平滑梯度估,稳定 backprop。<em>(ii)</em> Adam / RMSProp 这类自适应优化器对 NN 训练<em>必要</em>(SGD 朴素步长在 NN 上调不动);它们与 MSE + autograd 无缝集成。<em>(iii)</em> PyTorch / TF 把"<em>给 loss 自动算梯度</em>" 封装好,手写 (8.38) 既贵又易错。形式等价:对 detach 的 \(w_T\) 算 \((y_T - \hat q)^2\),backward 出来的梯度<em>恰好</em> 是 (8.38) 的样本估。所以代码用 MSE + autograd,数学解释用 (8.38),两边都对。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=42&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=42" target="_blank">YouTube 备链</a></p>
+
+  <h3>下一节预告</h3>
+  <p>L6 引入 target network 解决"<em>w 同时出现两次 ⇒ 梯度难算 + 自反馈</em>" 那一半。<strong>L7(教材 §8.4.1, pp. 183-184)</strong> 引入<em>experience replay</em> 解决另一半:<em>(i)</em> 数据时间相关性(违反 SGD 独立样本假设);<em>(ii)</em> off-policy 加权失配(behavior policy 数据的稳态分布 ≠ uniform)。Replay buffer 把<em>多 episode 样本混存</em>,均匀抽样 ⇒ 数据近似 IID 且加权近似均匀,<em>双效</em> 缓解。L7 把"<em>target net</em>" 与"<em>experience replay</em>" 摆成<em>两个独立 callout</em>,讲清各自的<em>动机</em> 与<em>实现细节</em>,然后给完整 DQN 算法 (Algorithm 8.3)。</p>
+
+  <nav class="lesson-nav">
+    <a href="lesson-05.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-07.html">Next →</a>
+  </nav>
+</div>
+
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({ startOnLoad: true, theme: 'default' });</script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>
