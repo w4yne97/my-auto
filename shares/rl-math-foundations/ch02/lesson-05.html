@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>贝尔曼方程(P5):动作值 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch02-l05" data-est-minutes="20">
+<div class="container">
+
+  <!-- Top nav -->
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.2 / Lesson 5</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <!-- Header -->
+  <p class="kicker">Bilibili #8 · YouTube #8 · Book §2.8-2.10 pp. 30-34</p>
+  <h1>L5: Bellman Equation (P5 - Action value)<small style="color:var(--color-muted); font-weight:400;">  (贝尔曼方程(P5):动作值)</small></h1>
+
+  <!-- §1 Why this lesson -->
+  <h2>§1 Why this lesson</h2>
+  <p>到上一节(L4)为止,我们已经能<strong>评估状态</strong>:给一个策略 \(\pi\),写出 25 条贝尔曼方程,矩阵化求解,得到每个状态的 \(v_\pi(s)\)。但 RL 真正想做的事情是<strong>评估动作</strong> —— 在某个状态 \(s\) 下,"向右"是不是比"向下"更好?\(v_\pi(s)\) 只能告诉你"这个状态值多少分",不能告诉你"在这个状态下哪个动作最值"。</p>
+  <p>本节(教材 §2.8-2.10,pp. 30-34)引入<strong>动作值 (action value)</strong> \(q_\pi(s, a) \doteq \mathbb{E}_\pi[G_t \mid S_t = s, A_t = a]\):"在 \(s\) 下<em>强行</em>执行 \(a\)、之后再按 \(\pi\) 走"的折现 return 期望。这看似只是在 \(v_\pi\) 的条件里多塞一个 \(A_t = a\),但意义大不一样:有了 \(q_\pi\),我们可以在每个状态<strong>枚举所有动作</strong>、挑出最大的 —— 这就是 Ch.3 BOE 里 \(\pi^*(s) = \arg\max_a q^*(s, a)\) 的雏形,也是 Q-learning(Ch.7)、DQN(Ch.8)的核心对象。本节做三件事:(1) 给定义;(2) 推 \(v_\pi \leftrightarrow q_\pi\) 的双向关系;(3) 写出动作值版本的贝尔曼方程,为 Ch.3 起的"基于 \(q\) 的算法"铺路。</p>
+
+  <!-- §2 核心定义 -->
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>动作值 (action value, state-action value) \(q_\pi(s, a)\)(教材 §2.8 公式定义,p. 30)</strong>:\(q_\pi(s, a) \doteq \mathbb{E}_\pi[G_t \mid S_t = s, A_t = a]\)。一句话:从 \(s\) 出发、<em>第一步强制做 \(a\)</em>、之后按 \(\pi\) 走,折现 return 的期望。<em>注意</em>:作者在 p. 30 末尾说"More rigorously it should be called <em>state-action</em> value",简称 action value 是历史习惯。</li>
+    <li><strong>v_π 与 q_π 的关系 1(教材 §2.8 公式 (2.13),p. 30)</strong>:\(v_\pi(s) = \sum_a \pi(a \mid s) \, q_\pi(s, a)\)。<em>直觉</em>:状态值 = 在该状态下,所有动作值按策略分布加权平均。换言之,\(v_\pi\) 是 \(q_\pi\) 沿动作维的"折叠"。</li>
+    <li><strong>v_π 与 q_π 的关系 2(教材 §2.8 公式 (2.14),p. 31)</strong>:\(q_\pi(s, a) = \sum_r p(r \mid s, a) \, r + \gamma \sum_{s&#39;} p(s&#39; \mid s, a) \, v_\pi(s&#39;)\)。<em>直觉</em>:动作值 = 在 \((s, a)\) 给定后的即时 reward 期望 + γ × 下一状态状态值的期望。这是 L3 公式 (2.7) 方括号里那一坨,直接被命名为 \(q_\pi(s, a)\)。所以 (2.7) 改写为 \(v_\pi(s) = \sum_a \pi(a \mid s) q_\pi(s, a)\) 就是 (2.13)。</li>
+    <li><strong>"两面同硬币"(教材 §2.8 末段)</strong>:(2.13) 是"<em>从 q 算 v</em>"((π 加权折叠 q)),(2.14) 是"<em>从 v 算 q</em>"(reward 期望 + γ × 下一状态 v 期望)。两条等式正好互逆,任意一边知道,另一边一步出。</li>
+    <li><strong>动作值版的贝尔曼方程(教材 §2.8.2 公式 (2.15) 上方)</strong>:把 (2.13) 代入 (2.14),消去 \(v_\pi\),得 \(q_\pi(s, a) = \sum_r p(r\mid s, a) r + \gamma \sum_{s&#39;} p(s&#39;\mid s, a) \sum_{a&#39;} \pi(a&#39; \mid s&#39;) q_\pi(s&#39;, a&#39;)\)。<em>这就是后面 Q-learning 直接迭代的方程,目标都是 \(q_\pi\) 而不是 \(v_\pi\)</em>。</li>
+    <li><strong>"未被策略选中的动作也有 q 值"(教材 §2.8.1 中段,p. 31-32)</strong>:即使 \(\pi(a \mid s) = 0\)(策略不选 \(a\)),\(q_\pi(s, a)\) 仍然是良好定义的 —— 它问的是"假设强制做了 \(a\),后面再按 \(\pi\) 走"的期望。这一点对 Ch.3 BOE 至关重要:要找出比当前 \(\pi\) 更好的动作,必须先能<em>评估当前 \(\pi\) 不选的那些动作</em>。</li>
+  </ul>
+
+  <!-- §3 关键公式 + 推导 -->
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节核心是<strong>两条互逆关系</strong>(2.13) 与 (2.14),以及一行动作值版贝尔曼方程。</p>
+
+  <p><strong>公式 1:从 q 折叠到 v(教材 §2.8 公式 (2.13))</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "v_\\pi(s) = \\sum_{a \\in \\mathcal{A}} \\pi(a \\mid s) \\, q_\\pi(s, a)",
+    "annotations": [
+      {"key": "v_from_q", "label": "v_π(s) = Σ_a π(a|s) q_π(s,a)", "description": "状态值 = 动作值按策略分布的加权平均。这是&#39;v 是 q 沿动作维的边缘化&#39;。"},
+      {"key": "deriv", "label": "推导一行", "description": "𝔼[G_t | S_t = s] = Σ_a 𝔼[G_t | S_t = s, A_t = a] π(a|s) = Σ_a q_π(s,a) π(a|s) —— 用全期望公式按 A_t 分层。"},
+      {"key": "intuition", "label": "几何直觉", "description": "把 q_π 看作 |𝒮|×|𝒜| 的表格;把每行按 π(·|s) 加权求和,就压缩成 |𝒮| 长度的 v_π。"},
+      {"key": "deterministic_pi", "label": "确定性策略下", "description": "若 π 是确定性的(在 s 下选 a*),则 v_π(s) = q_π(s, a*) —— 状态值就等于&#39;被选中那个动作的动作值&#39;。"}
+    ]
+  }'></div>
+
+  <p><strong>公式 2:从 v 展开到 q(教材 §2.8 公式 (2.14))</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "q_\\pi(s, a) = \\sum_{r \\in \\mathcal{R}} p(r \\mid s, a) \\, r + \\gamma \\sum_{s&#39; \\in \\mathcal{S}} p(s&#39; \\mid s, a) \\, v_\\pi(s&#39;)",
+    "annotations": [
+      {"key": "immediate", "label": "Σ_r p(r|s,a) r", "description": "即时 reward 期望:在 (s,a) 给定后,环境给出的 reward 的均值。"},
+      {"key": "future", "label": "γ Σ_{s&#39;} p(s&#39;|s,a) v_π(s&#39;)", "description": "γ 折扣后,对所有可能下一状态的状态值求期望。"},
+      {"key": "no_pi_outer", "label": "外层无 Σ_a π", "description": "对比 v_π(s) 的 (2.7),q_π(s,a) 的展开外层&#39;不再有&#39;Σ_a π(a|s) —— 因为 a 已经固定了。这是 q 与 v 的核心结构差异。"},
+      {"key": "model_components", "label": "需要 p(r|s,a) 与 p(s&#39;|s,a)", "description": "这是 MDP 的&#39;模型&#39;——给定模型,从 v_π 一步算 q_π;Ch.7 的&#39;model-free&#39;算法绕开这一步,直接用样本估计 q_π。"}
+    ]
+  }'></div>
+
+  <p><strong>公式 3:动作值版贝尔曼方程(教材 §2.8.2 (2.15) 上方)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "q_\\pi(s, a) = \\sum_r p(r\\mid s, a) r + \\gamma \\sum_{s&#39;} p(s&#39;\\mid s, a) \\sum_{a&#39;} \\pi(a&#39; \\mid s&#39;) \\, q_\\pi(s&#39;, a&#39;)",
+    "annotations": [
+      {"key": "merge", "label": "由 (2.13) + (2.14) 得", "description": "把 v_π(s&#39;) = Σ_{a&#39;} π(a&#39;|s&#39;) q_π(s&#39;, a&#39;) 代入 (2.14) 第二项,即得 q 版贝尔曼方程。"},
+      {"key": "self_ref", "label": "q_π 自洽", "description": "q_π(s,a) 由 q_π(s&#39;,a&#39;) 表示——bootstrap 在动作值层重演。Q-learning(Ch.7)、DQN(Ch.8)直接迭代这个方程。"},
+      {"key": "matrix_form", "label": "矩阵形式 q = r̃ + γPΠq", "description": "L4 的 v 矩阵形式有对应的 q 版,见教材 (2.15)——P 是 (s,a)→s&#39; 的转移矩阵,Π 是&#39;在 s&#39; 上按 π 选 a&#39;&#39;的块对角策略矩阵。维度从 |𝒮| 变成 |𝒮|·|𝒜|。"},
+      {"key": "fixed_point", "label": "压缩映射", "description": "教材原文:&#39;(2.15) 也是 contraction mapping,有唯一不动点&#39;——和 v 版本一样收敛,只是迭代变量换成了 q。"}
+    ]
+  }'></div>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>(2.13) 是怎么从定义出发的?</em>从 \(v_\pi(s) = \mathbb{E}_\pi[G_t \mid S_t = s]\) 出发,按 \(A_t\) 用全期望公式分层:\(\mathbb{E}_\pi[G_t \mid S_t = s] = \sum_a \pi(a \mid s) \, \mathbb{E}_\pi[G_t \mid S_t = s, A_t = a]\)。后者正是 \(q_\pi(s, a)\) 的定义。一行收工 —— 全期望公式而已。
+  </div>
+
+  <div class="callout">
+    <strong>Step 2.</strong> <em>(2.14) 是怎么从定义出发的?</em>把 \(q_\pi(s, a) = \mathbb{E}_\pi[G_t \mid S_t = s, A_t = a]\) 中的 \(G_t = R_{t+1} + \gamma G_{t+1}\) 代入,期望线性 \(\mathbb{E}[R_{t+1} \mid S_t=s, A_t=a] + \gamma \mathbb{E}[G_{t+1} \mid S_t=s, A_t=a]\)。第一项 = \(\sum_r p(r\mid s, a) r\)(reward 分布平均);第二项用 Markov 性 \(\mathbb{E}[G_{t+1} \mid S_t=s, A_t=a, S_{t+1}=s&#39;] = \mathbb{E}[G_{t+1} \mid S_{t+1}=s&#39;] = v_\pi(s&#39;)\),再按 \(S_{t+1}\) 分层得 \(\sum_{s&#39;} p(s&#39;\mid s, a) v_\pi(s&#39;)\)。合起来即 (2.14)。<strong>注意</strong>:这里不需要再对 \(a&#39;\) 求和,因为<em>第一步动作 \(a\) 已经给定</em>,只有"之后"按 \(\pi\) 才有 \(\pi(a&#39;\mid s&#39;)\) 的随机性 —— 那部分被打包进 \(v_\pi(s&#39;)\) 里了。
+  </div>
+
+  <!-- §4 Grid-world 例子 -->
+  <h2>§4 Grid-world 实例化</h2>
+  <p>用教材 §2.8.1 的 2×2 例(图 2.8,与 L3 §4 例 2 / L4 §4 例同一张),\(s_1\) 上策略 \(\pi(a_2\mid s_1) = \pi(a_3\mid s_1) = 0.5\),\(\gamma = 0.9\)。我们已知 \(v_\pi(s_1) = 8.5\)、\(v_\pi(s_2) = v_\pi(s_3) = v_\pi(s_4) = 10\)(L4 §4 算过)。把 \(s_1\) 的<strong>所有 5 个动作</strong>的 \(q_\pi(s_1, \cdot)\) 全算出来,看哪个动作最值:</p>
+  <ul>
+    <li>\(q_\pi(s_1, a_1)\) (向上,撞墙弹回 \(s_1\),\(r_\text{boundary} = -1\)) = \(-1 + \gamma v_\pi(s_1) = -1 + 0.9 \cdot 8.5 = 6.65\)</li>
+    <li>\(q_\pi(s_1, a_2)\) (向右,撞 forbidden \(s_2\),\(r = -1\)) = \(-1 + \gamma v_\pi(s_2) = -1 + 0.9 \cdot 10 = 8\)</li>
+    <li>\(q_\pi(s_1, a_3)\) (向下,走 \(s_3\),\(r = 0\)) = \(0 + \gamma v_\pi(s_3) = 0 + 0.9 \cdot 10 = 9\)</li>
+    <li>\(q_\pi(s_1, a_4)\) (向左,撞墙弹回 \(s_1\),\(r = -1\)) = \(-1 + \gamma v_\pi(s_1) = 6.65\)</li>
+    <li>\(q_\pi(s_1, a_5)\) (停留,\(r = 0\),原地) = \(0 + \gamma v_\pi(s_1) = 0.9 \cdot 8.5 = 7.65\)</li>
+  </ul>
+  <p><strong>验证 (2.13)</strong>:\(v_\pi(s_1) = 0.5 \cdot q_\pi(s_1, a_2) + 0.5 \cdot q_\pi(s_1, a_3) = 0.5 \cdot 8 + 0.5 \cdot 9 = 8.5\) ✓ 与 L4 算出的 \(v_\pi(s_1) = 8.5\) 完全对得上。</p>
+  <p><strong>从 q 表读"最优动作"。</strong>在 \(s_1\) 上,\(\arg\max_a q_\pi(s_1, a) = a_3\)(向下,\(q = 9\))—— 比当前策略 \(\pi\) 的随机加权平均(8.5)还要好。这是 Ch.3 BOE 故事的<strong>开端</strong>:你只要扫一遍当前 \(\pi\) 下的 \(q_\pi\) 表,就能找到"局部能改进的动作",不断改进就走向 \(\pi^*\)。这正是 Ch.4 Policy Iteration 的内核。</p>
+
+  <p><strong>把 q 想成 5×5×|𝒜| 的"加厚热图"。</strong>下图是 Ch.2 §4 一直在用的 5×5 状态值热图(\(v_\pi\));<em>action value 把它"加厚"成 5×5×5 的张量</em> —— 每格上不再是一个数,而是 5 个数(对应 5 个动作)。本节没有显式画出 \(q_\pi\) 的张量,但你可以把它想象成"在每格上叠一个长度为 5 的小条形图(distribution-bar 形式)",条形高度 = 该动作的 \(q\) 值。Ch.7 起 DQN / Q-learning 直接学这个张量,跳过 \(v_\pi\) 这一中间层。</p>
+  <div data-component="gridworld" id="gw-ch02-l05" data-config='{
+    "rows": 5, "cols": 5,
+    "target": [3, 2],
+    "forbidden": [[1,1],[2,1],[2,2],[1,3],[3,3]],
+    "policy": [
+      ["↓","↓","↓","↓","↓"],
+      ["↓","","↓","","↓"],
+      ["↓","","","→","↓"],
+      ["↓","→","","","←"],
+      ["→","→","↑","←","←"]
+    ],
+    "heatmap": [
+      [4.78, 5.31, 5.90, 6.56, 7.29],
+      [5.31, 0,    6.56, 0,    8.10],
+      [5.90, 0,    0,    9.00, 9.00],
+      [6.56, 7.29, 10.0, 0,    8.10],
+      [7.29, 8.10, 9.00, 8.10, 7.29]
+    ]
+  }'></div>
+
+  <!-- §5 常见误解 -->
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"既然 \(\pi\) 不选 \(a_1, a_4, a_5\),它们的 \(q_\pi(s_1, \cdot)\) 干脆设为 0 或者 \(-\infty\) 就行,免得算多余的。"<br>
+    <strong>实际上:</strong>这是<strong>教材 p. 31-32 专门点名的"common mistake"</strong>。"未被选中"≠"value 是 0":\(q_\pi(s, a)\) 问的是"如果我<em>偏要</em>做 \(a\),后面再按 \(\pi\) 走,期望回报多少?"——这跟 \(\pi\) 选不选 \(a\) 完全无关。例如本节 \(q_\pi(s_1, a_5) = 7.65\) 是个非零数,虽然 \(\pi(a_5 \mid s_1) = 0\)。<br>
+    <strong>因为:</strong>找最优策略的<strong>整个动机</strong>就是"看那些当前策略<em>不选</em>的动作里有没有更好的"。如果你把它们全设 0,你就永远找不到改进方向 —— 这正是 Ch.3 BOE 与 Ch.4 PI 的核心运作机制(<em>policy improvement</em>:\(\pi&#39;(s) = \arg\max_a q_\pi(s, a)\),要 \(\arg\max\) 的话,所有 \(a\) 的 \(q\) 都得有定义)。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"\(v_\pi(s) = \max_a q_\pi(s, a)\) —— 状态值就是最优动作的动作值。"<br>
+    <strong>实际上:</strong>这是 \(v^*\) 与 \(q^*\) 之间的关系(下章 BOE),<strong>不是 \(v_\pi\) 与 \(q_\pi\) 的关系</strong>!对一般策略 \(\pi\),(2.13) 是<em>加权平均</em> \(v_\pi(s) = \sum_a \pi(a\mid s) q_\pi(s, a)\),而不是 max。本节 §4 的 \(v_\pi(s_1) = 8.5\) 但 \(\max_a q_\pi(s_1, a) = 9\) 就是反例。<br>
+    <strong>因为:</strong>"max" 只在<em>最优</em>策略上成立(因为最优策略一定贪心选最值的动作);任意策略下 max 给出的是"还可以更好"的暗示,不是当前 \(v_\pi\)。Ch.3 第一节就用这条 max 关系定义最优策略,本节先警告别提前混淆。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"既然 \(q\) 比 \(v\) 信息多,直接学 \(q\) 不就行了,何必先学 \(v\)?"<br>
+    <strong>实际上:</strong><em>这正是 Ch.7 Q-learning / Ch.8 DQN 的取舍</em>。代价是 \(q\) 的存储是 \(|\mathcal{S}| \cdot |\mathcal{A}|\)(本课 25 × 5 = 125),比 \(v\) 的 \(|\mathcal{S}| = 25\) 大 5 倍;一旦动作空间连续(机器人控制)就更糟。所以本章先用 \(v\) 把 Bellman / 矩阵 / 求解的<em>骨架</em>讲清,再到 Ch.7 把同一套搬到 \(q\) 上。<br>
+    <strong>因为:</strong>"Q-learning vs Value Iteration"的优劣并不绝对,取决于动作空间大小、是否需要 model-free、是否能直接 \(\arg\max_a\)。本课的策略是:<em>先学完 v 的世界、再学完 q 的世界、最后比较两者的算法栈</em>(Ch.4 vs Ch.7)。
+  </div>
+
+  <!-- §6 自检 + 视频 + teaser -->
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> 在 §4 的设定下,把 \(s_1\) 的策略改成确定性 \(\pi(a_3 \mid s_1) = 1\)(全压向下)。(a) 重算 \(v_\pi(s_1)\);(b) 重算 \(q_\pi(s_1, a_2)\)(原本不被选中的"向右"动作)。</summary>
+    <p><strong>A.</strong> (a) 现在 \(s_1\) 必走向下、reward = 0、转 \(s_3\),\(v_\pi(s_1) = 0 + \gamma v_\pi(s_3) = 0.9 \cdot 10 = 9\)。<em>注意:这个 \(v_\pi\) 是<strong>新策略下的</strong>状态值,因为换了策略 \(\pi\) 就换了一个 \(v_\pi\) 函数</em> —— 这是 (R2) 的具体提醒。(b) \(q_\pi(s_1, a_2) = -1 + \gamma v_\pi(s_2) = -1 + 0.9 \cdot 10 = 8\)。<em>关键观察</em>:即使 \(\pi\) 永远不选 \(a_2\),\(q_\pi(s_1, a_2) = 8\) 仍然有意义 —— 它告诉你"假如你强行选了 \(a_2\),后果是 8 分(比当前 9 分差)";这就证实了当前确定性策略 \(a_3\) 比 \(a_2\) 更好,至少局部如此。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> 用 (2.14) 验证 §4 中 \(q_\pi(s_3, a_2) = ?\)(\(s_3\) 上"向右"=到 target、reward = +1)。</summary>
+    <p><strong>A.</strong> \(q_\pi(s_3, a_2) = \sum_r p(r \mid s_3, a_2) r + \gamma \sum_{s&#39;} p(s&#39; \mid s_3, a_2) v_\pi(s&#39;) = 1 + 0.9 \cdot v_\pi(s_4) = 1 + 0.9 \cdot 10 = 10\)。验证 (2.13):\(v_\pi(s_3) = \pi(a_2\mid s_3) q_\pi(s_3, a_2) = 1 \cdot 10 = 10\) ✓(\(s_3\) 上策略是确定性向右)。这两条等式互相校验,完全自洽。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> 矩阵-向量形式 \(q_\pi = \tilde r + \gamma P \Pi q_\pi\)(教材 (2.15))中,\(q_\pi\) 的维度是多少?\(P\)、\(\Pi\) 各是什么?为什么这套形式比 \(v\) 版"贵"?</summary>
+    <p><strong>A.</strong> \(q_\pi \in \mathbb{R}^{|\mathcal{S}| \cdot |\mathcal{A}|}\)(每个 (s, a) 对一个分量,本课 25 × 5 = 125 维)。\(P \in \mathbb{R}^{|\mathcal{S}\mathcal{A}| \times |\mathcal{S}|}\):\([P]_{(s,a), s&#39;} = p(s&#39; \mid s, a)\),把 (s, a) 映到 s&#39;。\(\Pi \in \mathbb{R}^{|\mathcal{S}| \times |\mathcal{S}\mathcal{A}|}\):块对角矩阵,块 \(s&#39;\) = 行向量 \([\pi(a&#39; \mid s&#39;)]_{a&#39;}\),把 s&#39; 映到 (s&#39;, a&#39;) 的 π 加权和。"贵"是因为状态空间从 \(|\mathcal{S}|\) 膨胀到 \(|\mathcal{S}\mathcal{A}|\),矩阵规模是 \(v\) 版的 \(|\mathcal{A}|\) 倍 —— grid-world 5 个动作就要付 5 倍代价。这是后面"value-based vs policy-based"路线分歧的根源:value-based 直接学这个大 q,policy-based 绕开它。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <p style="font-size:0.85rem;color:var(--color-muted);">视频:首选 Bilibili 直播(下方 iframe);若 iframe 不显示,用 YouTube 链接打开。BVID 当前是占位,实际 BVID 等首次部署时填。</p>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=8&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=8" target="_blank"><strong>▶ YouTube 备链(建议优先点这个)</strong></a></p>
+
+  <h3>下一章预告</h3>
+  <p>到这一节为止,Ch.2 完成了它的<strong>三件事</strong>:(1) 用 state value 把"策略好坏"翻译成可比的标量;(2) 用 Bellman 方程把"算 \(v_\pi\)"变成线性方程组求解;(3) 用 action value 把"评估状态"细化为"评估动作"。但我们一直假设 \(\pi\) 是<em>给定</em>的 —— 没有回答 RL 的<strong>核心</strong>问题:<em>哪个 \(\pi\) 最好?</em>下章(Ch.3 Bellman Optimality Equation)直接登场:定义最优状态值 \(v^*(s) = \max_\pi v_\pi(s)\) 与最优策略 \(\pi^*\),把 (2.7) 中的 \(\sum_a \pi(a\mid s)[\dots]\) 换成 \(\max_a [\dots]\),得到非线性的 BOE \(v^*(s) = \max_a [\sum_r p(r\mid s,a)r + \gamma \sum_{s&#39;} p(s&#39;\mid s,a) v^*(s&#39;)]\),并用 Banach 不动点定理(γ-Lipschitz contraction)证明 BOE 有<em>唯一解</em>、且迭代法 \(v_{k+1} = T v_k\) 一定收敛到 \(v^*\)。这就是把"评估"升级为"优化"的转折点。</p>
+
+  <!-- Bottom nav -->
+  <nav class="lesson-nav">
+    <a href="lesson-04.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="../ch03/index.html">Next (Ch.3) →</a>
+  </nav>
+</div>
+
+<!-- Components -->
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>
