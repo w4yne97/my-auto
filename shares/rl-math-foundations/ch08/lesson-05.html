@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>值函数近似(P5):Sarsa 与 Q-learning 的 FA 版本 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch08-l05" data-est-minutes="20">
+<div class="container">
+
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.8 / Lesson 5</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <p class="kicker">Bilibili #41 · YouTube #41 · Book §8.3 pp. 179-181</p>
+  <h1>L5: Sarsa and Q-learning with Function Approximation<small style="color:var(--color-muted); font-weight:400;">  (Sarsa / Q-learning 的 FA 版本)</small></h1>
+
+  <h2>§1 Why this lesson</h2>
+  <p>L1-L4 把 \(\hat v(s; w)\) 的故事讲完(目标 + 算法 + 例子 + 收敛 + deadly triad 警告)。但<em>状态值</em> 只能"<em>评估</em>" 给定策略,不能直接<em>导出</em> 最优策略 —— 后者要 \(\hat q(s, a; w)\)。本节(教材 §8.3, pp. 179-181)把 \(\hat v\) 推到 \(\hat q\):<strong>Sarsa-FA</strong>(教材 (8.35))与 <strong>Q-learning-FA</strong>(教材 (8.36)),并把它们嵌入 generalized policy iteration(GPI)框架(算法 8.2、8.3)。</p>
+  <p>核心 takeaway:<strong>(a)</strong> 形式<em>1:1 翻译</em> Ch.7 表式 —— 把 \(\hat v(s; w)\) 换成 \(\hat q(s, a; w)\),把 \(\delta_t\) 中的 \(\hat v(s_{t+1}; w)\) 换成<em>动作-值</em> 形式即可。Sarsa-FA: \(\delta_t = r + \gamma \hat q(s&#39;, a&#39;; w) - \hat q(s, a; w)\),需要"<em>第二个动作 \(a&#39;\)</em>"(on-policy);Q-learning-FA: \(\delta_t = r + \gamma \max_{a&#39;}\hat q(s&#39;, a&#39;; w) - \hat q(s, a; w)\),用 max 不依赖 \(a&#39;\) 来源(off-policy)。<strong>(b)</strong> 半梯度 update <em>仍然</em> 是 \(w \leftarrow w + \alpha \delta_t \nabla_w \hat q(s, a; w)\)。线性 FA 时 \(\nabla_w \hat q = \phi(s, a)\),退化为 Ch.7 update 乘以 \(\phi\)。<strong>(c)</strong> GPI 嵌入:每步 \(\hat q\)-update 后立即 ε-greedy 改 \(\pi\) ⇒ 收敛到<em>给定起点</em> 下的"<em>good path</em>",非全局最优(教材实验 Fig. 8.9, 8.10)。<strong>(d)</strong> Q-learning-FA <em>形式上</em> 凑齐 deadly triad(FA + bootstrap + off-policy 的 max),线性 FA 下<em>实测</em> 多数稳(\(d_b \approx d_\pi\) + 小 \(\alpha\)),但 NN-FA 下需要 DQN trick(L6-L7)。</p>
+
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>动作-值 FA \(\hat q(s, a; w)\)</strong>:把"<em>状态特征</em>" \(\phi(s)\) 推广到"<em>状态-动作特征</em>" \(\phi(s, a)\)。线性 FA 形态:\(\hat q(s, a; w) = \phi(s, a)^\top w\)。一种常见构造:<em>tile 编码</em>—— \(\phi(s, a) = e_a \otimes \phi(s)\)(每个动作有<em>独立</em> 一份 \(\phi(s)\) 权重),维度 \(|\mathcal A| \cdot |\phi|\)。</li>
+    <li><strong>Sarsa-FA(教材 (8.35))</strong>:\(w \leftarrow w + \alpha\, [r + \gamma \hat q(s_{t+1}, a_{t+1}; w) - \hat q(s_t, a_t; w)]\, \nabla_w \hat q(s_t, a_t; w)\)。on-policy:\(a_{t+1} \sim \pi_t(\cdot | s_{t+1})\),来自<em>当前</em> 策略。</li>
+    <li><strong>Q-learning-FA(教材 (8.36))</strong>:\(w \leftarrow w + \alpha\, [r + \gamma \max_{a&#39;} \hat q(s_{t+1}, a&#39;; w) - \hat q(s_t, a_t; w)]\, \nabla_w \hat q(s_t, a_t; w)\)。off-policy:\(\max_{a&#39;}\) <em>不</em> 依赖<em>实际采</em> 的 \(a_{t+1}\),数据可来自任意 behavior policy。</li>
+    <li><strong>半梯度的<em>动作-值</em> 形态</strong>:与 \(\hat v\) 版完全同构 —— 扔掉 \(\nabla_w \hat q(s&#39;, \cdot; w)\) 项,只保留 \(\nabla_w \hat q(s, a; w)\)。线性 FA 下退化为 \(w \leftarrow w + \alpha \delta_t \phi(s, a)\),与 Ch.7 L5 \(Q(s, a) \leftarrow Q(s, a) + \alpha \delta_t\) 对应("<em>把 1 换成 \(\phi(s, a)\)</em>")。</li>
+    <li><strong>GPI 嵌入(教材 Algorithm 8.2 / 8.3)</strong>:与 Ch.7 L7 同套路。<em>q-step</em>:用一条样本 update \(w\)。<em>π-step</em>:对当前 state \(s_t\),取 \(a^* = \arg\max_a \hat q(s_t, a; w_{t+1})\),设 \(\pi_{t+1}(a^* | s_t) = 1 - \epsilon + \epsilon/|\mathcal A|\),其余动作 \(\epsilon/|\mathcal A|\)。两步交替直至 episode 终止。</li>
+    <li><strong>"<em>good path</em>" vs "<em>全局最优</em>"</strong>:算法 8.2 / 8.3 从<em>固定起点</em> \(s_0\) 出发,只 update <em>路径上</em> 的状态;非路径状态的 \(\hat q\) 不更新 ⇒ 学到的策略<em>对起点 \(s_0\) 最优</em>,不一定全状态最优。要全局最优需充分探索(behavior policy ε-greedy 大 ε 或多个起点)。</li>
+    <li><strong>off-policy 的 deadly triad 触发</strong>:Q-learning-FA 的 \(\max_{a&#39;}\) 让"<em>target policy = greedy</em>",但样本由 ε-greedy(behavior policy)采 ⇒ off-policy。再加 FA + bootstrap ⇒ 三联齐。线性 FA 实测稳(教材 Fig. 8.10,500 episodes 收敛),NN 必须用 DQN trick(L6-L7)。</li>
+  </ul>
+
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节核心是<strong>从 \(\hat v\) 算法到 \(\hat q\) 算法的两条 update 公式</strong>,以及它们的<em>梯度形态</em>。</p>
+
+  <p><strong>公式 1:Sarsa-FA(教材 (8.35),on-policy)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "w_{t+1} = w_t + \\alpha_t\\, \\big[r_{t+1} + \\gamma\\, \\hat q(s_{t+1}, a_{t+1}; w_t) - \\hat q(s_t, a_t; w_t)\\big]\\, \\nabla_w \\hat q(s_t, a_t; w_t)",
+    "annotations": [
+      {"key": "on_policy", "label": "on-policy:a_{t+1} 来自当前 π", "description": "需要采&#39;第二个动作&#39; a_{t+1} ~ π_t(·|s_{t+1})。这条让 Sarsa-FA 的加权 D = D_π 自动满足 ⇒ deadly triad 的 off-policy 那条不在,严格收敛(线性 FA 下,Tsitsiklis-Van Roy 1997)。"},
+      {"key": "td_error_q", "label": "动作-值 TD 误差", "description": "δ_t = r + γ q̂(s&#39;, a&#39;; w) - q̂(s, a; w)。形式与 Ch.7 L5 Sarsa 完全同构,只是把表式 Q(s,a) 换成 q̂(s,a;w)。"},
+      {"key": "linear_form", "label": "线性 FA 形态", "description": "q̂(s,a;w) = φ(s,a)^T w ⇒ ∇_w q̂ = φ(s,a)。update:w ← w + α δ_t φ(s_t, a_t)。这就是 Ch.7 L5 表式 Sarsa 的&#39;1 字翻译&#39;:1 → φ。"},
+      {"key": "gpi", "label": "GPI 嵌入 + 收敛性", "description": "Algorithm 8.2:每步 update w 后立即 ε-greedy 改 π_{t+1}。这是&#39;truncated policy evaluation + improvement&#39; 同 Ch.4 PI 思想。GPI 收敛到&#39;给定起点&#39; 下的 good path,非全局最优。"}
+    ]
+  }'></div>
+
+  <p><strong>公式 2:Q-learning-FA(教材 (8.36),off-policy)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "w_{t+1} = w_t + \\alpha_t\\, \\big[r_{t+1} + \\gamma\\, \\max_{a&#39;} \\hat q(s_{t+1}, a&#39;; w_t) - \\hat q(s_t, a_t; w_t)\\big]\\, \\nabla_w \\hat q(s_t, a_t; w_t)",
+    "annotations": [
+      {"key": "max_a", "label": "max_{a&#39;} 引入 off-policy", "description": "target = r + γ max_{a&#39;} q̂(s&#39;, a&#39;; w) ⇒ target policy 是 greedy(取 max),与 behavior policy ε-greedy 不同 ⇒ off-policy。这是 Q-learning 与 Sarsa 的核心区别。"},
+      {"key": "deadly_triad", "label": "三联齐:FA + bootstrap + off-policy", "description": "FA(共享 w)+ bootstrap(target 含 q̂(s&#39;; w))+ off-policy(max ≠ behavior)= deadly triad。线性 FA 实测多数稳(教材 Fig. 8.10),但理论无收敛保证;NN-FA 需 DQN trick。"},
+      {"key": "linear_practice", "label": "线性 FA 实测稳", "description": "教材 Algorithm 8.3 + 5×5 grid + Fourier order 5 特征,500 episodes 收敛到 good policy(Fig. 8.10)。&#39;实测稳&#39; 因 d_b ≈ d_π(behavior 与 target 都偏好 target 方向)+ 小 α(0.001)+ 大 batch(每 episode 500 步)。"},
+      {"key": "to_dqn", "label": "通往 DQN", "description": "把 q̂(s,a;w) 中的 w 换成 NN 参数 θ ⇒ deep Q-learning。但 (8.36) 单步在线 + NN ⇒ 实测发散。L6-L7 用 target net + replay buffer 修。"}
+    ]
+  }'></div>
+
+  <p>把<em>半梯度 update 步骤</em> 摊开看 —— 一个完整 step 的<em>计算流程</em>:</p>
+
+  <div data-component="iteration-stepper" data-config='{
+    "steps": [
+      {"label": "Step 0: 输入 (s_t, a_t, r_{t+1}, s_{t+1})", "note": "一条 transition 样本。Sarsa 还需 a_{t+1} ~ π_t;Q-learning 不需要。"},
+      {"label": "Step 1: 算 q̂(s_t, a_t; w_t)", "note": "前向:线性 FA 是 φ(s_t, a_t)^T w_t;NN 是 forward pass 取 a_t 对应的 output。这是&#39;当前估&#39;。"},
+      {"label": "Step 2: 算 target", "note": "Sarsa: target = r_{t+1} + γ q̂(s_{t+1}, a_{t+1}; w_t)。Q-learning: target = r_{t+1} + γ max_{a&#39;} q̂(s_{t+1}, a&#39;; w_t)(对所有 a&#39; forward pass 取 max)。"},
+      {"label": "Step 3: 算 δ_t = target - q̂(s_t, a_t; w_t)", "note": "TD 误差。半梯度&#39;扔掉&#39; target 对 w 的依赖,把 target 当此刻常数。"},
+      {"label": "Step 4: 算 ∇_w q̂(s_t, a_t; w_t)", "note": "线性 FA: ∇ = φ(s_t, a_t)(常向量);NN: backprop。这是&#39;只对 q̂(s,a) 求梯度,不对 q̂(s&#39;,·) 求&#39; 的语义。"},
+      {"label": "Step 5: w_{t+1} = w_t + α δ_t ∇_w q̂", "note": "梯度上升一步(δ 是&#39;偏离 target 的余量&#39;,符号正确)。线性 FA 是 w + α δ_t φ;NN 是 w + α δ_t · grad。"},
+      {"label": "Step 6: π-step(GPI)", "note": "对 s_t 取 a* = argmax_a q̂(s_t, a; w_{t+1}),设 π_{t+1}(a*|s_t) = 1-ε+ε/|A|,其余动作 ε/|A|。这是&#39;truncated policy improvement&#39;。"}
+    ]
+  }'></div>
+
+  <p style="font-size:0.85rem; color:var(--color-muted);">直观:6 步流程<em>每条 transition</em> 都跑一遍。Sarsa 与 Q-learning 的<em>差别只在 Step 2</em>(target 用 \(\hat q(s&#39;, a&#39;)\) 还是 \(\max_{a&#39;}\hat q(s&#39;, a&#39;)\)),其他 5 步完全相同。这就是"<em>1 字翻译</em>" 的<em>结构清晰</em>:从 Ch.7 表式到 Ch.8 FA,只多了 Step 4 的 \(\nabla_w \hat q\)。NN 时 Step 4 是 backprop,deep RL 算力开销主要在此。</p>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>"<em>1:1 翻译 Ch.7 表式</em>" 的<em>结构对应</em></em>。Ch.7 L5 表式 Sarsa:\(Q(s, a) \leftarrow Q(s, a) + \alpha \delta_t\)。Ch.8 L5 Sarsa-FA:\(w \leftarrow w + \alpha \delta_t \phi(s, a)\)。<em>差别</em>:表式只更新"<em>第 \((s, a)\) 格</em>",FA 同时更新"<em>所有 \(\phi_i(s, a) \neq 0\) 的方向</em>"。one-hot \(\phi(s, a) = e_{(s, a)}\) 时退化成表式;\(\phi\) 共享时<em>"<em>泛化</em>"</em> 到所有 \((s&#39;, a&#39;)\) with \(\phi(s&#39;, a&#39;)\) 与 \(\phi(s, a)\) 相关。这是 FA 的<em>核心好处</em>:学一格惠及多格,让大状态空间可学。
+  </div>
+
+  <div class="callout">
+    <strong>Step 2.</strong> <em>Sarsa-FA 与 Q-learning-FA 的<em>收敛对比</em></em>。Sarsa-FA 在线性 FA + on-policy 下严格收敛(Tsitsiklis-Van Roy);Q-learning-FA <em>无</em>线性 FA 收敛保证(off-policy + bootstrap + FA = 三联),但<em>实测</em> 多数 grid-world 任务收敛(教材 Fig. 8.10)。这是<em>"<em>实测稳 vs 理论保证</em>" 的典型例子</em>。L6-L7 的 DQN 在 NN-FA 下用 target net + replay 把"<em>实测稳</em>" 工程化,代价是<em>无理论收敛</em>。
+  </div>
+
+  <div class="callout">
+    <strong>Step 3.</strong> <em>"<em>good path vs 全局最优</em>" 的<em>定位</em></em>。教材 Algorithm 8.2 / 8.3 是<em>"<em>固定起点 \(s_0\)</em>" 模式</em>:每 episode 从 \(s_0\) 出发,沿当前 \(\pi\) 走到 target;只 update 路径上的 \((s, a)\) 的 \(\hat q\)。结果:<em>路径状态</em> 学得好,<em>非路径状态</em> 不更新 ⇒ 学到的策略对 \(s_0\) 最优,对其他起点可能<em>非</em>最优(Fig. 8.10c 看得到:左下角格的箭头是初始化随机)。要全局最优,需<em>多起点</em> 或<em>大 ε 探索</em>(Q-learning 的 off-policy 对此<em>更友好</em> —— 数据可来自完全均匀的 behavior)。L8 DQN 实验用了"<em>1 局 1000 步均匀 behavior</em>" 几乎覆盖全状态。
+  </div>
+
+  <h2>§4 数值演示:Sarsa-FA 在 5×5 grid 上学 good path</h2>
+  <p>教材 Fig. 8.9 给 Sarsa-FA(线性 Fourier 特征 order 5,\(d=36\),\(\gamma=0.9\),\(\alpha=0.001\),\(\epsilon=0.1\),\(r_{\text{forbidden}}=r_{\text{boundary}}=-10\),\(r_{\text{target}}=1\))从左上 \((1,1)\) 到 target \((4, 3)\) 的<em>good path</em>。500 episodes 后<em>total reward 与 episode length</em> 都收敛到稳定值。</p>
+
+  <div data-component="gridworld" id="gw-ch08-l05" data-config='{
+    "rows": 5, "cols": 5,
+    "target": [3, 2],
+    "forbidden": [[1,1],[2,1],[2,2],[1,3],[3,3]],
+    "policy": [
+      ["↓","↓","↓","↓","↓"],
+      ["↓","·","↓","→","↓"],
+      ["→","·","·","↓","↓"],
+      ["→","→","·","←","←"],
+      ["·","·","·","·","·"]
+    ]
+  }'></div>
+
+  <p style="font-size:0.85rem; color:var(--color-muted);">本图是教材 Fig. 8.9(右图)的 schematic:箭头<em>沿 \((1,1) \to (4,3)\) 路径</em> 方向是"<em>好</em>" 的(避开 forbidden 区,走到 target),路径外的格<em>不</em> 收敛到最优(\(\hat q\) 未充分 update)。Q-learning-FA(Fig. 8.10)在<em>同设置</em> 下结果<em>类似</em>,但<em>off-policy</em> ⇒ 数据更分散,500 episodes 收敛<em>稍慢</em>。</p>
+
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"<em>Q-learning-FA 是 Sarsa-FA 的更强版本</em>,既然 Q-learning 表式更优,FA 版应该也更优。"<br>
+    <strong>实际上:</strong><strong>Sarsa-FA 与 Q-learning-FA 是<em>不同</em> 算法,各有适用场景</strong>。Sarsa-FA <em>有</em>线性 FA 收敛保证(on-policy),适合<em>需要稳定的</em> 任务。Q-learning-FA <em>无</em> 收敛保证(off-policy + FA + bootstrap = 三联),但<em>样本利用更广</em>(可重用旧 buffer 数据)。NN-FA 时 Q-learning-FA 必须配 target net + replay(DQN);否则发散。Sarsa-NN 也不稳但<em>稍好</em>(无 max 的 off-policy)。<br>
+    <strong>因为:</strong>表式时 Q-learning 的"<em>off-policy + max</em>" 不引发问题(每格独立);FA 时<em>共享 \(w\)</em> 让"<em>错的加权</em>" 放大到多状态。所以从 Ch.7 到 Ch.8,Q-learning 的"<em>样本广</em>" 优势<em>受 deadly triad 折扣</em>,Sarsa 的"<em>稳</em>" 反而<em>升值</em>。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"既然教材 Algorithm 8.2 / 8.3 学到的是 good path 不是全局最优,那这两个算法<em>不实用</em>,DQN 才<em>实用</em>。"<br>
+    <strong>实际上:</strong><strong>"<em>good path</em>" 对许多实际任务<em>足够</em></strong>。机器人导航、游戏 AI 多数场景"<em>从 \(s_0\) 走到 goal</em>" 即任务定义,不需要"<em>全状态最优策略</em>"。Algorithm 8.2 的固定起点 + 路径 update <em>恰好</em> 是这类任务的最自然设计。要全局最优(如 Atari)需要<em>充分探索</em>(behavior policy 大 ε 或随机 reset),但这只是<em>采样设计</em>,与"<em>算法 8.2/8.3</em>" 公式无关。<br>
+    <strong>因为:</strong>"<em>从 \(s_0\) 起好路径</em>" vs "<em>全局最优</em>" 是<em>问题设定</em> 差别,不是<em>算法能力</em> 差别。Sarsa-FA / Q-learning-FA 的 update 公式<em>不限制</em> 起点;限制来自<em>数据采样</em>。改变采样(多起点、大 ε、replay)即可学全局最优。教材<em>实验设置</em> 选了固定起点,所以<em>实验</em> 是 good path,不代表算法<em>本身</em> 只能学 good path。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"<em>线性 FA + Q-learning 实测稳</em> 已经说明 deadly triad 是<em>过度警告</em>。"<br>
+    <strong>实际上:</strong><strong>线性 FA 实测稳 ≠ 理论收敛保证</strong>。教材 Fig. 8.10 的"<em>500 episodes 收敛</em>" 依赖<em>(i)</em> behavior policy ε-greedy 让 \(d_b \approx d_\pi\)(都偏 target);<em>(ii)</em> \(\alpha=0.001\) 极小;<em>(iii)</em> Fourier 特征光滑(\(\|A\|\) 谱条件好);<em>(iv)</em> grid 规模小,500 步 episode 多次访问每格。换大状态空间(NN)、大 \(\alpha\)、稀疏访问 ⇒ 很容易触发发散。Baird 反例就<em>纯线性</em> 也炸 —— 不是 NN 才会出事。<br>
+    <strong>因为:</strong>deadly triad 的"<em>触发</em>" 需要<em>(off-policy 加权失配)+ (FA 放大)+ (bootstrap 反馈)</em> 三件事都<em>足够强</em>。线性 FA + 小 \(\alpha\) + grid 规模小 ⇒ 三件事都<em>弱</em>,合力不爆。NN + 大 \(\alpha\) + Atari 规模 ⇒ 三件事都<em>强</em>,合力炸。L7 DQN 的 trick 让三件事<em>分别</em> 减弱,工程上保稳。
+  </div>
+
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> 写出 Sarsa-FA 与 Q-learning-FA 的 update 公式,并指出它们的<em>唯一区别</em>。</summary>
+    <p><strong>A.</strong> Sarsa-FA: \(w \leftarrow w + \alpha [r + \gamma \hat q(s&#39;, a&#39;; w) - \hat q(s, a; w)]\nabla_w \hat q(s, a; w)\),其中 \(a&#39; \sim \pi_t(\cdot | s&#39;)\)。Q-learning-FA: \(w \leftarrow w + \alpha [r + \gamma \max_{a&#39;}\hat q(s&#39;, a&#39;; w) - \hat q(s, a; w)]\nabla_w \hat q(s, a; w)\)。<em>唯一区别</em>:Sarsa 用<em>"<em>实际下一动作</em> \(a&#39;\) 来自当前 \(\pi\)</em>",Q-learning 用<em>"<em>greedy 下一动作</em> \(\arg\max_{a&#39;}\)</em>"。Sarsa = on-policy(数据加权 = \(D_\pi\));Q-learning = off-policy(target = greedy ≠ behavior)。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> 为什么 Q-learning-FA 在线性 FA 下<em>实测</em> 稳,但 NN-FA 下<em>必须</em> 用 target net + replay?</summary>
+    <p><strong>A.</strong> 线性 FA 实测稳因:<em>(i)</em> 行为策略 ε-greedy 与 target greedy 接近 ⇒ \(d_b \approx d_\pi\) ⇒ 加权失配弱;<em>(ii)</em> 小 \(\alpha\)(0.001)+ 谱条件好的 Fourier 特征 ⇒ \(\|I - \alpha A\|\) 即便 A 非正定也<em>近 1</em>(慢移动);<em>(iii)</em> 小 grid + 长 episode ⇒ 每格充分访问。NN-FA 三件事都<em>恶化</em>:NN 谱条件差(\(\|A\|\) 大),状态空间大(每格采样稀)、大 \(\alpha\)(\(\|I-\alpha A\| > 1\) 普遍)。所以 NN 必须<em>三道防线</em>:target net 截断 bootstrap 自反馈;replay 让加权<em>近</em>均匀;mini-batch 平滑梯度。三者合力让"<em>实测稳</em>" 在 NN 下也成立。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> 教材 Algorithm 8.2 学的是"<em>good path</em>" 而非"<em>全局最优</em>",为什么?算法本身改不改 update?</summary>
+    <p><strong>A.</strong> 因为<em>采样设计</em>:每 episode 从固定 \(s_0\) 出发,沿当前 \(\pi\)(ε-greedy)走到 target ⇒ 路径外的状态<em>少访问</em>,\(\hat q\) 不更新 ⇒ 路径外策略保持初始化随机。要全局最优<em>不</em> 改 update 公式,只改采样:<em>(i)</em> 每 episode <em>随机</em> reset;<em>(ii)</em> 用<em>独立</em> behavior(如均匀随机)写 buffer + Q-learning off-policy 训练。L8 DQN 实验采用 (ii):1 局 1000 步均匀 behavior 几乎覆盖全 \((s, a)\),所以学到全状态最优策略。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=41&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=41" target="_blank">YouTube 备链</a></p>
+
+  <h3>下一节预告</h3>
+  <p>L5 把 Sarsa / Q-learning 的<em>FA 公式</em> 写完,但 \(\hat q(s, a; w)\) 仍可能是<em>线性</em> 的(\(\phi^\top w\))。<strong>L6(教材 §8.4.1)</strong> 把 \(\hat q\) 换成<em>神经网络</em>:\(\hat q(s, a; \theta) = \text{NN}_\theta(s, a)\)。这<em>看似</em> 只是把"<em>\(\phi(s, a)^\top w\)</em>" 换成"<em>NN</em>",但带来三个新问题:<em>(i)</em> \(\nabla_\theta \hat q\) 由 backprop 给(算 Step 4 比线性贵 100×);<em>(ii)</em> NN 谱条件差,deadly triad 真触发(线性 FA 实测稳的 trick 失效);<em>(iii)</em> 数据需 mini-batch 才能稳定 backprop ⇒ 单步在线 update 不可。L6 把这三条说严,引入<em>"<em>主网络 + target 网络</em>"</em> 解决 (ii),L7 引入 <em>experience replay</em> 解决 (iii) 与<em>off-policy 加权失配</em>。</p>
+
+  <nav class="lesson-nav">
+    <a href="lesson-04.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-06.html">Next →</a>
+  </nav>
+</div>
+
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>
