@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>蒙特卡罗学习(P5):ε-贪心 MC 介绍 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch05-l05" data-est-minutes="20">
+<div class="container">
+
+  <!-- Top nav -->
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.5 / Lesson 5</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <!-- Header -->
+  <p class="kicker">Bilibili #20 · YouTube #20 · Book §5.4.1-5.4.2 pp. 89-91</p>
+  <h1>L5: ε-Greedy Policy Family<small style="color:var(--color-muted); font-weight:400;">  (ε-贪心策略 + 介绍)</small></h1>
+
+  <!-- §1 Why this lesson -->
+  <h2>§1 Why this lesson</h2>
+  <p>L4 的 MC Exploring Starts <em>必须</em> "<em>从每个 (s, a) 起跑充分多 episode</em>",这条假设在真实环境(机器人、推荐、自动驾驶)<em>几乎不成立</em>。本节(教材 §5.4.1-5.4.2,pp. 89-91)给出根本性替换 —— <strong>ε-greedy 策略</strong>:让 \(\pi(a \mid s) > 0\) 对<em>所有</em> a,这样一条充分长 episode 就能 visit 每个 \((s, a)\) 多次,<em>不再需要</em> exploring starts。</p>
+  <p>关键洞察(教材 §5.4.1-5.4.2):<strong>(a) Soft policy 概念(p. 89)</strong>:任何 \(\pi(a \mid s) > 0\) 对所有 \((s, a)\) 都成立的策略叫 soft;反之是 deterministic / greedy。Soft 策略的关键性质:一条<em>充分长</em> episode 能 visit 所有 \((s, a)\),所以"<em>多条 exploring-start 短 episode</em>" 可换成"<em>一条 soft 长 episode</em>"。<strong>(b) ε-greedy 公式(p. 89 末)</strong>:\(\pi(a \mid s) = 1 - \frac{|\mathcal A(s)| - 1}{|\mathcal A(s)|}\varepsilon\) 给 greedy action,\(\frac{\varepsilon}{|\mathcal A(s)|}\) 给其他 action。<em>关键</em>:greedy action 总比其他 action 概率<em>更高</em>(\(1 - \varepsilon + \varepsilon/|\mathcal A| \ge \varepsilon/|\mathcal A|\) 对 \(\varepsilon \in [0, 1]\) 成立)。<strong>(c) ε 端点</strong>:\(\varepsilon = 0\) ⇒ deterministic greedy(回到 L4 的强假设依赖);\(\varepsilon = 1\) ⇒ <em>uniform random</em>(\(\pi(a \mid s) = 1/|\mathcal A|\) 对所有 a),最强探索但完全不利用估值;\(\varepsilon \in (0, 1)\) 是连续光谱。<strong>(d) 实操采样</strong>(p. 90 中段):生成随机数 \(x \sim U[0, 1]\),若 \(x \ge \varepsilon\) 选 greedy(概率 \(1 - \varepsilon\)),否则均匀随机选(再次以 \(1/|\mathcal A|\) 选,可能再次撞中 greedy)。这是工程上常见的两步实现。<strong>(e) 整合到 MC</strong>(§5.4.2):把"<em>improvement step 用 \(\arg\max_a q\)</em>" 改成"<em>用 ε-greedy 改</em>"。policy improvement 的求解空间从"<em>所有 \(\Pi\)</em>" 缩到"<em>ε-greedy 子集 \(\Pi_\varepsilon\)</em>"。本节讲分布形态与 policy improvement 公式;L6 落地完整算法 + 全章总结。</p>
+
+  <!-- §2 核心定义 -->
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>Soft policy (软策略,p. 89)</strong>:对所有 \((s, a)\),\(\pi(a \mid s) > 0\)。即每个 action 都有正概率被选。<em>性质</em>:一条充分长 episode 能 visit 所有 \((s, a)\),省掉 exploring starts。</li>
+    <li><strong>ε-greedy 策略(p. 89 末)</strong>:soft 策略的特例。\(\pi(a \mid s) = 1 - \frac{|\mathcal A(s)| - 1}{|\mathcal A(s)|}\varepsilon\) 给 greedy(\(a = a^*\)),\(\frac{\varepsilon}{|\mathcal A(s)|}\) 给其他。\(\varepsilon \in [0, 1]\) 控制"<em>探索 vs 利用</em>" 平衡。</li>
+    <li><strong>ε 的端点意义</strong>:\(\varepsilon = 0 \Rightarrow\) greedy(L4 的 \(\arg\max\));\(\varepsilon = 1 \Rightarrow\) uniform 随机(\(1/|\mathcal A|\) 对所有 a),完全不利用估值。<em>实操</em>:\(\varepsilon \in [0.05, 0.3]\) 是常见取值,深度学习里还有 ε-decay 调度。</li>
+    <li><strong>"<em>greedy 概率</em> ≥ <em>其他概率</em>" 的不等式(p. 90 顶)</strong>:\(1 - \varepsilon + \varepsilon/|\mathcal A| \ge \varepsilon/|\mathcal A|\) 对 \(\varepsilon \in [0, 1]\) 恒成立。直觉:ε-greedy <em>总是</em> 偏向 greedy action,绝不退化为 uniform 之外的形式 —— ε=1 时<em>恰好</em> 等于 uniform(此时 greedy 与其他都是 \(1/|\mathcal A|\))。</li>
+    <li><strong>采样实现(p. 90 中段)</strong>:抽 \(x \sim U[0, 1]\)。若 \(x \ge \varepsilon\) 直接选 greedy 动作 \(a^*\);若 \(x < \varepsilon\) 在 \(\mathcal A\) 上均匀抽(可能再撞 \(a^*\))。等价于上面分布公式。</li>
+    <li><strong>策略空间 \(\Pi\) vs \(\Pi_\varepsilon\)</strong>:\(\Pi\) = 所有合法策略(含 deterministic 与 stochastic);\(\Pi_\varepsilon\) = 满足 ε-greedy 形式的策略子集(给定 \(\varepsilon\))。<em>注</em>:\(\Pi_\varepsilon \subset \Pi\),且 \(\varepsilon \to 0\) 时 \(\Pi_\varepsilon\) 退化到 deterministic 策略集。</li>
+    <li><strong>"<em>policy improvement 的搜索空间收窄</em>"(§5.4.2)</strong>:原 PI 的 improvement 解 \(\arg\max_{\pi \in \Pi}\)(任意策略空间);ε-greedy MC 改解 \(\arg\max_{\pi \in \Pi_\varepsilon}\)。<em>代价</em>:最优解 \(\pi^*_\varepsilon \in \Pi_\varepsilon\) 比真 \(\pi^* \in \Pi\) 略差;<em>补偿</em>:不再需要 exploring starts。</li>
+  </ul>
+
+  <!-- §3 关键公式 + 推导 -->
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节核心是 ε-greedy 的<strong>分布公式</strong> 与<strong>policy improvement 的求解</strong>。</p>
+
+  <p><strong>公式 1:ε-greedy 分布(教材 p. 89 末)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\pi(a \\mid s) = \\begin{cases} 1 - \\frac{|\\mathcal A(s)| - 1}{|\\mathcal A(s)|}\\varepsilon, & a = a^*(s) \\\\ \\frac{\\varepsilon}{|\\mathcal A(s)|}, & a \\ne a^*(s) \\end{cases}",
+    "annotations": [
+      {"key": "greedy_prob", "label": "greedy 动作概率", "description": "1 - (|A|-1)/|A| · ε。化简:1 - ε + ε/|A|。当 ε=0 时为 1(纯贪心);ε=1 时为 1/|A|(等于 uniform)。"},
+      {"key": "other_prob", "label": "其他动作概率", "description": "ε/|A|。同样:ε=0 时为 0(纯贪心);ε=1 时为 1/|A|(等于 uniform)。所以 ε=1 时整个分布退化为 uniform。"},
+      {"key": "sum_to_1", "label": "概率和 = 1 检验", "description": "(1 - (|A|-1)/|A| · ε) + (|A|-1) · ε/|A| = 1 - (|A|-1)ε/|A| + (|A|-1)ε/|A| = 1。✓ 严格归一化。"},
+      {"key": "greedy_dominant", "label": "greedy 最大", "description": "1 - ε + ε/|A| ≥ ε/|A| 对 ε ∈ [0,1] 恒成立。即 greedy 概率始终 ≥ 其他动作概率,差距随 ε 减小而拉大。这是 ε-greedy &#39;偏贪心&#39; 的精确含义。"}
+    ]
+  }'></div>
+
+  <p><strong>公式 2:ε-greedy 在 \(\Pi_\varepsilon\) 内的 improvement(教材 (5.5),§5.4.2)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\pi_{k+1}(s) = \\arg\\max_{\\pi \\in \\Pi_\\varepsilon} \\sum_a \\pi(a \\mid s) q_{\\pi_k}(s, a)",
+    "annotations": [
+      {"key": "search_space", "label": "Π_ε 子集", "description": "搜索空间从 Π(全策略集合)缩到 Π_ε(给定 ε 的所有 ε-greedy 策略)。直接结果:解仍是 ε-greedy 形式,只是 a* 选 \\arg\\max_a q 那个动作。"},
+      {"key": "solution_form", "label": "解的形式", "description": "π_{k+1}(a|s) = 1 - (|A|-1)/|A|·ε if a = a_k* = \\arg\\max_a q(s,a); ε/|A| otherwise。和原 greedy improvement 几乎一样,只是把&#39;1 vs 0&#39; 改成&#39;1-εcoef vs ε/|A|&#39;。"},
+      {"key": "no_exploring_starts", "label": "不需要 exploring starts", "description": "因为 π_{k+1}(a|s) > 0 对所有 a,所有 (s, a) 都被持续访问 ⇒ 一条长 episode 可估所有 q。L4 的强假设由此被替换。"},
+      {"key": "epsilon_optimality_tradeoff", "label": "ε-最优 vs 真最优", "description": "解出的 π* ∈ Π_ε,即 &#39;Π_ε 内的最优策略&#39;,但 Π_ε ⊂ Π,所以可能不等于真 π* ∈ Π(教材 p. 91 末段:&#39;may not be optimal in Π&#39;)。L6 详谈这个 tradeoff。"}
+    ]
+  }'></div>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>验证 \(\sum_a \pi(a \mid s) = 1\)</em>。\(|\mathcal A|\) 个动作,1 个 greedy + \((|\mathcal A| - 1)\) 个其他。\((1 - \frac{|\mathcal A| - 1}{|\mathcal A|}\varepsilon) + (|\mathcal A| - 1) \cdot \frac{\varepsilon}{|\mathcal A|} = 1 - \frac{(|\mathcal A| - 1)\varepsilon}{|\mathcal A|} + \frac{(|\mathcal A| - 1)\varepsilon}{|\mathcal A|} = 1\)。✓
+  </div>
+
+  <div class="callout">
+    <strong>Step 2.</strong> <em>验证 \(\varepsilon = 0\) 与 \(\varepsilon = 1\) 端点</em>。\(\varepsilon = 0\):greedy 概率 = 1,其他 = 0 ⇒ 纯 greedy(deterministic)。\(\varepsilon = 1\):greedy 概率 = \(1 - (|\mathcal A| - 1)/|\mathcal A| = 1/|\mathcal A|\),其他 = \(1/|\mathcal A|\) ⇒ uniform。即 \(\Pi_{\varepsilon = 0}\) 是 deterministic 策略集,\(\Pi_{\varepsilon = 1}\) 只含 uniform 策略。\(\varepsilon \in (0, 1)\) 是中间。
+  </div>
+
+  <div class="callout">
+    <strong>Step 3.</strong> <em>(5.5) 解的形式推导</em>。在 \(\Pi_\varepsilon\) 内最大化 \(\sum_a \pi(a \mid s) q(s, a)\)。已知 ε-greedy 必须给所有 \(a \ne a^*\) 同概率 \(\varepsilon/|\mathcal A|\),自由变量只有"<em>哪个 a 当 a*</em>"。\(\sum_a \pi(a \mid s) q(s, a) = (1 - \frac{|\mathcal A| - 1}{|\mathcal A|}\varepsilon) q(s, a^*) + \frac{\varepsilon}{|\mathcal A|} \sum_{a \ne a^*} q(s, a)\)。第一项最大化要求 \(a^* = \arg\max_a q(s, a)\)(因为 \(1 - \varepsilon + \varepsilon/|\mathcal A| \ge \varepsilon/|\mathcal A|\),把权重最大的位置给 q 最大的动作)。第二项是常数(不依赖 \(a^*\) 的具体选择,只看是否包含每个动作一次)。所以最优 ε-greedy 策略仍由 \(\arg\max_a q\) 决定 greedy 动作 —— 与原 PI 一致,只是不再"<em>独占 100%</em>"。
+  </div>
+
+  <!-- §4 ε-greedy 分布形态可视化 -->
+  <h2>§4 ε-greedy 分布形态:从 greedy 到 uniform</h2>
+  <p>用 distribution-bar 展示<em>同一个 state \(s\)、5 个动作 \(\{↑, →, ↓, ←, \cdot\}\)</em>(\(|\mathcal A| = 5\))在不同 ε 下的概率分布。设 greedy action \(a^* = ↓\)。</p>
+
+  <div data-component="distribution-bar" data-config='{
+    "title": "ε-greedy 在 |A|=5 上的分布(a* = ↓):从最贪到最探的连续光谱",
+    "distributions": [
+      {"name": "greedy (ε=0)", "items": [{"label":"↑","value":0.0},{"label":"→","value":0.0},{"label":"↓ (a*)","value":1.0},{"label":"←","value":0.0},{"label":"·","value":0.0}]},
+      {"name": "ε=0.1 (轻探)", "items": [{"label":"↑","value":0.02},{"label":"→","value":0.02},{"label":"↓ (a*)","value":0.92},{"label":"←","value":0.02},{"label":"·","value":0.02}]},
+      {"name": "ε=0.5 (中探)", "items": [{"label":"↑","value":0.10},{"label":"→","value":0.10},{"label":"↓ (a*)","value":0.60},{"label":"←","value":0.10},{"label":"·","value":0.10}]},
+      {"name": "uniform (ε=1)", "items": [{"label":"↑","value":0.20},{"label":"→","value":0.20},{"label":"↓ (a*)","value":0.20},{"label":"←","value":0.20},{"label":"·","value":0.20}]}
+    ]
+  }'></div>
+
+  <p><strong>关键观察</strong>:四档分布从左到右展现"<em>greedy 概率衰减、其他概率上升</em>" 的连续过渡。<em>(i)</em> ε=0:greedy 独占 1.0,其他 0;<em>(ii)</em> ε=0.1:greedy 0.92(\(1 - 0.1 + 0.1/5 = 0.92\)),其他 0.02(\(0.1/5\));<em>(iii)</em> ε=0.5:greedy 0.6,其他 0.1;<em>(iv)</em> ε=1:全部 0.2 = uniform。<em>这就是教材 §5.4.1 的"<em>探索程度</em> 连续光谱"</em> —— 工程师选 ε 就是选"<em>多探还是多利</em>"。</p>
+
+  <p><strong>样本量 vs 估计精度的另一视角</strong>。同一 state 上 ε 越大、被采到 greedy 之外动作的概率越大 ⇒ 那些 \(q(s, a)\) 估计样本越多 ⇒ 估计误差越小。下面的 convergence-plot 草图给出"<em>非贪心动作 q 估计误差</em> vs <em>样本数 n</em>" 在不同 ε 下的衰减:</p>
+
+  <div data-component="convergence-plot" data-config='{
+    "x-label": "总采样步数 n",
+    "y-label": "非贪心动作 q 估计的标准误差",
+    "log-y": true,
+    "series": [
+      {"name": "ε=0 (永不探非贪心)", "color": "#10b981", "points": [[100, 1.0], [1000, 1.0], [10000, 1.0], [100000, 1.0]]},
+      {"name": "ε=0.1 (轻探)", "color": "#f59e0b", "points": [[100, 0.71], [1000, 0.224], [10000, 0.071], [100000, 0.0224]]},
+      {"name": "ε=0.5 (中探)", "color": "#3b82f6", "points": [[100, 0.316], [1000, 0.1], [10000, 0.0316], [100000, 0.01]]},
+      {"name": "ε=1 (uniform)", "color": "#ef4444", "points": [[100, 0.224], [1000, 0.071], [10000, 0.0224], [100000, 0.0071]]}
+    ]
+  }'></div>
+
+  <p style="font-size:0.85rem; color:var(--color-muted);">数值含义:ε=0 时非贪心动作<em>永远</em> 不被采样,误差永远 = 1(无信息)。ε=0.1 时被采样概率 \(\sim 0.02\) per step,误差按 \(1/\sqrt{n \cdot 0.02}\) 衰减。ε=1 时被采样概率 \(0.2\) per step,误差按 \(1/\sqrt{n \cdot 0.2}\) 衰减,最快但<em>greedy 利用度</em> 最低。</p>
+
+  <!-- §5 常见误解 -->
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"ε-greedy 就是<em>uniform 加权</em> 的策略 —— ε 概率均匀抽,1-ε 概率贪心抽。"<br>
+    <strong>实际上:</strong><strong>ε-greedy <em>不是</em> uniform 与 greedy 的简单加权</strong>。教材 (p. 89 末) 公式:greedy 动作概率是 \(1 - \frac{|\mathcal A| - 1}{|\mathcal A|}\varepsilon = 1 - \varepsilon + \varepsilon/|\mathcal A|\),<em>不</em> 是 \(1 - \varepsilon\)。其他动作概率是 \(\varepsilon/|\mathcal A|\)。差异关键:在 ε 概率"<em>抽随机</em>" 时,<em>仍可能</em> 抽到 greedy 动作(\(1/|\mathcal A|\) 概率),所以 greedy 动作的<em>总</em> 概率是 \((1 - \varepsilon) + \varepsilon \cdot 1/|\mathcal A| = 1 - \varepsilon + \varepsilon/|\mathcal A|\)。这就是教材的公式。<em>很多人写错的版本</em>:"\(\pi(a^*) = 1 - \varepsilon, \pi(\text{其他}) = \varepsilon / (|\mathcal A| - 1)\)"。这<em>也是</em> 一种 soft 策略,但<em>不是</em> 教材定义的 ε-greedy。<br>
+    <strong>因为:</strong>定义差异源于"<em>是否允许第二次抽到 greedy</em>"。教材的实现(p. 90 中段)\(x \sim U[0, 1]\) → \(x \ge \varepsilon\) 选 greedy,\(x < \varepsilon\) 在<em>所有</em> 5 个动作里 uniform 抽 —— 第二步可能再次撞 greedy。这是一个 implementation 细节,但导致两种数学公式略有差异。本书坚持教材定义,所以 ε-greedy 是 \(\Pi_\varepsilon\) 中"<em>greedy 概率最大</em>" 的形式。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"ε 应该选小一些(如 0.05),让策略<em>近乎</em> greedy 最优。"<br>
+    <strong>实际上:</strong><strong>ε 太小会让"<em>非贪心动作 q 估计</em>" 永远不准</strong>。看 §4 convergence-plot:ε=0.05 时非贪心动作每 100 步只被采到 \(\sim 1\) 次,误差衰减极慢。如果初始 \(q\) 估计有偏,greedy 动作选错,小 ε 让"<em>纠错信号</em>" 来得太慢。这是<em>探索不足</em>(under-exploration)的典型陷阱 —— 算法会"<em>自信地走错路</em>"。<em>实操</em>:ε 通常从 \(\sim 0.5\) 起,按 episode 数衰减到 \(\sim 0.05\)("<em>ε-decay</em> 调度,L6 §6 提)。<br>
+    <strong>因为:</strong>"<em>探索 vs 利用</em>" 的最优解依赖<em>初始 q 估计的不确定性</em>。早期不确定性大 ⇒ 多探;后期 q 已稳 ⇒ 多利用。固定 ε 是粗暴折衷;ε-decay 让算法自适应。Ch.7 Q-learning 默认搭配 ε-decay,Ch.8 DQN(\(\varepsilon = 1.0 \to 0.1\) 退火)是经典实现。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"ε-greedy 在 \(\Pi_\varepsilon\) 内最优,所以等价于 PI 在 \(\Pi\) 内最优。"<br>
+    <strong>实际上:</strong><strong>ε-greedy 最优 ≠ 真最优</strong>(教材 p. 91 末段)。\(\Pi_\varepsilon \subset \Pi\),所以 \(\pi^*_\varepsilon \in \Pi_\varepsilon\) 一般<em>不等于</em> \(\pi^* \in \Pi\)。具体差距:\(v_{\pi^*_\varepsilon}(s) \le v_{\pi^*}(s)\) 严格成立,等号只在 ε=0 时成立。L6 §4 会用具体数值(教材 Figure 5.6:ε=0 vs ε=0.5 的 v 值差异)展示这个差距。<em>结论</em>:ε-greedy 是"<em>放弃 strict optimality 换 explorability</em>" 的<em>有意识 trade-off</em>,不是"<em>近似</em> 最优"。<br>
+    <strong>因为:</strong>strict optimal 策略一定 deterministic(BOE 定理,Ch.3 L2),但 deterministic 策略 \(\notin \Pi_\varepsilon\) for \(\varepsilon > 0\)。所以 ε-greedy 注定在 \(\Pi_\varepsilon\) 内是<em>受限最优</em>。Ch.10 Actor-Critic 用 stochastic policy + 直接梯度优化,不再受这个限制。
+  </div>
+
+  <!-- §6 自检 + 视频 + teaser -->
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> ε=0.5、\(|\mathcal A| = 4\) 时,greedy 动作的概率 = ?其他三个动作各自的概率 = ?</summary>
+    <p><strong>A.</strong> Greedy 概率 = \(1 - \frac{|\mathcal A| - 1}{|\mathcal A|}\varepsilon = 1 - \frac{3}{4} \cdot 0.5 = 1 - 0.375 = 0.625\)。等价计算:\(1 - \varepsilon + \varepsilon/|\mathcal A| = 1 - 0.5 + 0.125 = 0.625\)。其他每个动作的概率 = \(\varepsilon / |\mathcal A| = 0.5 / 4 = 0.125\)。验证:\(0.625 + 3 \cdot 0.125 = 0.625 + 0.375 = 1\)。✓</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> 为什么 ε=1 时 ε-greedy 退化为 uniform 而<em>不是</em> "<em>给非贪心动作 100% 概率</em>"?</summary>
+    <p><strong>A.</strong> 看公式:ε=1 时 greedy 概率 = \(1 - \frac{|\mathcal A| - 1}{|\mathcal A|} = \frac{1}{|\mathcal A|}\),其他每个动作概率 = \(\frac{1}{|\mathcal A|}\)。<em>所有</em> 动作同概率 ⇒ uniform。直觉解释:实现层面 ε=1 意味着"<em>100% 概率执行随机抽</em>",随机抽<em>包括</em> greedy 动作 —— 所以 greedy 仍有 \(1/|\mathcal A|\) 概率被选,与其他动作平等。这就是为什么教材 ε-greedy 公式在 ε=1 时退化为 uniform 而不是"<em>反贪心</em>"。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> ε-greedy 是 soft 策略族里的一个特例。其他常见 soft 策略形式有哪些?</summary>
+    <p><strong>A.</strong> 三类常见:<strong>(1) Boltzmann / softmax 策略</strong>:\(\pi(a \mid s) = \exp(q(s, a) / \tau) / \sum_b \exp(q(s, b) / \tau)\),温度 \(\tau\) 控制探索。\(\tau \to 0\) 退化 greedy,\(\tau \to \infty\) 退化 uniform。比 ε-greedy <em>更光滑</em>,概率随 q 值连续变化,但需要 q 数值<em>排序与差距</em> 都准确(对 noise 敏感)。<strong>(2) Stochastic policy with entropy bonus</strong>:Ch.10 SAC 等算法用 \(J(\pi) + \beta H(\pi)\) 形式,鼓励高熵(强探索)。<strong>(3) UCB (Upper Confidence Bound)</strong>:bandit 文献的经典,\(\arg\max_a [q(s,a) + c\sqrt{\log n / N(s,a)}]\),给"<em>访问少</em>" 的动作 bonus。RL 里 MCTS(AlphaGo)用 PUCT 变种。<em>本书选 ε-greedy</em> 是因为它<em>最简单</em>,且足以让所有 (s, a) 被覆盖 —— 收敛理论清晰,Ch.7 Q-learning 直接复用。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <p style="font-size:0.85rem; color:var(--color-muted);">视频:首选 Bilibili 直播(下方 iframe);若 iframe 不显示,用 YouTube 链接打开。BVID 当前是占位,实际 BVID 等首次部署时填。</p>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=20&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=20" target="_blank"><strong>▶ YouTube 备链(建议优先点这个)</strong></a></p>
+
+  <h3>下一节预告</h3>
+  <p>本节给了 ε-greedy 策略的<em>形态</em> 与<em>improvement 公式</em>。下一节(L6,Ch.5 收官)把 ε-greedy 嵌入完整算法 —— <strong>MC ε-Greedy(Algorithm 5.3,p. 91)</strong>:用 ε-greedy 当 behavior policy 跑<em>一条超长 episode</em>,every-visit 估 q,improvement 步在 \(\Pi_\varepsilon\) 内解。教材 §5.5 还会给"<em>探索 vs 利用</em>" 的<em>具体数值代价</em>:Figure 5.6 / 5.7 显示同一 grid 下 ε=0 / 0.1 / 0.5 的 v 值与最优策略差异 —— ε 越大 v 越低,但 grid 上"<em>覆盖率</em>" 越好。L6 还要做 Ch.5 全章总结:三个 MC 算法(Basic / ES / ε-Greedy)的关系图,以及对 Ch.6 RM/SGD 的预告 —— "<em>(1/n) 这个权</em>" 在 stochastic approximation 框架下的统一。</p>
+
+  <!-- Bottom nav -->
+  <nav class="lesson-nav">
+    <a href="lesson-04.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-06.html">Next →</a>
+  </nav>
+</div>
+
+<!-- Components -->
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>
