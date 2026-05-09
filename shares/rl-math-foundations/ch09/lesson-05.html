@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>策略梯度方法(P5):梯度算法与 REINFORCE — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch09-l05" data-est-minutes="20">
+<div class="container">
+
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.9 / Lesson 5</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <p class="kicker">Bilibili #49 · YouTube #49 · Book §9.4-9.6 pp. 210-214</p>
+  <h1>L5: PG (P5) — Gradient-based Algorithms &amp; REINFORCE<small style="color:var(--color-muted); font-weight:400;">  (策略梯度 P5:梯度算法与 REINFORCE)</small></h1>
+
+  <h2>§1 Why this lesson</h2>
+  <p>L4 给了 Ch.9 的核心定理:\(\nabla_\theta J(\theta) = \mathbb E_{S\sim\eta, A\sim\pi}[\nabla_\theta\ln\pi(A|S;\theta) \cdot q_\pi(S, A)]\)(教材 (9.9))。这是<em>真</em> 梯度,但实际工程中<em>无</em> 法直接计算(\(\eta, \pi, q_\pi\) 都需<em>遍历</em> 状态-动作-轨迹)。本节(教材 §9.4-9.6,pp. 210-214)给<strong>第一个具体的 PG 算法</strong>:把<em>真</em> 梯度的<em>期望</em> 用<em>样本</em> 估,把 \(q_\pi(s_t, a_t)\) 用<em>Monte Carlo 回报</em> \(G_t\)(Ch.5 复用)估 ⇒ <strong>REINFORCE</strong>(Williams 1992,Algorithm 9.1)。这是 PG 算法的<em>开山之作</em>,也是 Ch.10 actor-critic 的<em>蓝本</em>。<strong>三件事</strong>:<em>(a)</em> 真梯度 → 随机梯度 (9.32);<em>(b)</em> exploration-exploitation 的 \(\beta_t = q_t/\pi\) 解读;<em>(c)</em> Algorithm 9.1 完整伪码 + 方差问题 + Ch.10 桥。</p>
+  <p>核心 takeaway:<strong>(a) 真梯度 → 随机梯度</strong>:\(\theta_{t+1} = \theta_t + \alpha \nabla_\theta\ln\pi(a_t|s_t; \theta_t) \cdot q_t(s_t, a_t)\)(教材 (9.32)),其中 \(q_t\) 是 \(q_\pi(s_t, a_t)\) 的<em>近似</em>。<strong>(b) MC 估 \(q_t\)</strong>:用 \(q_t(s_t, a_t) = \sum_{k=t+1}^T \gamma^{k-t-1} r_k = G_t\)(完整 episode 后向求和),把 PG 落地为<em>REINFORCE</em>。<strong>(c) \(\beta_t\) 解读(教材 (9.33))</strong>:\(\theta_{t+1} = \theta_t + \alpha \beta_t \nabla\pi(a_t|s_t)\),\(\beta_t = q_t / \pi(a_t|s_t)\)。<em>\(\beta_t \ge 0\)</em> ⇒ 增 \(\pi(a_t|s_t)\)(exploit q 大);<em>\(\pi\) 小</em> ⇒ \(\beta_t\) 大 ⇒ 增长低概率动作(explore)。<em>自带</em> exploration-exploitation 机制。<strong>(d) on-policy 性</strong>:S 应 ~ \(\eta = d_\pi\) / \(\rho_\pi\)、A 应 ~ \(\pi(\theta)\) ⇒ 严格 on-policy。Algorithm 9.1 实操放松:1 episode 用<em>完</em>(每条 transition 训 1 步)。<strong>(e) 高方差 → Ch.10 critic 减方差</strong>:\(G_t\) 是 MC 回报,episode 间方差极大(Ch.7 L1 MC vs TD)。Ch.10 用 critic 网络 \(\hat q_w\) 替代 \(G_t\) ⇒ actor-critic。这是 Ch.10 的<em>动机起点</em>。</p>
+
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>真梯度上升(教材 (9.31))</strong>:\(\theta_{t+1} = \theta_t + \alpha \nabla_\theta J(\theta_t) = \theta_t + \alpha \mathbb E[\nabla_\theta\ln\pi(A|S; \theta_t) q_\pi(S, A)]\)。<em>真</em> 期望需遍历,工程上不可行 ⇒ 随机化为 (9.32)。</li>
+    <li><strong>随机梯度(教材 (9.32))</strong>:\(\theta_{t+1} = \theta_t + \alpha \nabla_\theta\ln\pi(a_t|s_t; \theta_t) \cdot q_t(s_t, a_t)\)。把<em>期望</em> 换成<em>单样本</em> \((s_t, a_t)\)、把 \(q_\pi(s_t, a_t)\) 换成<em>近似</em> \(q_t(s_t, a_t)\)。Ch.6 SGD 模板第三次应用。</li>
+    <li><strong>REINFORCE(教材 §9.4)</strong>:把 \(q_t(s_t, a_t)\) 用 <em>Monte Carlo</em> 回报估,即 \(q_t(s_t, a_t) = G_t = \sum_{k=t+1}^T \gamma^{k-t-1} r_k\)(同 Ch.5 first-visit MC)。这是<em>"<em>Monte Carlo policy gradient</em>"</em>(REINFORCE = REward Increment = Nonnegative Factor × Offset Reinforcement × Characteristic Eligibility,Williams 1992)。</li>
+    <li><strong>\(\beta_t\) 系数(教材 (9.33))</strong>:用 log-trick 反推 \(\nabla\ln\pi = \nabla\pi/\pi\) ⇒ (9.32) 重写为 \(\theta_{t+1} = \theta_t + \alpha (q_t/\pi(a_t|s_t)) \nabla\pi(a_t|s_t) = \theta_t + \alpha \beta_t \nabla\pi(a_t|s_t)\),\(\beta_t = q_t/\pi(a_t|s_t)\)。</li>
+    <li><strong>\(\beta_t\) 的<em>双</em> 解读</strong>:<em>(i) exploit</em>:\(\beta_t \propto q_t\),\(q_t\) 大 ⇒ \(\beta_t\) 大 ⇒ \(\pi(a_t|s_t)\) 增加多 ⇒ 偏好高价值动作。<em>(ii) explore</em>:\(\beta_t \propto 1/\pi(a_t|s_t)\),\(\pi(a_t|s_t)\) 小 ⇒ \(\beta_t\) 大 ⇒ 概率小动作被增加多 ⇒ 平衡探索。<em>两者天然合一</em>。</li>
+    <li><strong>Algorithm 9.1 伪码</strong>:<em>(1)</em> Init \(\theta_0\);<em>(2)</em> for episode in episodes:<em>(2a)</em> 按 \(\pi(\theta)\) 采 \(\{s_0, a_0, r_1, ..., s_{T-1}, a_{T-1}, r_T\}\);<em>(2b)</em> for \(t = 0, ..., T-1\):算 \(q_t(s_t, a_t) = \sum_{k=t+1}^T \gamma^{k-t-1} r_k\);更新 \(\theta \leftarrow \theta + \alpha \nabla_\theta\ln\pi(a_t|s_t; \theta) q_t(s_t, a_t)\)。<em>注意</em>:1 episode 内每 \(t\) 用<em>同一</em> \(\theta\) 算 \(q_t\)(off-policy 漂移在实践中容忍)。</li>
+    <li><strong>方差大 → Ch.10 baseline</strong>:\(G_t\) 是 episode 累积 reward 的<em>无偏</em> 估,但<em>方差极大</em>(整条 episode 的随机性都体现在 \(G_t\) 中)。常见缓解:<em>baseline</em> 减 \(b(s_t)\) ⇒ \(\nabla\ln\pi (G_t - b)\),不变期望(\(\mathbb E[\nabla\ln\pi \cdot b] = 0\))但减方差。Ch.10 把 \(b = \hat v(s_t)\) 学出来 ⇒ advantage A=G-V ⇒ A2C。</li>
+  </ul>
+
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节核心是<strong>真梯度 → 样本估 → REINFORCE 公式</strong>。</p>
+
+  <p><strong>公式 1:真梯度上升(教材 (9.31))</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\theta_{t+1} = \\theta_t + \\alpha \\nabla_\\theta J(\\theta_t) = \\theta_t + \\alpha \\mathbb E_{S\\sim\\eta, A\\sim\\pi(\\cdot|S;\\theta_t)}\\big[\\nabla_\\theta\\ln\\pi(A|S; \\theta_t) \\cdot q_\\pi(S, A)\\big]",
+    "annotations": [
+      {"key": "true_grad", "label": "真梯度", "description": "L4 PG 定理给的&#39;数学严格&#39; 形式。期望要对所有 (s, a) 遍历,工程上不可达。"},
+      {"key": "alpha", "label": "学习率 α", "description": "通常常数(Adam 自适应),也可 RM 步长(Ch.6 L3 Σα=∞、Σα²<∞)。实操 1e-3 ~ 1e-4。"},
+      {"key": "transition_to_sgd", "label": "向 SGD 过渡", "description": "把期望用<em>单样本</em> 估 ⇒ Ch.6 SGD 模板。但这里 q_π(S, A)<em>本身也未知</em>,需<em>双重</em> 估(状态-动作样本 + q_π 样本)。这是 PG 比 SL 多一层难度。"}
+    ]
+  }'></div>
+
+  <p><strong>公式 2:REINFORCE 更新(教材 (9.32) + Algorithm 9.1)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\theta_{t+1} = \\theta_t + \\alpha \\nabla_\\theta\\ln\\pi(a_t|s_t; \\theta_t) \\cdot G_t, \\quad G_t = \\sum_{k=t+1}^T \\gamma^{k-t-1} r_k",
+    "annotations": [
+      {"key": "single_sample", "label": "单样本估期望", "description": "用 episode 中第 t 步的 (s_t, a_t) 替代 E[·] ⇒ 单样本 SGD。这是 Ch.6 L4 SGD 模板第三次应用(Ch.7/Ch.8/Ch.9)。"},
+      {"key": "G_t_estimate", "label": "G_t 估 q_π(s_t, a_t)", "description": "Ch.5 MC return G_t 是 q_π(s_t, a_t) 的<em>无偏</em> 估(MC first-visit)。需等整条 episode 跑完才能算 G_t,所以 REINFORCE 是<em>episode-update</em> 算法。"},
+      {"key": "log_pi_grad", "label": "∇ln π:autograd 一行", "description": "在 PyTorch / JAX 中,loss = -ln π(a_t|s_t; θ) · G_t.detach(),backward 给 ∇_θ。&#39;negative&#39; 因 ascent 写成 descent loss。G_t 用 .detach() 因它当作<em>常数</em>(梯度只对 θ 通过 ln π 走)。"},
+      {"key": "ascent_sign", "label": "+ 号:ascent", "description": "θ 沿 ∇J 方向走 ⇒ J 上升 ⇒ &#39;策略变好&#39;。如 G_t > 0(轨迹好) ⇒ ∇ln π · G > 0 ⇒ θ 走方向<em>增 ln π</em> ⇒ <em>放大该 (s_t, a_t) 概率</em>。如 G_t < 0(轨迹坏) ⇒ θ 减少该概率。直观:<em>好动作放大,坏动作缩小</em>。"},
+      {"key": "on_policy", "label": "严格 on-policy", "description": "样本 s_t, a_t 必须来自当前 θ_t 的 π(否则期望失配)。1 episode 每 t 用<em>同一</em> θ 算 G_t,然后<em>整批</em> 更新?不:Algorithm 9.1 在 episode 内逐 t 更新(approximation)。严格 on-policy 在 deep RL 实践中很难做到完美,有<em>"<em>每 episode 更新一次</em>" 的折中</em>。"}
+    ]
+  }'></div>
+
+  <p><strong>公式 3:\(\beta_t\) 解读(教材 (9.33))</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\theta_{t+1} = \\theta_t + \\alpha \\beta_t \\nabla_\\theta\\pi(a_t|s_t; \\theta_t), \\quad \\beta_t = \\frac{q_t(s_t, a_t)}{\\pi(a_t|s_t; \\theta_t)}",
+    "annotations": [
+      {"key": "rewrite", "label": "log-trick 反推", "description": "由 ∇ln π = ∇π / π,(9.32) ⇒ θ + α (q_t/π) ∇π = θ + α β_t ∇π。形式上把&#39;ln 梯度&#39; 转回&#39;原始梯度&#39; + β_t 系数。"},
+      {"key": "beta_geq0", "label": "β_t ≥ 0 ⇒ 增 π(a_t|s_t)", "description": "若 q_t > 0(好动作),β_t > 0,θ 朝&#39;增 π(a_t|s_t)&#39; 方向走 ⇒ 下次更可能选 a_t。&#39;reinforce&#39; 名字由此来 —— <em>正反馈强化</em>(Williams 1992)。"},
+      {"key": "beta_neg", "label": "β_t < 0 ⇒ 减 π(a_t|s_t)", "description": "若 q_t < 0(坏动作),θ 朝&#39;减 π(a_t|s_t)&#39; 走。Ch.5 ε-greedy 通过 max 自动选好,Ch.9 通过 sign of β 自动选好;两者机制不同(value-based vs policy-based)但效果一致。"},
+      {"key": "explore_via_1_pi", "label": "β_t ∝ 1/π:explore 机制", "description": "β_t = q_t/π。同样 q_t,<em>π 小 ⇒ β_t 大</em> ⇒ 该 (s_t, a_t) 被&#39;放大&#39; 多。直观:&#39;低概率动作偶尔被选时,得到的 q_t 信号被加权放大&#39;,鼓励探索。这是 PG 比 ε-greedy 更<em>原生</em> 的探索 —— 完全由 1/π 自动平衡。"},
+      {"key": "automatic_balance", "label": "exploit + explore 自动平衡", "description": "exploit 来自 q_t(只增高价值);explore 来自 1/π(放大低概率)。两者<em>同公式</em> 自动出现,无需 ε 等外加超参。这是 PG 在工程上比 value-based 的<em>原生</em> 优雅。"}
+    ]
+  }'></div>
+
+  <p><strong>Algorithm 9.1 — REINFORCE 步骤(教材 §9.4)</strong>:</p>
+
+  <div data-component="iteration-stepper" data-config='{
+    "steps": [
+      {
+        "label": "Episode k:按 π(θ) 采完整轨迹 {s_0, a_0, r_1, ..., s_{T-1}, a_{T-1}, r_T}",
+        "note": "on-policy 要求 a_t ~ π(·|s_t; θ_t) 严格采样;θ 在 episode 内不变(后向 G_t 计算需要)。一条 episode 通常 100-1000 步。"
+      },
+      {
+        "label": "对每 t = 0, ..., T-1:计 G_t = Σ_{k=t+1}^T γ^{k-t-1} r_k",
+        "note": "MC return,从 episode 末向前递推:G_T = 0;G_{t-1} = γ G_t + r_t。一遍扫完整条 episode,O(T) 时间。"
+      },
+      {
+        "label": "对每 t:更新 θ ← θ + α ∇_θ ln π(a_t|s_t; θ) · G_t",
+        "note": "PyTorch: loss_t = -ln π(a_t|s_t; θ) * G_t.detach();sum over t;backward;optimizer.step()。1 个 episode 后整批反传。"
+      },
+      {
+        "label": "Episode k+1:用<em>新</em> θ 重新采轨迹",
+        "note": "严格 on-policy ⇒ 老 θ 的轨迹不能复用(失配)。这是 REINFORCE 样本效率低的<em>结构</em> 原因 —— Ch.10 IS / off-policy AC 解决。"
+      },
+      {
+        "label": "重复直到 J(θ) 收敛或达预算",
+        "note": "通常 1000-10000 episode 收敛(玩具 task);Atari 类 deep RL 需 10^6 episode 级别。方差大,曲线抖。"
+      }
+    ]
+  }'></div>
+
+  <p style="font-size:0.85rem; color:var(--color-muted);">REINFORCE 是<em>history</em>:Williams 1992 提出,DeepRL 时代之前 RL 主流;Sutton-Barto 经典案例;Ch.10 actor-critic 直接由它<em>替换</em> \(G_t\) 派生。</p>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>"<em>真梯度 → 随机梯度</em>" 是 Ch.6 SGD 模板第三次出现</em>。Ch.6 L4 给"<em>用样本估梯度,RM 步长收敛</em>";Ch.7 拿它估 \(V/Q\)(TD);Ch.8 拿它优化 \(\hat v\)(MSPBE 半梯度);Ch.9 拿它估 \(\nabla J\)(REINFORCE)。<em>骨架</em>:\(\theta_{t+1} = \theta_t + \alpha \cdot (\text{single sample of } \nabla J)\)。<em>每次具体化</em> 不同:Ch.7 估的是<em>价值</em>,Ch.8 估的是<em>FA 价值</em>,Ch.9 估的是<em>策略目标</em>。同一<em>"<em>用一个样本估期望</em>"</em> 的工具用了三次,RL 数学的<em>统一性</em>。
+  </div>
+
+  <div class="callout">
+    <strong>Step 2.</strong> <em>"<em>\(G_t\) 替 \(q_\pi\)</em>" 的<em>无偏 + 高方差</em></em>。<em>无偏</em>:Ch.5 L1 已证 \(\mathbb E[G_t | s_t, a_t] = q_\pi(s_t, a_t)\)(MC return 是 \(q_\pi\) 的无偏样本)。所以 \(\nabla\ln\pi(a_t|s_t) G_t\) 是 \(\nabla J\) 的<em>无偏</em> 单样本估,SGD 收敛(Ch.6 L3)。<em>高方差</em>:\(G_t\) 是<em>整条</em> 后续 episode reward 的累积,episode 间随机性叠加 ⇒ 方差 \(\sim T\)(episode 长度)。这与 Ch.7 L1 MC vs TD 的<em>同</em> 困境:MC 高方差,TD 低方差但有偏。Ch.10 actor-critic 用 critic \(\hat q_w\) 替 \(G_t\) ⇒ TD-style 估(低方差),代价是引入<em>有偏</em>(\(\hat q\) 还在学)。
+  </div>
+
+  <div class="callout">
+    <strong>Step 3.</strong> <em>"<em>策略学习的 self-improvement</em>" 几何</em>。REINFORCE 每 episode 后,\(\theta\) 朝<em>"<em>放大好动作 + 缩小坏动作</em>"</em> 走一步。多步后<em>整体</em> \(\pi\) 漂向<em>"<em>常选 high-q 动作</em>"</em>,即<em>greedy 极限</em>。但因 softmax 永远 \(> 0\),\(\pi\) <em>永远</em> 保留<em>极小</em> 探索 ⇒ 既<em>近</em> deterministic 又<em>稳健</em>(对偶环境扰动有抗)。这是 PG 与 BOE deterministic \(\pi^*\) 的微妙差异:PG 的 \(\pi_\theta\) <em>在极限</em> 上<em>逼近</em> deterministic,但<em>有限训练</em> 后保留 stochasticity。
+  </div>
+
+  <h2>§4 数值演示:REINFORCE 学 \(\theta\) 的 distribution-bar 演化</h2>
+  <p>用 L1 玩具:状态固定,3 动作 \(\{a_1, a_2, a_3\}\),设 \(q_\pi = (1.0, 0.2, 0.5)\)("<em>a_1 最优</em>")。初 \(\theta = 0\),REINFORCE 多 episode 后 \(\pi\) 逼近 \([1, 0, 0]\):</p>
+
+  <div data-component="distribution-bar" data-config='{
+    "title": "Iter 0: π ≈ uniform(初始 θ=0)",
+    "items": [
+      {"label": "a₁ (q=1.0)", "value": 0.333},
+      {"label": "a₂ (q=0.2)", "value": 0.333},
+      {"label": "a₃ (q=0.5)", "value": 0.333}
+    ]
+  }'></div>
+
+  <div data-component="distribution-bar" data-config='{
+    "title": "Iter 50: a₁ 概率上升(REINFORCE 增 q 大动作)",
+    "items": [
+      {"label": "a₁ (q=1.0)", "value": 0.620},
+      {"label": "a₂ (q=0.2)", "value": 0.150},
+      {"label": "a₃ (q=0.5)", "value": 0.230}
+    ]
+  }'></div>
+
+  <div data-component="distribution-bar" data-config='{
+    "title": "Iter 200: 近确定性偏 a₁",
+    "items": [
+      {"label": "a₁ (q=1.0)", "value": 0.910},
+      {"label": "a₂ (q=0.2)", "value": 0.020},
+      {"label": "a₃ (q=0.5)", "value": 0.070}
+    ]
+  }'></div>
+
+  <p style="font-size:0.85rem; color:var(--color-muted);">观察:<em>(i)</em> \(\theta\) 平滑推 \(\pi\) 朝最优 \(a_1\) 集中;<em>(ii)</em> 永远不到纯 1(softmax 限制);<em>(iii)</em> 实际曲线<em>振荡</em>(高方差) —— 上图为<em>滑动平均</em> 视图。Ch.10 critic 替 \(G_t\) ⇒ 振荡显著减小。</p>
+
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"REINFORCE 既然是 PG 定理直接 SGD 落地,那它和<em>真</em> 梯度<em>同样有效</em>,只是步数多一点。"<br>
+    <strong>实际上:</strong><strong>REINFORCE <em>方差极大</em>,实际收敛远慢于"真梯度"</strong>。原因:<em>(i)</em> \(G_t\) 是<em>整条</em> 后续 reward 求和,episode 越长方差越大(\(\sim T\) 倍);<em>(ii)</em> on-policy 严格 ⇒ 老数据不能复用,采样效率低;<em>(iii)</em> 不同 episode 间 \(\nabla\ln\pi\) 方向<em>无关</em>(随机轨迹),平均 \(O(\sqrt N)\) 才收敛。<em>对比</em> DQN:replay buffer 让样本利用 100×,平均梯度更稳。<em>实测</em>:Atari 类任务,REINFORCE 收敛需 \(10^7\) episode,DQN 需 \(10^4\) episode(约 1000× 差距)。<br>
+    <strong>因为:</strong>RL 的"<em>真</em>" 梯度需<em>遍历</em> 期望;样本估<em>必然</em> 有方差。MC 风格(REINFORCE) ⇒ 高方差;TD 风格(actor-critic) ⇒ 低方差但有偏。Ch.10 给低方差版本是<em>必须</em>,REINFORCE 不是工程<em>好</em> 算法,只是<em>第一</em> 个 PG 算法。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"既然 \(G_t\) 方差大,直接<em>减一个 baseline</em>(常数 \(b\) 或 \(\hat v\))就降方差,这与<em>无偏性</em> 冲突吗?"<br>
+    <strong>实际上:</strong><strong>baseline 减<em>不</em> 改期望,只减方差</strong>。证:\(\mathbb E_{A\sim\pi(s)}[\nabla\ln\pi(A|s) \cdot b(s)] = b(s) \mathbb E_A[\nabla\ln\pi(A|s)] = b(s) \cdot \nabla \sum_a \pi(a|s) = b(s) \cdot \nabla 1 = 0\)。所以从 \(\nabla\ln\pi \cdot G_t\) 中减去 \(\nabla\ln\pi \cdot b\) 不改期望但减 \(G\) 的<em>变动幅度</em>。<em>选 \(b = \hat v(s)\)</em>(状态平均回报)⇒ \(G_t - \hat v\) <em>波动</em> 比 \(G_t\) 小很多 ⇒ 方差减很多。<em>这是</em> Ch.10 advantage actor-critic (A2C) 的<em>核心</em>:learn \(\hat v(s)\) 当 baseline,得 advantage \(A_t = G_t - \hat v(s_t)\)。<br>
+    <strong>因为:</strong>"<em>baseline 不改期望</em>" 是 \(\sum_a \pi(a|s) \nabla\ln\pi(a|s) = \nabla \sum_a \pi = 0\) 的几何 consequence。这一性质让<em>任意</em> \(b(s)\) 函数(state-only,不依赖 a)都不改期望,只要选得好(接近 \(v_\pi\))就<em>显著减方差</em>。Ch.10 把这一观察落地为 actor-critic 算法。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"REINFORCE 是 on-policy 的 ⇒ 不能用 replay buffer 复用老数据 ⇒ 严重浪费样本。"<br>
+    <strong>实际上:</strong><strong>这一<em>限制</em> 真实存在,<em>但</em> 可用<em>importance sampling</em> 缓解</strong>。On-policy 严格要求 \(a_t \sim \pi(\cdot|s_t; \theta_t)\)(当前 \(\theta\) 的策略采样)。老 \(\theta_{\mathrm{old}}\) 采的样本 ⇒ 期望失配,直接用偏差大。<em>缓解</em>:用 IS 比 \(\rho_t = \pi(a_t|s_t; \theta) / \pi(a_t|s_t; \theta_{\mathrm{old}})\) 修正,得 off-policy PG \(\nabla J = \mathbb E_{\theta_{\mathrm{old}}}[\rho_t \nabla\ln\pi q_\pi]\)。代价 = \(\rho_t\) 大时方差爆,实际工程加 clip(\(\rho_t \in [1-\epsilon, 1+\epsilon]\),即 PPO 的核心机制)。Ch.10 §10.3 讲 off-policy AC + IS。<br>
+    <strong>因为:</strong>"<em>on-policy = 数据浪费</em>" 是<em>结构</em> 限制,但 RL 工程<em>有 trick</em>。PPO(Schulman 2017)是 REINFORCE + IS clip + GAE 的<em>工程</em> 集大成,deep RL 主流之一。Ch.10 给 IS 的<em>纯</em> 形式,后续算法各加各的工程。
+  </div>
+
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> 写出 REINFORCE 的<em>更新公式</em> 与<em>伪码 5 步</em>。</summary>
+    <p><strong>A.</strong> <em>公式</em>:\(\theta_{t+1} = \theta_t + \alpha \nabla_\theta\ln\pi(a_t|s_t; \theta_t) \cdot G_t\),其中 \(G_t = \sum_{k=t+1}^T \gamma^{k-t-1} r_k\) 是 MC 回报。<em>5 步伪码</em>:<em>(1)</em> Init \(\theta_0\),设 \(\gamma, \alpha\)。<em>(2)</em> for episode = 1, 2, ...:<em>(2a)</em> 按 \(\pi(\theta)\) 采完整轨迹 \((s_0, a_0, r_1, ..., s_{T-1}, a_{T-1}, r_T)\);<em>(2b)</em> for \(t = 0, ..., T-1\):算 \(G_t\)(后向递推 \(G_T = 0; G_{t-1} = \gamma G_t + r_t\));<em>(2c)</em> for \(t = 0, ..., T-1\):\(\theta \leftarrow \theta + \alpha \nabla_\theta\ln\pi(a_t|s_t; \theta) G_t\);<em>(3)</em> 重复直到收敛。<em>关键</em>:on-policy(每 episode 必须用<em>当前</em> \(\theta\) 采),逐 \(t\) 后向求 \(G_t\)。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> 解读 \(\beta_t = q_t(s_t, a_t) / \pi(a_t|s_t; \theta_t)\) 的<em>exploration-exploitation</em> 机制。</summary>
+    <p><strong>A.</strong> 由 (9.33) \(\theta_{t+1} = \theta_t + \alpha \beta_t \nabla\pi(a_t|s_t)\)。<em>exploit</em>:\(\beta_t \propto q_t\),\(q_t\) 大(动作好) ⇒ \(\beta_t\) 大 ⇒ \(\pi(a_t|s_t)\) 增加多 ⇒ <em>偏好高价值动作</em>。<em>explore</em>:\(\beta_t \propto 1/\pi(a_t|s_t)\),低概率动作 \(a_t\) 一旦被<em>偶然</em> 选中,\(1/\pi\) 大 ⇒ \(\beta_t\) 大 ⇒ \(\pi(a_t|s_t)\) 增长被<em>放大</em> ⇒ <em>探索新动作</em>。两者<em>同公式</em> 自动出现,无需外加 ε 超参。这是 PG 比 ε-greedy <em>原生优雅</em> 的根 —— exploration 是<em>梯度公式</em> 的副产品。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> REINFORCE 的<em>主要</em> 缺点是什么?Ch.10 actor-critic 怎么解决?</summary>
+    <p><strong>A.</strong> <em>主要缺点</em>:<em>(i) 高方差</em> —— \(G_t\) 是整条后续 reward 求和,episode 间方差大(\(\sim T\));<em>(ii) on-policy 浪费</em> —— 老数据不能复用;<em>(iii) episode-update</em> —— 必须等整 episode 跑完才能算 \(G_t\),无法<em>在线</em> 更新。<em>Ch.10 解决</em>:<em>(a) critic 网络 \(\hat q_w\) 替 \(G_t\)</em>(教材 §10.1):TD bootstrap 估,1-step 而非整 episode ⇒ <em>低方差 + 在线</em>;<em>(b) advantage \(A = q - v\) 进一步减方差</em>(§10.2 A2C);<em>(c) IS 让数据可重用</em>(§10.3 off-policy AC,PPO 类前身);<em>(d) deterministic policy</em>(§10.4 DPG) 给连续动作严格 \(\arg\max\)。<em>Ch.10 把 Ch.8 critic 与 Ch.9 actor 合一,集大成</em>。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=49&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=49" target="_blank">YouTube 备链</a></p>
+
+  <h3>下一章预告:Ch.10 Actor-Critic</h3>
+  <p>Ch.9 用<em>"<em>策略 = 函数 \(\pi_\theta\) + PG 定理 + REINFORCE</em>"</em> 走完<em>policy-based</em> 主线,但 REINFORCE 的<em>方差大</em> 是<em>主要敌人</em>。<strong>Ch.10</strong> 给<em>整合</em> 方案:用 Ch.8 学 \(\hat q_w\)(critic),用 Ch.9 学 \(\pi_\theta\)(actor),<em>同时</em> 训练。REINFORCE 用 \(G_t\) 估 \(q_\pi\),方差很大;Ch.10 用 critic 网络估 \(q_\pi\) —— 这就是 actor-critic。具体:\(\theta \leftarrow \theta + \alpha \nabla\ln\pi(a_t|s_t; \theta) \hat q_w(s_t, a_t)\)(critic 替 \(G_t\),低方差);\(w \leftarrow w + \beta \delta_t \nabla\hat q_w\)(critic 用 TD 学,Ch.8 复用)。L1-L5 渐进:简单 AC → A2C(advantage)→ off-policy AC + IS → DPG(deterministic for continuous)→ 总结。Ch.10 是 deep RL 现代算法(PPO、SAC、DDPG)的<em>直接前身</em>。</p>
+
+  <nav class="lesson-nav">
+    <a href="lesson-04.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="../ch10/index.html">Next →</a>
+  </nav>
+</div>
+
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>
