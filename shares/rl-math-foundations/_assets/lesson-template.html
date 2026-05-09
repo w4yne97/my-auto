@@ -33,6 +33,12 @@
   </ul>
 
   <!-- §3 关键公式 + 推导 -->
+  <!--
+    LaTeX 引号注意:data-config='...' 用单引号包裹,任何字面单引号 ' (如 LaTeX prime: s', v_π(s'))
+    必须写成 HTML 实体 &#39;,否则 KaTeX 会渲染成 double prime ″。
+    例:"\\sum_{s&#39;,r} p(s&#39;,r|s,a)[r + \\gamma v_\\pi(s&#39;)]"
+    LaTeX 反斜杠在 JSON 里要写两个 \\
+  -->
   <h2>§3 关键公式 + 推导</h2>
   <p>本节核心公式:</p>
   <div data-component="equation-walkthrough" data-config='{
