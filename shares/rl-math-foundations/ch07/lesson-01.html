@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>时序差分(P1):动机示例 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch07-l01" data-est-minutes="20">
+<div class="container">
+
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.7 / Lesson 1</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <p class="kicker">Bilibili #29 · YouTube #29 · Book §7.1.1 pp. 125-128</p>
+  <h1>L1: TD Motivating Example<small style="color:var(--color-muted); font-weight:400;">  (TD 动机:从均值估计跨到 Bellman 估计)</small></h1>
+
+  <h2>§1 Why this lesson</h2>
+  <p>Ch.6 L7 收尾时把 RM/SGD 的尾巴交给 Ch.7:"<em>RM 给数学,Ch.7 把它套到 Bellman 算子的固定点上,生出第一族真正能在线运行的 RL 算法族。</em>" 本节(教材 §7.1.1)做<strong>三件事</strong>:<strong>(1)</strong> 用<em>三个递推</em> 把"<em>从均值估计 → 估 \(\mathbb E[R]\) → 估 \(\mathbb E[R + \gamma V(s&#39;)]\)</em>" 这一阶梯铺给读者看;<strong>(2)</strong> 引入<em>动机问题</em>:为什么 MC 已经能估期望,我们还要 TD?<strong>(3)</strong> 直觉地说出 TD 的关键差别:<strong>不等 episode 结束</strong>,只用<em>一步</em> 数据 \((s_t, r_{t+1}, s_{t+1})\) 就能改 \(V(s_t)\)。</p>
+  <p>核心 takeaway:<strong>TD 是<em>带 bootstrap 的均值估计</em></strong>。Ch.5 MC 用 \(G_t\)(整条 return)估 \(v_\pi(s_t)\),要等到 episode 结束;TD 用<em>一步样本 \(r_{t+1}\) 加上对未来的当前估计 \(\gamma V(s_{t+1})\)</em> 当 target,每一步就能更新。<em>"<em>把估计的尾巴接到自己的估计上</em>"</em> 即 bootstrap,正是 TD 与 MC 的<em>结构差异</em>,也是 §7.1.2 引入 TD error \(\delta_t\) 的根。</p>
+
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>问题 1:估 \(\mathbb E[X]\)(教材 §7.1.1 (7.1))</strong>。Ch.6 L1 给的递推 \(w_{k+1} = w_k - \alpha_k(w_k - x_k)\):每来一个 \(x_k\) 就一步更新。RM 框架下收敛到 \(\mathbb E[X]\)。</li>
+    <li><strong>问题 2:估 \(\mathbb E[v(X)]\)(教材 (7.2))</strong>。把 \(x_k\) 替成 \(v(x_k)\):\(w_{k+1} = w_k - \alpha_k(w_k - v(x_k))\)。同样 RM 思路,只是被估对象更复杂(把"<em>样本</em>" 改成"<em>样本的函数</em>")。</li>
+    <li><strong>问题 3:估 \(\mathbb E[R + \gamma v(X&#39;)]\)(教材 (7.3))</strong>。target 含<em>另一个状态的当前估计 \(v(X&#39;)\)</em> ⇒ 即<em>bootstrap</em>。这是从"<em>独立样本均值</em>" 跳到"<em>Bellman 风格的固定点估计</em>" 的<em>关键一跨</em>。</li>
+    <li><strong>关键差别:bootstrap (自举)</strong>。MC target = 真采样的 \(G_t\)(无 bias);TD target = \(r_{t+1} + \gamma V(s_{t+1})\),其中 \(V(s_{t+1})\) 是<em>当前估计</em>(有 bias,但方差小)。</li>
+    <li><strong>"online" 含义</strong>。MC 在 episode 末才一次性算所有 \(G_t\);TD 在<em>每一步</em> 立刻改 \(V(s_t)\)。<em>memory 与延迟都更友好</em>,且适配持续型任务(无明确 episode 终点)。</li>
+    <li><strong>Ch.7 整章主线(预告)</strong>。L2 给出 TD(0) 与 \(\delta_t\);L3 用 RM 证收敛;L4 把 TD 推广到 \(q\) → Sarsa;L5 加 \(n\) 步与 expected 变种;L6-L7 把 sampled 改 max → Q-learning;L8 总结统一视角。</li>
+  </ul>
+
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节核心是<strong>三个递推阶梯</strong>:从估 \(\mathbb E[X]\)、到估 \(\mathbb E[v(X)]\)、再到估 \(\mathbb E[R + \gamma v(X&#39;)]\)。第三个就是 TD 的种子。</p>
+
+  <p><strong>公式:三阶梯递推(教材 (7.1)-(7.3))</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\text{(7.1) } w_{k+1} = w_k - \\alpha_k(w_k - x_k);\\quad \\text{(7.2) } w_{k+1} = w_k - \\alpha_k(w_k - v(x_k));\\quad \\text{(7.3) } w_{k+1} = w_k - \\alpha_k\\big(w_k - [r_{k+1} + \\gamma v(x_{k+1})]\\big)",
+    "annotations": [
+      {"key": "step1", "label": "(7.1) 估 E[X]", "description": "Ch.6 L1 已熟悉。target = 单样本 x_k;RM 框架下收敛到 E[X]。这是&#39;增量均值估计&#39; 的祖先。"},
+      {"key": "step2", "label": "(7.2) 估 E[v(X)]", "description": "把样本 x_k 换成函数值 v(x_k)。结构没变,只是被估对象从&#39;数&#39; 变成了&#39;函数的期望&#39;。仍是 RM。"},
+      {"key": "step3", "label": "(7.3) 引入 bootstrap", "description": "target = r_{k+1} + γ v(x_{k+1})。问题:v(x_{k+1}) 不是真实样本,而是&#39;另一个状态上的当前估计&#39;。这就是 bootstrap —— 估计去喂自己。"},
+      {"key": "td_seed", "label": "TD 种子", "description": "把 (7.3) 中的 v 改写成对状态的估计 V(·),x_k 换成 s_t,即得 TD(0): V(s_t) ← V(s_t) − α(V(s_t) − [r_{t+1} + γ V(s_{t+1})])。L2 把这个&#39;种子&#39; 培成完整算法。"},
+      {"key": "ch6_link", "label": "对 Ch.6 的延续", "description": "三阶梯都是 RM 形态 w_{k+1} = w_k − α g̃,差别只在 g̃ 的来源。这正是 Ch.6 L7 takeaway [T1]:&#39;RL 算法多样性在 g̃ 怎么采&#39;。"}
+    ]
+  }'></div>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>为什么 (7.3) 是<em>跨越</em>,不是顺势</em>。(7.1)、(7.2) 中 \(x_k\) 是<em>真采样</em>,无偏。(7.3) 中 target 含 \(v(x_{k+1})\) —— 它是<em>当前对 \(x_{k+1}\) 的估计</em>,本身就有误差。把"<em>带误差的估计</em>" 当 target 来更新,在朴素直觉看似乎"<em>错误传播</em>",但 RM 理论会保证:只要 \(\alpha_k\) 满足两条件,\(V\) 仍能收敛到真 \(v_\pi\)。L3 给严证。
+  </div>
+
+  <div class="callout">
+    <strong>Step 2.</strong> <em>"<em>用 (7.3) 估 \(v_\pi(s)\)</em>" 的对应</em>。Bellman 期望方程 \(v_\pi(s) = \mathbb E_\pi[R_{t+1} + \gamma v_\pi(S_{t+1}) \mid S_t = s]\)。所以"<em>估 \(\mathbb E[R + \gamma v(X&#39;)]\) 在 \(s\) 处的值</em>"<em>恰好</em> 是估 \(v_\pi(s)\)。把 (7.3) 用在 \(s_t\) 处,target 即是 Bellman 右端的一次单样本估计 —— 这就是 TD(0)。L2 把它写出。
+  </div>
+
+  <div class="callout">
+    <strong>Step 3.</strong> <em>MC vs TD 的<em>第一对比</em></em>。MC:用 \(G_t = R_{t+1} + \gamma R_{t+2} + \ldots + \gamma^{T-t-1} R_T\) 当 target,需要等 episode 末。TD:用 \(R_{t+1} + \gamma V(s_{t+1})\) 当 target,只看一步。<em>MC target 无 bias、方差大</em>;<em>TD target 有 bias(因 \(V\) 不准)、方差小</em>。这条 bias-variance trade-off 是 Ch.7 全章的<em>主旋律</em>,L5 \(n\)-step 把这条轴上每一点都给出来。
+  </div>
+
+  <h2>§4 Grid-world 例子</h2>
+  <p>用作者的 5×5 网格直观理解"<em>等到 episode 结束 vs 一步更新</em>"。target=(3,2),forbidden={(1,1),(2,1),(2,2),(1,3),(3,3)}。设当前 episode 从 (0,0) 出发沿 policy 走到 target,共 5 步:</p>
+  <div data-component="gridworld" id="gw-ch07-l01" data-config='{
+    "rows": 5, "cols": 5,
+    "target": [3, 2],
+    "forbidden": [[1,1],[2,1],[2,2],[1,3],[3,3]],
+    "policy": [
+      [{"a":"down"},{"a":"down"},{"a":"down"},{"a":"left"},{"a":"left"}],
+      [{"a":"down"},{"a":""},{"a":"down"},{"a":""},{"a":"left"}],
+      [{"a":"down"},{"a":""},{"a":""},{"a":"down"},{"a":"left"}],
+      [{"a":"right"},{"a":"right"},{"a":""},{"a":""},{"a":"left"}],
+      [{"a":"up"},{"a":"up"},{"a":"up"},{"a":"up"},{"a":"up"}]
+    ],
+    "trajectory": [[0,0],[1,0],[2,0],[3,0],[3,1],[3,2]]
+  }'></div>
+  <p style="font-size:0.85rem; color:var(--color-muted);"><em>MC 视角</em>:走完 5 步、拿到 \(R_1, \ldots, R_5\) 后,才一次性算 \(G_0 = R_1 + \gamma R_2 + \ldots + \gamma^4 R_5\),然后更新 \(V(s_0)\)。<em>TD 视角</em>:第 1 步走完(到 (1,0))就能用 \(R_1 + \gamma V((1,0))\) 当 target,立刻更新 \(V((0,0))\);第 2 步类似改 \(V((1,0))\);整条轨迹走完时,5 个状态各自被改了一次。<em>"<em>不等 episode</em>" 意味着 5 次更新而非 1 次</em>,信息利用率高。</p>
+
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"既然 MC 无 bias、TD 有 bias,MC 应该总是更优。"<br>
+    <strong>实际上:</strong><strong>方差才是 RL 的真敌人</strong>。MC 的 \(G_t\) 是<em>整条轨迹的累加</em>,方差随 episode 长度爆炸。TD 用 \(r + \gamma V(s&#39;)\) 把<em>未来的不确定性</em> 压缩成<em>一步 reward + 当前估计</em>,方差小很多。在长 horizon 任务里 TD 几乎总比 MC 收敛快。<br>
+    <strong>因为:</strong>"<em>无偏 + 高方差</em>" 与"<em>低偏 + 低方差</em>" 是经典 trade-off。RL 的目标不是"<em>消 bias</em>" 而是"<em>消 总误差</em>"。L5 \(n\)-step 把"<em>一步 → 整条</em>" 中间所有可能都给你 ——<em>选哪一档</em> 才是工程艺术。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"TD 的 bootstrap 是<em>错误循环</em>:用错的估计去校准错的估计。"<br>
+    <strong>实际上:</strong><strong>RM 理论保证 bootstrap 仍能收敛到真值</strong>。关键在 (7.3) 在期望意义下是对 \(v_\pi(s)\) 的<em>无偏 RM 步</em>(条件期望取出 \(\mathbb E[R + \gamma v(X&#39;)] = v_\pi(s)\)),只要 \(\alpha_k\) 满足两条件、\(V\) 初始值有界,长期能收敛。L3 详细给。<br>
+    <strong>因为:</strong>"<em>每步 \(V\) 不准</em>" 不等于"<em>更新平均后不准</em>"。RM 的核心思想是<em>用噪声样本沿"<em>正确方向</em>" 持续推动,长期平均后误差消失</em> —— bootstrap 只是把"<em>正确方向</em>" 定义到了"<em>当前估计与下一步估计的差</em>" 上,这正是 \(\delta_t\) 的几何含义。
+  </div>
+
+  <h2>§6 自检 + 视频 + 下一节</h2>
+  <details>
+    <summary><strong>Q1.</strong> 把 (7.3) 的 target 改写成 \(R + \gamma v(X&#39;)\),为什么这就是<em>Bellman 方程的右端</em>?</summary>
+    <p><strong>A.</strong> Bellman 期望方程:\(v_\pi(s) = \mathbb E_\pi[R_{t+1} + \gamma v_\pi(S_{t+1}) \mid S_t = s]\)。(7.3) 的 target 期望就是右端:\(\mathbb E[R + \gamma v(X&#39;)]\)。所以"<em>估 (7.3) 在 \(s\) 处的值</em>" = "<em>估 \(v_\pi(s)\)</em>"。TD(0) 即把 (7.3) 部署到 \(s_t\) 处:每一步把 target 与当前估计的差乘 \(\alpha\) 加到 \(V(s_t)\)。这就是 L2 \(\delta_t\) 公式的直接推导。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> MC 与 TD 都在估 \(v_\pi\),它们的<em>更新时机</em> 与<em>target 形态</em> 各是什么?</summary>
+    <p><strong>A.</strong> MC:<em>更新时机</em> 在 episode 末;<em>target</em> 是 \(G_t\)(从 \(t\) 起的真实累计 reward)。无 bias,方差大。TD(0):<em>更新时机</em> 在每个 \((s_t, r_{t+1}, s_{t+1})\) 之后立刻;<em>target</em> 是 \(r_{t+1} + \gamma V(s_{t+1})\)(一步 reward + 下一状态当前估计)。有 bias(因 \(V\) 不准),方差小。<em>核心结构差异:</em>bootstrap。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=29&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=29" target="_blank">YouTube 备链</a></p>
+
+  <h3>下一节预告</h3>
+  <p>本节用三阶梯铺好"<em>从均值到 Bellman</em>" 的路径。<strong>L2(教材 §7.1.2)</strong> 把 (7.3) 正式写成 TD(0) 算法,并引入<em>整个 Ch.7-Ch.10 最被引用的表达式</em>:<strong>TD error \(\delta_t = r_{t+1} + \gamma V(s_{t+1}) - V(s_t)\)</strong>。掌握 \(\delta_t\) 后,Sarsa、Expected Sarsa、Q-learning 都只是 \(\delta_t\) 中"<em>下一状态 value 怎么算</em>" 的不同选择 —— 这是 Ch.7 全章的<em>骨架</em>。</p>
+
+  <nav class="lesson-nav">
+    <a href="../ch06/lesson-07.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-02.html">Next →</a>
+  </nav>
+</div>
+
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>
