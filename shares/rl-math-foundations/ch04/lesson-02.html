@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>值迭代与策略迭代(P2):策略迭代 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch04-l02" data-est-minutes="30">
+<div class="container">
+
+  <!-- Top nav -->
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.4 / Lesson 2</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <!-- Header -->
+  <p class="kicker">Bilibili #14 · YouTube #14 · Book §4.2 pp. 62-70</p>
+  <h1>L2: Policy Iteration<small style="color:var(--color-muted); font-weight:400;">  (策略迭代)</small></h1>
+
+  <!-- §1 Why this lesson -->
+  <h2>§1 Why this lesson</h2>
+  <p>L1 的 VI 在每轮里"<em>同时</em>" 更新 \(v\) 和 \(\pi\),中途的 \(v_k\) <strong>不是</strong> state value(只是 BOE 算子的迭代点)。这有个工程缺陷:如果你想在 \(k = 100\) 停下来"<em>看看 \(\pi_{100}\) 到底有多好</em>",你拿到的 \(v_{100}\) 不能<em>严格</em> 当作 \(\pi_{100}\) 的 value —— 它还在路上。L1 末段的 Q2 已经埋下伏笔:<em>能不能在每轮都把 \(\pi_k\) 评估到位</em>,让中途的 \(v\) 真正具有"\(\pi_k\) 的 state value" 含义?</p>
+  <p>本节(教材 §4.2,pp. 62-70)给出<strong>另一条路径</strong>:Policy Iteration (PI)。每轮外循环干两件事:<strong>(1) PE</strong> 解 Bellman 方程 \(v_{\pi_k} = r_{\pi_k} + \gamma P_{\pi_k} v_{\pi_k}\)(Ch.2 L4 的闭式或迭代);<strong>(2) PI step</strong> 贪心 \(\pi_{k+1} = \arg\max_\pi (r_\pi + \gamma P_\pi v_{\pi_k})\)。三件核心结论:<strong>(a) 单调改进 (Lemma 4.1)</strong> \(v_{\pi_{k+1}}(s) \ge v_{\pi_k}(s) \forall s\);<strong>(b) 收敛 (Theorem 4.1)</strong> \(\{v_{\pi_k}\}\) 单调上升且被 \(v^*\) 上界 \(\Rightarrow\) 收敛到 \(v^*\);<strong>(c) 5×5 grid 上只需 \(\sim 10\) 外循环</strong> —— 远比 VI 的 \(\sim 65\) 步少,代价是每外步要解一个完整 Bellman 方程。PI 是"少而贵"、VI 是"多而便宜"。这套"两层循环" 是<strong>现代 RL 算法的祖型</strong> —— Ch.5 MC Basic、Ch.7 SARSA / Q-learning、Ch.10 actor-critic 都在 GPI 框架内活动。</p>
+
+  <!-- §2 核心定义 -->
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>Policy Iteration (PI;Algorithm 4.2,p. 66)</strong>:输入<em>任意初始策略</em> \(\pi_0\)。每轮外循环 \(k\) 做<strong>(PE)</strong> 解 \(v_{\pi_k} = r_{\pi_k} + \gamma P_{\pi_k} v_{\pi_k}\) + <strong>(PIstep)</strong> \(\pi_{k+1} = \arg\max_\pi (r_\pi + \gamma P_\pi v_{\pi_k})\),直到 \(\pi_{k+1} = \pi_k\) 或 \(\|v_{\pi_{k+1}} - v_{\pi_k}\| < \epsilon\)。</li>
+    <li><strong>Policy Evaluation (PE)</strong>:有两个等价做法。<em>闭式</em> \(v_{\pi_k} = (I - \gamma P_{\pi_k})^{-1} r_{\pi_k}\)(理论用,\(O(n^3)\));<em>迭代</em> \(v_{\pi_k}^{(j+1)} = r_{\pi_k} + \gamma P_{\pi_k} v_{\pi_k}^{(j)}\)(实践用,从 \(v^{(0)}\) 任取出发,\(j \to \infty\) 收敛)。这是 Ch.2 L4 的迭代法被<strong>嵌入</strong>到 PI 的内循环。</li>
+    <li><strong>Policy Improvement (PI step)</strong>:\(\pi_{k+1}(s) = \arg\max_a q_{\pi_k}(s, a)\),其中 \(q_{\pi_k}(s, a) = \sum_r p(r\mid s,a) r + \gamma \sum_{s&#39;} p(s&#39;\mid s,a) v_{\pi_k}(s&#39;)\)。注意这里的 \(q_{\pi_k}\) <strong>是真正的 action value</strong>(因为 \(v_{\pi_k}\) 是真正的 state value),不像 VI 中的 \(q_k\) 只是中间量。</li>
+    <li><strong>Lemma 4.1 (Policy improvement,p. 63)</strong>:若 \(\pi_{k+1} = \arg\max_\pi (r_\pi + \gamma P_\pi v_{\pi_k})\),则 \(v_{\pi_{k+1}} \ge v_{\pi_k}\)(逐元素)。<em>翻译</em>:贪心改进出来的新策略,严格意义上<em>每个状态</em> 都不比旧策略差。这是 PI 的"<strong>monotonic improvement</strong>" 保证。</li>
+    <li><strong>Theorem 4.1 (Convergence of PI,p. 64)</strong>:PI 生成的 \(\{v_{\pi_k}\}\) 收敛到 \(v^*\),\(\{\pi_k\}\) 收敛到一个最优策略。<em>证明思路</em>:Lemma 4.1 给单调上升,\(v_{\pi_k} \le v^*\) 给上界,单调有界数列必收敛(monotone convergence theorem);极限恰是 \(v^*\) 因为 PE+PI step 一起就是 BOE 算子的"加速版"(Box 4.2)。</li>
+    <li><strong>PI 收敛<em>不慢于</em> VI(Box 4.2)</strong>:用同样的 \(v_0 = v_{\pi_0}\) 起点,PI 的 \(v_{\pi_k}\) 和 VI 的 \(v_k\) 满足 \(v_k \le v_{\pi_k} \le v^*\) —— 因为 PI 的内循环把 PE 跑到 \(\infty\) 步,而 VI 只跑 1 步。<em>实操观察</em>:对 5×5 grid,VI 需 \(\sim 65\) 外步,PI 只需 \(\sim 10\) 外步;但 PI 每外步代价远大,总壁钟时间不必更少。</li>
+    <li><strong>PI 的两个空间观察(教材 §4.2.3 末段)</strong>:<strong>(a) 信息从 target 向外辐射</strong>:近 target 格子先在早期外循环里找到最优朝向(因为 PE 立即把"近格" 的 \(v_\pi\) 算到位),远 target 格子要等近格<em>有了正向 v</em> 之后才能算出有意义的 q-table;<strong>(b) \(v^*\) 空间分布:近 target 值大、远 target 值小</strong>(\(\gamma\) 折扣使远期 reward 缩水)。Figure 4.4 给完整 11 帧演化。</li>
+  </ul>
+
+  <!-- §3 关键公式 + 推导 -->
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节核心两个证明:<strong>Lemma 4.1 单调改进</strong>(\(v_{\pi_{k+1}} \ge v_{\pi_k}\))和 <strong>Theorem 4.1 PI 收敛</strong>。这两个是 PI 算法<em>能用</em> 的全部理论保障。</p>
+
+  <p><strong>公式 1:PI 的两步拆解(Algorithm 4.2 / Box 4.1 / Box 4.2)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\text{PE: } v_{\\pi_k} = r_{\\pi_k} + \\gamma P_{\\pi_k} v_{\\pi_k}; \\quad \\text{PI: } \\pi_{k+1} = \\arg\\max_\\pi (r_\\pi + \\gamma P_\\pi v_{\\pi_k})",
+    "annotations": [
+      {"key": "PE_eq", "label": "PE: 解 Bellman", "description": "策略评估。给定 π_k,解线性系统 v=r_{π_k}+γP_{π_k}v 得 v_{π_k}。两条路:闭式 (I-γP)^{-1}r 或迭代 v^{(j+1)}=r+γPv^{(j)}。"},
+      {"key": "PI_eq", "label": "PI: greedy w.r.t. v_{π_k}", "description": "策略改进。用刚算出的 v_{π_k} 当&#39;承诺&#39;,在每个 s 上贪心选 q_{π_k}(s,a)=r(s,a)+γΣp(s&#39;|s,a)v_{π_k}(s&#39;) 最大的 a。"},
+      {"key": "v_is_real", "label": "v_{π_k} 是真 state value", "description": "对比 VI:VI 的 v_k 不是任何 π 的 v_π;PI 的 v_{π_k} 是 π_k 的真 state value(因为 PE 把它解到位)。这是 PI 与 VI 设计哲学的根本差别。"},
+      {"key": "Lemma41", "label": "Lemma 4.1", "description": "贪心改进保证 v_{π_{k+1}}≥v_{π_k} 逐元素成立 —— 每轮策略&#39;只升不降&#39;。"},
+      {"key": "Thm41", "label": "Theorem 4.1", "description": "{v_{π_k}} 单调上升 + 被 v* 上界 + monotone convergence theorem ⇒ 收敛到 v*。"}
+    ]
+  }'></div>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>Lemma 4.1 单调改进证明(教材 Box 4.1)</em>。两个 Bellman 方程:\(v_{\pi_k} = r_{\pi_k} + \gamma P_{\pi_k} v_{\pi_k}\),\(v_{\pi_{k+1}} = r_{\pi_{k+1}} + \gamma P_{\pi_{k+1}} v_{\pi_{k+1}}\)。由 \(\pi_{k+1} = \arg\max_\pi (r_\pi + \gamma P_\pi v_{\pi_k})\),取 \(\pi = \pi_k\) 作竞争者,\(r_{\pi_{k+1}} + \gamma P_{\pi_{k+1}} v_{\pi_k} \ge r_{\pi_k} + \gamma P_{\pi_k} v_{\pi_k} = v_{\pi_k}\)。所以 \(v_{\pi_k} - v_{\pi_{k+1}} \le (r_{\pi_{k+1}} + \gamma P_{\pi_{k+1}} v_{\pi_k}) - v_{\pi_{k+1}} = \gamma P_{\pi_{k+1}} (v_{\pi_k} - v_{\pi_{k+1}})\)。
+  </div>
+  <div class="callout">
+    <strong>Step 2.</strong> <em>Lemma 4.1 收尾</em>。由 Step 1 的不等式迭代:\(v_{\pi_k} - v_{\pi_{k+1}} \le \gamma^n P_{\pi_{k+1}}^n (v_{\pi_k} - v_{\pi_{k+1}})\)。\(P_{\pi_{k+1}}^n\) 是非负行随机矩阵(每行和 \(\le 1\)),\(\gamma^n \to 0\),所以右端 \(\to 0\),从而 \(v_{\pi_k} - v_{\pi_{k+1}} \le 0\),即 \(v_{\pi_{k+1}} \ge v_{\pi_k}\)。<em>关键洞察</em>:贪心改进借助"<strong>同一个 \(v_{\pi_k}\) 当评判标尺</strong>" 在 PE 与 PI 之间架桥,使 PI 步在该 \(v_{\pi_k}\) 度量下"无可挑剔",再用 Bellman 方程把"PI 评判标尺下的不等式" 翻译成"\(v_\pi\) 自己的不等式"。
+  </div>
+  <div class="callout">
+    <strong>Step 3.</strong> <em>Theorem 4.1 收敛性</em>。Lemma 4.1 给 \(v_{\pi_0} \le v_{\pi_1} \le \dots \le v^*\) 单调上升 + 被 \(v^*\) 上界,monotone convergence theorem 给收敛到某 \(v_\infty\)。再证 \(v_\infty = v^*\):取 \(k \to \infty\),Bellman + 改进步给 \(v_\infty\) 满足 BOE,Ch.3 BOE 解唯一 \(\Rightarrow v_\infty = v^*\)。
+  </div>
+  <div class="callout">
+    <strong>Step 4.</strong> <em>PI vs VI 收敛速率(Box 4.2 核心洞察)</em>。同样从 \(v_0 = v_{\pi_0}\) 起步,可以证 \(v_k \le v_{\pi_k} \le v^*\) for all \(k\)(归纳:\(k = 0\) 取等;假设第 \(k\) 步成立,推第 \(k+1\) 步用 Lemma 4.1 + \(\arg\max\) 性质)。这告诉你<strong>PI 比 VI 在数值上更"靠近" \(v^*\)</strong> —— 因为 PI 的 PE 内循环跑了 \(\infty\) 步,而 VI 只跑 1 步。直觉:PI <em>充分利用</em>了"已知 \(\pi_k\) 后 \(v_\pi\) 是个线性系统能直接解" 这个事实;VI 假装不知道、只走一步。代价:PE 解线性系统贵。
+  </div>
+
+  <!-- §4 Grid-world 例子 -->
+  <h2>§4 Grid-world 实例化</h2>
+  <p>用 5×5 grid 看 PI 怎样从一个"<em>糟糕</em>" 的 \(\pi_0\)(全部&#39;stay&#39;,\(v_{\pi_0}\) 全 0)演化到 \(\pi^*\)。target = \((3, 2)\),forbidden = \(\{(1,1),(2,1),(2,2),(1,3),(3,3)\}\),\(r_\text{target} = +1\)、\(r_\text{forbidden} = -10\)、\(r_\text{boundary} = -1\)、\(r_\text{other} = 0\)、\(\gamma = 0.9\)(参考教材 §4.2.3 "more complicated example",Figure 4.4)。</p>
+
+  <p><strong>PI 的两层循环结构</strong> —— 这是本节最关键的可视化。我们用两个 iteration-stepper:<em>外循环</em> 显示 \(\pi_k \to \pi_{k+1}\) 的 grid 演化(箭头 + 热图同步动);<em>内循环</em> 单独演示一次 PE 的 \(v_{\pi_k}^{(j)} \to v_{\pi_k}\) 收敛过程(固定 \(\pi_k = \pi_3\),展示 \(j = 0, 1, \dots\) 直到收敛)。</p>
+
+  <h3>外循环:\(\pi_k\) 的演化(Figure 4.4 (a)-(h))</h3>
+  <div data-component="gridworld" id="gw-ch04-l02-outer" data-config='{
+    "rows": 5, "cols": 5,
+    "target": [3, 2],
+    "forbidden": [[1,1],[2,1],[2,2],[1,3],[3,3]],
+    "policy": [
+      ["·","·","·","·","·"],
+      ["·","·","·","·","·"],
+      ["·","·","·","·","·"],
+      ["·","·","·","·","·"],
+      ["·","·","·","·","·"]
+    ],
+    "heatmap": [
+      [0,0,0,0,0],
+      [0,0,0,0,0],
+      [0,0,0,0,0],
+      [0,0,0,0,0],
+      [0,0,0,0,0]
+    ]
+  }'></div>
+
+  <div data-component="iteration-stepper" data-config='{
+    "linked-gridworld": "#gw-ch04-l02-outer",
+    "steps": [
+      {
+        "label": "k=0  π_0 = 全部 stay,v_{π_0} ≈ 0",
+        "patch": {
+          "policy": [
+            ["·","·","·","·","·"],
+            ["·","·","·","·","·"],
+            ["·","·","·","·","·"],
+            ["·","·","·","·","·"],
+            ["·","·","·","·","·"]
+          ],
+          "heatmap": [
+            [0,0,0,0,0],
+            [0,0,0,0,0],
+            [0,0,0,0,0],
+            [0,0,0,0,0],
+            [0,0,0,0,0]
+          ]
+        },
+        "note": "起点:全部 stay 策略,所有 r=0(包括 target,因为 stay≠拿 target reward) ⇒ v_{π_0}=0。一个糟糕的初始策略,演示 PI 能不能从这里恢复。"
+      },
+      {
+        "label": "k=1  π_1: 只在 target 邻居有方向",
+        "patch": {
+          "policy": [
+            ["·","·","·","·","·"],
+            ["·","","·","","·"],
+            ["·","","","↓","·"],
+            ["·","→","·","←","·"],
+            ["·","·","↑","·","·"]
+          ],
+          "heatmap": [
+            [0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0],
+            [0, 0, 0, 1.0, 0],
+            [0, 1.0, 1.0, 0, 0],
+            [0, 0, 1.0, 0, 0]
+          ]
+        },
+        "note": "PE 把 π_0 评估为 v=0;PI step 算 q_{π_0}(s,a) 然后 arg max。target 4-邻居的&#39;朝 target&#39; 动作 q=+1(直接拿 target reward),其他动作 q=0;邻居被改向 target,π_1 在邻居拿 v_{π_1}=1。远格还是 stay 因为 q 全 0、arg max 任选。"
+      },
+      {
+        "label": "k=2  扩散到 2-格邻居",
+        "patch": {
+          "policy": [
+            ["·","·","·","·","·"],
+            ["·","","→","","↓"],
+            ["·","→","","↓","↓"],
+            ["·","→","·","←","↓"],
+            ["·","→","↑","↑","←"]
+          ],
+          "heatmap": [
+            [0,    0,    0,    0,    0   ],
+            [0,    0,    0.9,  0,    0.9 ],
+            [0,    0.9,  0,    1.9,  1.9 ],
+            [0,    1.9,  1.0,  1.9,  1.9 ],
+            [0,    1.9,  1.9,  1.9,  0.9 ]
+          ]
+        },
+        "note": "PE(π_1) 让 1-格邻居获得 v_{π_1}=1,2-格邻居获得 0+γ·1=0.9。PI step 重算 q,2-格邻居首次被改向&#39;朝 1-格邻居&#39;。注意 π 在远格仍未稳。"
+      },
+      {
+        "label": "k=5  大部分格已朝向 target",
+        "patch": {
+          "policy": [
+            ["→","→","→","↓","↓"],
+            ["↑","","→","","↓"],
+            ["↑","→","","↓","↓"],
+            ["→","→","·","←","←"],
+            ["→","→","↑","↑","←"]
+          ],
+          "heatmap": [
+            [3.20, 3.55, 3.95, 4.39, 4.78],
+            [2.88, 0,    4.39, 0,    5.31],
+            [2.59, 2.88, 0,    5.90, 5.90],
+            [2.88, 4.39, 7.29, 0,    5.31],
+            [3.20, 4.78, 5.90, 4.78, 4.31]
+          ]
+        },
+        "note": "k=5 时 π_5 已经几乎站定。注意 forbidden 在 (1,1)、(2,1)、(2,2)、(1,3)、(3,3) 形成的&#39;墙&#39;,π 选择从外圈绕 (因 r_forbidden=-10 太重不敢穿)。"
+      },
+      {
+        "label": "k=10  收敛到 π*,v_{π*}",
+        "patch": {
+          "policy": [
+            ["→","→","→","↓","↓"],
+            ["↑","","→","","↓"],
+            ["↑","→","","↓","↓"],
+            ["→","→","·","←","←"],
+            ["→","→","↑","↑","←"]
+          ],
+          "heatmap": [
+            [3.50, 3.90, 4.30, 4.80, 5.30],
+            [3.10, 0,    4.80, 0,    5.90],
+            [2.80, 2.50, 0,    5.90, 6.60],
+            [2.50, 7.30, 10.0, 7.30, 5.90],
+            [2.30, 5.90, 9.00, 6.60, 5.30]
+          ]
+        },
+        "note": "对应 Figure 4.4(h)。π_10 与 π_9 重合,算法停。注意此 v* 跟 L1 §4 的 v* 不同 —— L1 用 r_forbidden=-1,这里用 -10,Theorem 3.6 不适用(非仿射变换),π* 不同。"
+      }
+    ]
+  }'></div>
+
+  <p><strong>外循环只用 \(\sim 10\) 步</strong>就到 \(\pi^*\) —— 远比 VI 的 \(\sim 65\) 步少。代价是每外步要解一个 25 维线性系统(或跑很多内循环步)。</p>
+
+  <h3>内循环:一次 PE 的迭代过程(以 \(\pi_3\) 为例)</h3>
+  <p>PE 是 PI 的<strong>嵌套迭代</strong>。固定 \(\pi_3\),从 \(v^{(0)} = 0\) 起跑迭代法 \(v^{(j+1)} = r_{\pi_3} + \gamma P_{\pi_3} v^{(j)}\)(Ch.2 L4 公式 (2.11)),看 \(v^{(j)}\) 怎样在<strong>固定 \(\pi_3\)</strong> 下收敛到 \(v_{\pi_3}\)。本动画在 5×5 grid 上展示 \(j = 0, 1, 2, 5, 20\) 的 \(v^{(j)}\) 热图。</p>
+
+  <div data-component="gridworld" id="gw-ch04-l02-inner" data-config='{
+    "rows": 5, "cols": 5,
+    "target": [3, 2],
+    "forbidden": [[1,1],[2,1],[2,2],[1,3],[3,3]],
+    "policy": [
+      ["→","→","→","↓","↓"],
+      ["↑","","→","","↓"],
+      ["↑","→","","↓","↓"],
+      ["→","→","·","←","←"],
+      ["→","→","↑","↑","←"]
+    ],
+    "heatmap": [
+      [0,0,0,0,0],
+      [0,0,0,0,0],
+      [0,0,0,0,0],
+      [0,0,0,0,0],
+      [0,0,0,0,0]
+    ]
+  }'></div>
+
+  <div data-component="iteration-stepper" data-config='{
+    "linked-gridworld": "#gw-ch04-l02-inner",
+    "steps": [
+      {
+        "label": "j=0  v^{(0)} = 0",
+        "patch": {
+          "heatmap": [
+            [0,0,0,0,0],
+            [0,0,0,0,0],
+            [0,0,0,0,0],
+            [0,0,0,0,0],
+            [0,0,0,0,0]
+          ]
+        },
+        "note": "PE 内循环起点:v^{(0)}=0(全零)。π_3 已固定不变(grid 上的箭头不再动)。"
+      },
+      {
+        "label": "j=1  v^{(1)} = R_{π_3}",
+        "patch": {
+          "heatmap": [
+            [0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0],
+            [0, 0, 0, 1, 0],
+            [0, 0, 1, 0, 0],
+            [0, 0, 1, 0, 0]
+          ]
+        },
+        "note": "v^{(1)} = R_{π_3} + 0 = R_{π_3}。只有&#39;一步进 target&#39; 的格子(target 4-邻居中按 π_3 朝 target 走的) 有 +1;其他 0。"
+      },
+      {
+        "label": "j=2",
+        "patch": {
+          "heatmap": [
+            [0,    0,    0,    0,    0   ],
+            [0,    0,    0.9,  0,    0.9 ],
+            [0,    0.9,  0,    1.9,  1.9 ],
+            [0,    0.9,  1.9,  0,    1.9 ],
+            [0,    0.9,  1.9,  0.9,  0.9 ]
+          ]
+        },
+        "note": "v^{(2)} = R + 0.9·P_{π_3}·v^{(1)}。信息扩 1 格 —— target 邻居获得 1+0.9·0=1 + 现在 v^{(1)}_{邻居}=0.9 给的折扣未来。"
+      },
+      {
+        "label": "j=5  PE 接近收敛",
+        "patch": {
+          "heatmap": [
+            [2.95, 3.30, 3.70, 4.15, 4.55],
+            [2.66, 0,    4.15, 0,    5.06],
+            [2.39, 2.66, 0,    5.62, 5.62],
+            [2.66, 4.15, 7.10, 0,    5.06],
+            [2.95, 4.55, 5.62, 4.55, 4.10]
+          ]
+        },
+        "note": "j=5 时大部分格已经在 v_{π_3} 的 80% 附近。误差量级 0.9^5·v_max ≈ 0.59·10 ≈ 6,实际略小。"
+      },
+      {
+        "label": "j=20  v^{(j)} → v_{π_3}",
+        "patch": {
+          "heatmap": [
+            [3.20, 3.55, 3.95, 4.39, 4.78],
+            [2.88, 0,    4.39, 0,    5.31],
+            [2.59, 2.88, 0,    5.90, 5.90],
+            [2.88, 4.39, 7.29, 0,    5.31],
+            [3.20, 4.78, 5.90, 4.78, 4.31]
+          ]
+        },
+        "note": "PE 内循环到 j=20 ≈ 收敛,v_{π_3} 拿到。这就是外循环 k=3 用的&#39;真 state value&#39;,接下来 PI step 算 arg max 给 π_4。j=∞ 是 PI 的理想,实际取 j_truncate≈10-50 即可(L3 详谈)。"
+      }
+    ]
+  }'></div>
+
+  <p><strong>PI vs VI 收敛对比</strong>。下图把同一 5×5 grid 上的 VI 和 PI 画在一起。<em>x 轴是外循环步数,y 轴是 \(\|v_k - v^*\|_\infty\) 的 log-y</em>。注意 PI 的"外循环" 与 VI 的"迭代轮次" 含义不同 —— 一个 PI 外步 = 一次完整 PE(可能跑 50 个内步) + 一次 PI step,代价远大于一个 VI 步。但在<em>外步数</em> 维度上 PI 显著更陡(更少步数到收敛)。Box 4.2 给的理论保证:同一起点下,\(v_k^\text{VI} \le v_{\pi_k}^\text{PI} \le v^*\)。</p>
+
+  <div data-component="convergence-plot" data-config='{
+    "x-label": "外循环迭代次数 k",
+    "y-label": "‖v − v*‖_∞",
+    "log-y": true,
+    "series": [
+      {"name": "VI (γ = 0.9)", "color": "#10b981", "points": [[0, 10], [5, 5.9], [10, 3.49], [20, 1.22], [40, 0.148], [60, 0.0181], [80, 0.00221]]},
+      {"name": "PI (γ = 0.9, PE 至收敛)", "color": "#3b82f6", "points": [[0, 10], [1, 3.0], [2, 1.0], [3, 0.30], [5, 0.030], [7, 0.003], [10, 0.0001]]}
+    ]
+  }'></div>
+
+  <!-- §5 常见误解 -->
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"Lemma 4.1 保证单调,PI 一定收敛得比 VI 快。"<br>
+    <strong>实际上:</strong><strong>"外循环步数" 上 PI 快,<em>总壁钟</em> 不一定</strong>。每 PI 外步要解 \(n\) 维 Bellman:闭式 \(O(n^3)\),迭代跑 \(\sim 50-100\) 内步、每步 \(O(n^2)\) = \(O(n^2 \cdot 100)\)。VI 一步 \(O(n^2)\)。PI 一外步 ≈ 50-100 个 VI 步,PI 用 10 外步、VI 用 65 步 —— PI 总成本反而 5-10 倍 VI。<br>
+    <strong>因为:</strong>PI 显式解线性系统,获得"v 与 π 自洽";VI 隐式做这件事,牺牲"v 是 state value" 但每步便宜。L3 truncated PI 把"PE 跑多少内步" 当作 dial 在两者之间找平衡。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"PI 中途的 \(v_{\pi_k}\) 也跟 VI 中途的 \(v_k\) 一样'不是 state value'。"<br>
+    <strong>实际上:</strong><strong>正好相反 —— PI 中途的 \(v_{\pi_k}\) <em>是</em> 真正的 state value</strong>(假设 PE 解到收敛)。具体:Bellman 方程 \(v_{\pi_k} = r_{\pi_k} + \gamma P_{\pi_k} v_{\pi_k}\) 在 PE 步后严格成立,所以可以合法地把 \(v_{\pi_k}\) 解读为"\(s\) 出发按 \(\pi_k\) 走的折扣 return 期望"。VI 的 \(v_k\) 不享受这特权(L1 §5 已详谈)。<br>
+    <strong>因为:</strong>这是 PI 与 VI 设计哲学的根本差异:<em>PI 在每外步保证"值与策略<strong>自洽</strong>"</em>(Bellman 方程精确成立);<em>VI 不要求中途自洽,只要极限自洽</em>(\(v^*\) 满足 BOE)。"自洽" 这件事是 RL 工程上很多 trick(如 fitted Q-iteration 用 PE 当子例程)的理论根。L3 truncated PI 把"PE 跑多少步" 设为 dial 后,中途的 \(v\) 既不是 \(v_{\pi_k}\) 也不是 BOE 中间量,变成<em>不完全自洽</em> —— 但仍能收敛。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"Lemma 4.1 说 \(v_{\pi_{k+1}} \ge v_{\pi_k}\),所以 PI <em>每个状态</em> 严格单调上升、最终到 \(v^*\)。"<br>
+    <strong>实际上:</strong><strong>"≥" 不是 ">"</strong>。若 \(\pi_k\) 已最优,Lemma 4.1 取等、PI step 给 \(\pi_{k+1} = \pi_k\)、迭代<em>停在原地</em> —— 这就是停机条件 \(\|v_{\pi_{k+1}} - v_{\pi_k}\| < \epsilon\) 的来源。精确说法:"新策略每个状态都不变差,且 strict improvement 至少在一个状态发生 —— 除非已最优"。<br>
+    <strong>因为:</strong>有限状态 + 有限动作 \(\Rightarrow\) deterministic policy 总数 \(|\mathcal A|^{|\mathcal S|}\) 有限,strict improvement 不能无限发生,PI <em>有限步内</em>必到 \(\pi^*\) —— 比 Box 4.2 的"单调有界" 更直接的另一种证法。
+  </div>
+
+  <!-- §6 自检 + 视频 + teaser -->
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> §4 教材简单例子(2 状态 \(\{s_1, s_2\}\),3 动作 \(\{a_\ell, a_0, a_r\}\),target = \(s_2\),\(\gamma = 0.9\))。\(\pi_0(s_1) = a_\ell\)、\(\pi_0(s_2) = a_0\)。手算 PE 给 \(v_{\pi_0}(s_1) = -10\)、\(v_{\pi_0}(s_2) = -9\)。验证:这两个值满足 \(v_{\pi_0} = r_{\pi_0} + \gamma P_{\pi_0} v_{\pi_0}\) 吗?</summary>
+    <p><strong>A.</strong> \(\pi_0\) 在 \(s_1\) 选 \(a_\ell\)(向左,撞 boundary,\(r = -1\),保持在 \(s_1\)):\(v_{\pi_0}(s_1) = -1 + 0.9 v_{\pi_0}(s_1)\),解出 \(v_{\pi_0}(s_1) = -10\)。\(\pi_0\) 在 \(s_2\) 选 \(a_0\)(stay,\(r = 0\),保持 \(s_2\)):应该是 \(v_{\pi_0}(s_2) = 0 + 0.9 v_{\pi_0}(s_2) \Rightarrow v_{\pi_0}(s_2) = 0\)。但教材给 \(-9\)?<em>注意</em>:教材这里 \(s_2\) 上的 \(a_0\) 转移到 \(s_1\)(看图 4.3a 里 \(s_2\) 那个箭头其实指向 \(s_1\),不是 stay),所以 \(v_{\pi_0}(s_2) = 0 + 0.9 \cdot v_{\pi_0}(s_1) = 0.9 \cdot (-10) = -9\) ✓。<strong>验证通过</strong>。这是 PE 的本质:解线性系统给"<em>遵从该策略下的真 return 期望</em>"。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> Lemma 4.1 给"\(v_{\pi_{k+1}} \ge v_{\pi_k}\) 逐元素"。如果 \(v_{\pi_{k+1}}(s_0) = v_{\pi_k}(s_0)\) 但 \(v_{\pi_{k+1}}(s_1) > v_{\pi_k}(s_1)\),还能算"严格改进" 吗?</summary>
+    <p><strong>A.</strong> <strong>算</strong>。"严格改进" 的定义就是"<em>至少一个状态 strict</em>,其他状态<em>不变差</em>"。PI 不要求所有状态都严格上升 —— 比如 target 自身的 \(v^*(s_\text{target}) = 1/(1-\gamma) = 10\) 在 \(\gamma = 0.9\) 下,如果 \(\pi_k\) 已经在 target 上选&#39;stay&#39; 拿 reward,那 \(v_{\pi_k}(s_\text{target}) = 10\) 已经到顶,后续外循环 target 自身 \(v\) 不动了,但其他状态可能还在上升。这种"局部已饱和、整体未收敛" 的情形完全合规。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> 为什么 PI 在 5×5 grid 上"<em>近 target 格子先收敛</em>"(教材 §4.2.3 末段第一个观察)?</summary>
+    <p><strong>A.</strong> 因为 \(v_{\pi_0} = 0\),第 1 外步 PI 的 q-table 只能在"<em>一步可达 target</em>" 的格子上拿到非零 q(直接吃 target reward),其他格子全 0、\(\arg\max\) 任选。所以第 1 外步只确定<em>target 4-邻居</em>的方向。第 2 外步 PE 把这些邻居的 \(v_{\pi_1}\) 算到位(他们能拿 +1 经折扣),才轮到"<em>2 步可达 target</em>" 的格子在 PI step 拿到非零 q、确定方向。<em>信息从 target 向外辐射</em>,辐射半径每外步增加 1 —— 这跟 L1 §4 的 VI 是<em>同一物理</em>。区别仅在 PI 每外步把当前已激活区的 \(v\) 算到精确,VI 每步把 \(v\) 推一小格。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <p style="font-size:0.85rem;color:var(--color-muted);">视频:首选 Bilibili 直播(下方 iframe);若 iframe 不显示,用 YouTube 链接打开。BVID 当前是占位,实际 BVID 等首次部署时填。</p>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=14&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=14" target="_blank"><strong>▶ YouTube 备链(建议优先点这个)</strong></a></p>
+
+  <h3>下一节预告</h3>
+  <p>到这里有了两个算法:VI 在<em>值空间</em>每步走一小格(每轮便宜),PI 在<em>策略空间</em>每外步把 \(v_{\pi_k}\) 解到位(每轮昂贵但少)。<em>问题</em>:PI 的 PE 真要跑到 \(j = \infty\) 吗?\(j = 5\)、\(j = 50\) 行不行?这种"PE 截断" 会破坏 Theorem 4.1 的收敛保证吗?下一节(L3,Book §4.3)给出统一答案 —— <strong>Truncated PI</strong>:PE 跑 \(j_\text{truncate}\) 步而不是 \(\infty\),得到一个连续可调的<em>算法谱</em>。\(j_\text{truncate} = 1\) ≡ VI,\(j_\text{truncate} = \infty\) ≡ PI,中间是<strong>实操甜点</strong>。"VI 低端、PI 高端" 的二分法被替换成"<em>同一族算法的连续光谱</em>" + 一个工程可调 dial。</p>
+
+  <!-- Bottom nav -->
+  <nav class="lesson-nav">
+    <a href="lesson-01.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-03.html">Next →</a>
+  </nav>
+</div>
+
+<!-- Components -->
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>
