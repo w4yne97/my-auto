@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>Actor-Critic 方法(P2):优势 Actor-Critic (A2C) — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch10-l02" data-est-minutes="20">
+<div class="container">
+
+  <!-- Top nav -->
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.10 / Lesson 2</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <!-- Header -->
+  <p class="kicker">Bilibili #51 · YouTube #51 · Book §10.2 pp. 217-221</p>
+  <h1>L2: Actor-Critic Methods (P2 — Advantage Actor-Critic)<small style="color:var(--color-muted); font-weight:400;">  (Actor-Critic 方法(P2):优势 Actor-Critic (A2C))</small></h1>
+
+  <!-- §1 Why this lesson -->
+  <h2>§1 Why this lesson</h2>
+  <p>L1 的 QAC 把 \(G_t\) 换成了 critic \(\hat{q}_w\),方差大幅降低。但还可以更进一步:在 \(\hat{q}_w\) 里减去一个只依赖当前状态 \(s\) 的函数 \(b(s)\)。从数学上可以严格证明这样做<em>不改变梯度的期望</em>——也就是无偏,但能<em>显著减少方差</em>。这个思路叫 <strong>baseline 不变性(baseline invariance)</strong>。这看起来像"免费午餐",但它有严格的数学基础。</p>
+  <p>教材 §10.2(pp. 217-221)把 baseline 的最优选择揭晓:\(b^*(s) \approx v_\pi(s)\),即状态价值函数。于是 \(\hat{q}(s,a) - v(s) = q(s,a) - v(s)\) 就是著名的 <strong>优势函数(advantage function)</strong>,记作 \(\delta_\pi(s,a)\) 或 \(A(s,a)\)。用 TD 误差近似 advantage 并同时训练 critic 估 \(v\),就是 <strong>A2C(Advantage Actor-Critic)</strong>。A2C 是当今几乎所有深度 RL 算法(PPO、SAC)的数学前身,理解它是进入前沿算法的必经之路。</p>
+  <p>直觉上,优势函数衡量的是"这次动作比平均水平好多少"——而不是"这次动作的绝对好坏"。绝对量会随着任务 reward 的量级波动很大(比如不同游戏 reward 差了 100 倍),但相对量(与均值之差)却稳定得多。这就是方差减少的直觉根源。</p>
+
+  <!-- §2 核心定义 -->
+  <h2>§2 核心定义</h2>
+  <ul>
+    <li><strong>Baseline 不变性 (baseline invariance)</strong>:对任意只依赖 \(s\) 的函数 \(b(S)\),有 \(\mathbb{E}_{S\sim\eta, A\sim\pi}[\nabla_\theta \ln\pi(A|S;\theta) \cdot b(S)] = 0\)。因此从 \(q_\pi\) 里减去 \(b(S)\) 不改变梯度期望,只改变方差。这是优势函数合法性的数学基础。</li>
+    <li><strong>优势函数 (advantage function)</strong>:\(\delta_\pi(s,a) \doteq q_\pi(s,a) - v_\pi(s)\)。它反映的是:在状态 \(s\) 下执行动作 \(a\) 的价值,相对于<em>平均水平</em> \(v_\pi(s)\) 高出多少。\(\delta_\pi > 0\) 表示该动作优于平均,actor 应该更倾向于它;\(\delta_\pi < 0\) 表示差于平均,应该回避。</li>
+    <li><strong>A2C(advantage actor-critic)</strong>:教材 §10.2 的主角。Critic 只需学 \(\hat{v}(s; w)\)(状态价值,比 QAC 的 \(\hat{q}(s,a;w)\) 简单),用 TD 误差 \(\delta_t = r_{t+1} + \gamma\hat{v}(s_{t+1};w) - \hat{v}(s_t;w)\) 同时近似 advantage。Actor 用 \(\delta_t\) 代替 \(\hat{q}_w\) 做梯度上升。</li>
+    <li><strong>TD 误差作为 Advantage 的近似</strong>:\(q_\pi(s_t,a_t) - v_\pi(s_t) \approx r_{t+1} + \gamma v_\pi(s_{t+1}) - v_\pi(s_t) \doteq \delta_t\)。这是因为 \(q_\pi(s,a) = \mathbb{E}[R_{t+1} + \gamma v_\pi(S_{t+1})|S_t=s, A_t=a]\),期望去掉之后用样本 \(r_{t+1}\) 替代就得到 \(\delta_t\)。一个网络 \(\hat{v}_w\) 搞定一切。</li>
+    <li><strong>最优 baseline(教材 (10.5))</strong>:\(b^*(s) = \frac{\mathbb{E}_{A\sim\pi}[\|\nabla_\theta\ln\pi\|^2 q_\pi(s,A)]}{\mathbb{E}_{A\sim\pi}[\|\nabla_\theta\ln\pi\|^2]}\)。这是最小化方差的理论最优值。实践中把梯度权重 \(\|\nabla_\theta\ln\pi\|^2\) 去掉,近似为 \(b^\dagger(s) = v_\pi(s)\)——次优但简洁,就是状态价值。</li>
+  </ul>
+
+  <!-- §3 关键公式 + 推导 -->
+  <h2>§3 关键公式 + 推导</h2>
+
+  <p><strong>核心推导:为什么 baseline 不改期望</strong>(教材 §10.2.1)</p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\mathbb{E}_{S\\sim\\eta, A\\sim\\pi}\\big[\\nabla_\\theta \\ln\\pi(A|S,\\theta) \\cdot b(S)\\big] = \\sum_{s\\in\\mathcal{S}} \\eta(s) b(s) \\sum_{a\\in\\mathcal{A}} \\nabla_\\theta \\pi(a|s,\\theta) = \\sum_{s\\in\\mathcal{S}} \\eta(s) b(s) \\nabla_\\theta 1 = 0",
+    "annotations": [
+      {"key": "expand", "label": "展开期望", "description": "把对 (S,A) 的联合期望拆开:先对 S 求和(权重 η(s)),再对 A 求和(权重 π(a|s))。"},
+      {"key": "log_trick_reverse", "label": "∇ ln π → ∇π/π → 消掉 π", "description": "∇_θ ln π(a|s) = ∇_θπ(a|s)/π(a|s),代入后 π(a|s) 消掉,∑_a ∇_θπ(a|s) 出现。"},
+      {"key": "sum_pi_one", "label": "∑_a π(a|s) = 1 → ∇_θ(1) = 0", "description": "概率之和恒为 1,对参数 θ 求梯度得 0。这是 baseline 不改期望的几何本质:policy 概率归一化约束使得这一项消失。"}
+    ]
+  }'></div>
+
+  <p><strong>A2C 更新公式(教材 (10.8) + Algorithm 10.2)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\theta_{t+1} = \\theta_t + \\alpha_\\theta \\delta_t \\nabla_\\theta \\ln\\pi(a_t|s_t;\\theta_t), \\quad \\delta_t = r_{t+1} + \\gamma \\hat{v}(s_{t+1};w_t) - \\hat{v}(s_t;w_t)",
+    "annotations": [
+      {"key": "delta_t", "label": "δₜ — TD 误差作为 advantage 近似", "description": "δₜ 是 q_π(sₜ,aₜ) - v_π(sₜ) 的单样本近似。δₜ > 0 意味着这次动作比平均好,actor 应增加其概率。"},
+      {"key": "v_only", "label": "只需要 v̂(s;w)——更简单的 critic", "description": "QAC 的 critic 需要估 q̂(s,a;w)(动作价值,输入是(s,a));A2C 的 critic 只需估 v̂(s;w)(状态价值,输入是 s)。参数量减少,泛化更好。"},
+      {"key": "actor_update", "label": "δₜ 替换了 q̂_w", "description": "原来 actor 更新用 q̂(sₜ,aₜ;wₜ),现在换成 δₜ = q̂ - v̂。两者期望相同(baseline 不变性),但 δₜ 的方差更小(减掉了 v 的绝对量级)。"}
+    ]
+  }'></div>
+
+  <p>推导步骤:</p>
+  <div class="callout">
+    <strong>Step 1.</strong> <em>从 QAC 到 A2C 的一步:</em>PG 定理 \(\nabla_\theta J = \mathbb{E}[\nabla_\theta\ln\pi \cdot q_\pi]\) 等价于 \(\mathbb{E}[\nabla_\theta\ln\pi \cdot (q_\pi - b)]\) 对任意 \(b(s)\)。选 \(b = v_\pi\) 得 \(\nabla_\theta J = \mathbb{E}[\nabla_\theta\ln\pi \cdot \delta_\pi]\)。
+  </div>
+  <div class="callout">
+    <strong>Step 2.</strong> <em>方差为何减少:</em>设 \(X = \nabla_\theta\ln\pi \cdot q_\pi\),\(Y = \nabla_\theta\ln\pi \cdot (q_\pi - v_\pi)\)。\(\mathbb{E}[X] = \mathbb{E}[Y]\),但 \(\text{Var}(Y) < \text{Var}(X)\) 因为 \(v_\pi(s) = \mathbb{E}_A[q_\pi(s,A)]\) 是 \(q_\pi\) 关于 \(A\) 的均值,减掉均值显著降低随机变量的波动幅度。
+  </div>
+  <div class="callout">
+    <strong>Step 3.</strong> <em>Critic 如何学:</em>\(w_{t+1} = w_t + \alpha_w \delta_t \nabla_w \hat{v}(s_t; w_t)\)。同样是半梯度 TD 更新(Ch.7 TD + Ch.8 FA 的组合)。一个网络 \(\hat{v}_w\) 同时提供 baseline 和 advantage 近似。
+  </div>
+
+  <!-- §4 收敛对比图 -->
+  <h2>§4 A2C vs REINFORCE 方差对比</h2>
+  <p>下图示意在相同任务上,REINFORCE(高方差 MC)与 A2C(低方差 advantage)的训练曲线对比。纵轴(log scale)为方差,横轴为训练 episode 数:</p>
+
+  <div data-component="convergence-plot" data-config='{
+    "title": "梯度估计方差:REINFORCE vs A2C",
+    "xlabel": "Episode 数",
+    "ylabel": "梯度估计方差 (log scale)",
+    "ylog": true,
+    "series": [
+      {
+        "label": "REINFORCE (MC, b=0)",
+        "color": "#e74c3c",
+        "points": [
+          [0, 5000], [50, 4200], [100, 3800], [150, 3500], [200, 3200],
+          [250, 3100], [300, 2900], [400, 2700], [500, 2600]
+        ]
+      },
+      {
+        "label": "A2C (TD advantage)",
+        "color": "#2ecc71",
+        "points": [
+          [0, 5000], [50, 1200], [100, 400], [150, 200], [200, 120],
+          [250, 90], [300, 70], [400, 55], [500, 45]
+        ]
+      }
+    ]
+  }'></div>
+
+  <p>核心观察:<em>(1)</em> A2C 早期方差快速下降——critic 迅速学会 \(v_\pi\) 后,advantage \(\delta_t\) 的波动就集中在单步 TD 误差,不再是整条 episode 的累积随机性。<em>(2)</em> REINFORCE 方差下降慢且趋于平稳——MC 回报 \(G_t\) 的高方差是结构性的:每条 episode 都是一次独立的随机游走,大量不确定性无法通过更多数据完全消除。<em>(3)</em> 两者最终期望梯度方向完全相同(baseline 不改期望),A2C 只是用了更精确的梯度估计。对于需要数千万步才能收敛的任务,梯度精度的差距直接决定能否在合理时间内训练出来。</p>
+  <p>方差对比的量级感:在典型连续控制任务(如 MuJoCo HalfCheetah)中,REINFORCE 的梯度方差往往比 A2C 高 10-100 倍。这意味着 A2C 需要的样本数少一到两个数量级——在真实机器人实验中,这可以是数小时和数周的差异。</p>
+
+  <!-- §5 常见误解 -->
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>减去 baseline \(b(s)\) 会让梯度产生偏差,因为你"修改"了目标函数的梯度。<br>
+    <strong>实际上:</strong>不改期望,因此<em>无偏</em>。证明的关键步骤是 \(\sum_a \nabla_\theta\pi(a|s) = \nabla_\theta \sum_a\pi(a|s) = \nabla_\theta 1 = 0\)。这个等式成立的前提是 \(b\) 只依赖 \(s\) 而<em>不依赖</em> \(a\)——如果 \(b\) 依赖 \(a\),等式就不成立,梯度会有偏差。<br>
+    <strong>因为:</strong>baseline 必须是 state-only 函数。\(b(s,a)\) 形式的"依赖 a 的 baseline"会破坏无偏性。这也是 advantage 定义为 \(q(s,a) - v(s)\)(不是 \(q(s,a) - q(s,a')\))的原因。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>A2C 和 TD actor-critic 是两个不同算法。<br>
+    <strong>实际上:</strong>教材把 A2C 和 "TD actor-critic" 视为<em>同一算法</em>(Algorithm 10.2 标题写的就是"A2C or TD actor-critic")。区别仅在命名视角:从 advantage 角度叫 A2C,从"用 TD 误差当 advantage"角度叫 TD actor-critic。A3C(Asynchronous Advantage Actor-Critic,Mnih 2016)是 A2C 的异步并行版本,多进程采样以提高样本效率。<br>
+    <strong>因为:</strong>两个名字聚焦的是同一等式的不同侧面:\(\delta_t \approx q - v\) 既是 TD 误差也是 advantage 的近似。
+  </div>
+
+  <!-- §6 自检 + 视频 + teaser -->
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> 证明 \(\mathbb{E}_{A\sim\pi(s)}[\nabla_\theta \ln\pi(A|s;\theta) \cdot b(s)] = 0\) 对任意 \(b(s)\) 成立。</summary>
+    <p><strong>A.</strong> \(\mathbb{E}_A[\nabla_\theta\ln\pi(A|s) \cdot b(s)] = b(s) \sum_a \pi(a|s) \nabla_\theta\ln\pi(a|s) = b(s) \sum_a \pi(a|s) \cdot \frac{\nabla_\theta\pi(a|s)}{\pi(a|s)} = b(s) \sum_a \nabla_\theta\pi(a|s) = b(s) \nabla_\theta \sum_a\pi(a|s) = b(s)\nabla_\theta 1 = 0\)。关键:log trick 把 \(\pi\) 消掉,剩下 \(\sum_a \nabla_\theta\pi = \nabla_\theta 1 = 0\)。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> A2C 的 critic 和 QAC 的 critic 有什么本质区别?</summary>
+    <p><strong>A.</strong> <em>QAC</em> 的 critic 估 \(\hat{q}(s,a;w)\)——动作价值,输入是状态-动作对 \((s,a)\),输出是 \(q_\pi(s,a)\) 的标量估计。<em>A2C</em> 的 critic 估 \(\hat{v}(s;w)\)——状态价值,输入只是状态 \(s\),输出是 \(v_\pi(s)\) 的标量估计。A2C 的 critic 更简单(输入维度更低),并且 TD 误差 \(\delta_t = r_{t+1} + \gamma\hat{v}(s_{t+1}) - \hat{v}(s_t)\) 同时作为 advantage 的近似——一个网络完成两个任务。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> TD 误差 \(\delta_t\) 为什么能近似 advantage 函数 \(q_\pi(s_t,a_t) - v_\pi(s_t)\)?</summary>
+    <p><strong>A.</strong> 由 \(q_\pi(s,a)\) 的定义:\(q_\pi(s_t,a_t) = \mathbb{E}[R_{t+1} + \gamma v_\pi(S_{t+1})|S_t=s_t, A_t=a_t]\)。因此 \(q_\pi - v_\pi = \mathbb{E}[R_{t+1} + \gamma v_\pi(S_{t+1})|S_t,A_t] - v_\pi(S_t)\)。用样本 \(r_{t+1}, s_{t+1}\) 替代期望,用 \(\hat{v}_w\) 替代 \(v_\pi\),就得到 \(\delta_t = r_{t+1} + \gamma\hat{v}(s_{t+1};w) - \hat{v}(s_t;w) \approx q_\pi - v_\pi\)。这是 TD 误差在 AC 框架下的<em>双重身份</em>:critic 的学习信号 + actor 的 advantage 近似。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=51&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=51" target="_blank">YouTube 备链</a></p>
+
+  <h3>下一节预告</h3>
+  <p>QAC 和 A2C 都是 on-policy 算法——必须用<em>当前</em>策略采样,旧数据无法重用。L3 引入 <strong>重要性采样(importance sampling)</strong>,让我们用 behavior policy \(\beta\) 采集的旧数据来学习目标策略 \(\pi\)。核心技术:用比率 \(\rho = \pi/\beta\) 修正采样偏差,得到 off-policy actor-critic。这是 PPO 等现代算法的理论前身。</p>
+
+  <!-- Bottom nav -->
+  <nav class="lesson-nav">
+    <a href="lesson-01.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-03.html">Next →</a>
+  </nav>
+</div>
+
+<!-- Components -->
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>
