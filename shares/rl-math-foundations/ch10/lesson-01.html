@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>Actor-Critic 方法(P1):最简单的 Actor-Critic — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch10-l01" data-est-minutes="20">
+<div class="container">
+
+  <!-- Top nav -->
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.10 / Lesson 1</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <!-- Header -->
+  <p class="kicker">Bilibili #50 · YouTube #50 · Book §10.1 pp. 215-217</p>
+  <h1>L1: Actor-Critic Methods (P1 — The Simplest Actor-Critic)<small style="color:var(--color-muted); font-weight:400;">  (Actor-Critic 方法(P1):最简单的 Actor-Critic)</small></h1>
+
+  <!-- §1 Why this lesson -->
+  <h2>§1 Why this lesson</h2>
+  <p>Ch.9 的最后给了我们 REINFORCE:每跑完一整条 episode,用 Monte Carlo 回报 \(G_t\) 来估 \(q_\pi(s_t, a_t)\),然后做策略梯度上升。这个算法<em>有效</em>、有理论保证,但<em>方差极大</em> —— \(G_t\) 是整条后续轨迹的随机 reward 求和,episode 间波动巨大,导致训练极不稳定。</p>
+  <p>Ch.10 第一节(教材 §10.1,pp. 215-217)给出解决方案:把 \(G_t\)(Monte Carlo 估)换成一个专门学出来的<em>值函数网络</em> \(\hat{q}_w(s_t, a_t)\),用 TD 更新这个网络。这样 actor(策略 \(\pi_\theta\))和 critic(值函数 \(\hat{q}_w\))同时在线训练——这就是 <strong>Actor-Critic</strong> 的本质,也是本章的基础。最简单的版本教材叫 <strong>QAC</strong>(Q actor-critic)。</p>
+
+  <!-- §2 核心定义 -->
+  <h2>§2 核心定义</h2>
+  <ul>
+    <li><strong>Actor(演员)</strong>:即策略网络 \(\pi(a|s; \theta)\),负责根据当前状态选动作。参数 \(\theta\) 通过策略梯度上升更新。之所以叫"演员",是因为它按照策略<em>执行动作</em>。</li>
+    <li><strong>Critic(评论员)</strong>:即值函数网络 \(\hat{q}(s, a; w)\),负责评估当前 actor 执行某动作有多好。参数 \(w\) 通过 TD 误差更新(Ch.7/Ch.8 复用)。之所以叫"评论员",是因为它通过估算动作价值来<em>批评或鼓励</em> actor。</li>
+    <li><strong>QAC(Q actor-critic)</strong>:教材 §10.1 的最简单 AC。Critic 学 \(\hat{q}(s, a; w)\),用 Sarsa 风格(on-policy)的 TD 更新;Actor 用 \(\hat{q}_w\) 替代 \(G_t\) 做梯度上升。两者<em>同步</em>在每个时间步 \(t\) 更新,无需等整 episode。</li>
+    <li><strong>TD 误差(TD error)</strong>:\(\delta_t = r_{t+1} + \gamma \hat{q}(s_{t+1}, a_{t+1}; w_t) - \hat{q}(s_t, a_t; w_t)\)。这是 critic 的学习信号(Ch.7 Sarsa 公式在函数近似下的推广)。注意 critic 用的是 \((s_{t+1}, a_{t+1})\) 而非 \(\max_{a}\)——因为 QAC 是 on-policy。</li>
+    <li><strong>同步双更新</strong>:每个时间步 \(t\) 先更新 actor(\(\theta\)),再更新 critic(\(w\))。两者学习率可以不同:\(\alpha_\theta\) 对应 actor,\(\alpha_w\) 对应 critic。这使训练可以<em>在线</em>、<em>逐步</em>进行,不依赖完整 episode。</li>
+  </ul>
+
+  <!-- §3 关键公式 + 推导 -->
+  <h2>§3 关键公式 + 推导</h2>
+  <p>QAC 的核心是两条并行的更新公式。</p>
+
+  <p><strong>公式 1:Actor 更新(教材 (10.2))</strong> — 策略梯度上升,把 \(G_t\) 换成 critic 的估计:</p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\theta_{t+1} = \\theta_t + \\alpha_\\theta \\nabla_\\theta \\ln \\pi(a_t|s_t, \\theta_t) \\cdot \\hat{q}(s_t, a_t; w_t)",
+    "annotations": [
+      {"key": "log_grad", "label": "∇ ln π — log trick", "description": "Ch.9 PG 定理的精华:∇π/π = ∇ ln π。log 化让梯度变成期望形式,可以用样本估。"},
+      {"key": "q_hat", "label": "q̂(s,a;w) — critic 替换 Gₜ", "description": "REINFORCE 用 Gₜ(MC 回报)估 q_π;QAC 用训练好的 critic 网络 q̂_w 估 q_π。方差由整条 episode 的随机性降为单步 TD 误差的随机性。"},
+      {"key": "alpha_theta", "label": "α_θ — actor 学习率", "description": "独立于 critic 学习率 α_w,通常更小以保证策略更新稳定。两个学习率分开调是 AC 调参的核心难点之一。"}
+    ]
+  }'></div>
+
+  <p><strong>公式 2:Critic 更新</strong> — Sarsa 风格 TD,用函数近似(Ch.8 复用):</p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "w_{t+1} = w_t + \\alpha_w \\big[r_{t+1} + \\gamma \\hat{q}(s_{t+1}, a_{t+1}; w_t) - \\hat{q}(s_t, a_t; w_t)\\big] \\nabla_w \\hat{q}(s_t, a_t; w_t)",
+    "annotations": [
+      {"key": "td_target", "label": "TD 目标 rₜ₊₁ + γq̂(sₜ₊₁,aₜ₊₁)", "description": "用下一步的 critic 估值做 bootstrap(Ch.7 TD 思路)。注意是 Sarsa:a_{t+1} 是按当前策略π真实采的,非 max_a。"},
+      {"key": "td_error", "label": "δₜ = TD 目标 - 当前估值", "description": "括号内就是 TD 误差 δₜ。δₜ > 0 意味着实际比预期好(critic 低估了),要把 q̂(sₜ,aₜ) 往上调。"},
+      {"key": "grad_w", "label": "∇_w q̂ — 函数近似梯度", "description": "Ch.8 VFA 的半梯度(semi-gradient)更新。若 q̂ 是线性函数 φ(s,a)ᵀw,则 ∇_w q̂ = φ(s,a)。NN 时就是反向传播。"}
+    ]
+  }'></div>
+
+  <p>推导步骤:</p>
+  <div class="callout">
+    <strong>Step 1.</strong> <em>为什么可以换:</em>Ch.9 PG 定理说 \(\nabla_\theta J(\theta) = \mathbb{E}[\nabla_\theta \ln\pi(A|S;\theta) \cdot q_\pi(S,A)]\)。\(q_\pi\) 未知,需要估。MC 估 = \(G_t\)(高方差),TD 估 = \(\hat{q}_w\)(低方差但有偏)。两者都是<em>近似</em>,区别在方差-偏差权衡。
+  </div>
+  <div class="callout">
+    <strong>Step 2.</strong> <em>为什么 critic 用 Sarsa 而非 Q-learning:</em>QAC 是 on-policy —— actor 按 \(\pi(\theta)\) 采样,critic 评估的也是 \(\pi(\theta)\) 下的 \(q_\pi\)。Sarsa 的 \(a_{t+1} \sim \pi(\theta)\) 保持这一一致性;Q-learning 的 \(\max_a\) 会把 critic 推向贪心策略(off-policy),两者不匹配。
+  </div>
+  <div class="callout">
+    <strong>Step 3.</strong> <em>为什么可以在线更新:</em>MC 需要等 episode 结束才能算 \(G_t\);TD bootstrap 只需要一步 \((s_t, a_t, r_{t+1}, s_{t+1}, a_{t+1})\),立刻就能更新。这让 QAC 适用于长 episode 甚至<em>无限时域</em>任务。
+  </div>
+
+  <!-- §4 例子:iteration-stepper -->
+  <h2>§4 QAC 梯度上升步骤示例</h2>
+  <p>用符号化的迭代步骤展示 QAC 一个时间步内 actor + critic 双更新的流程(本章为抽象算法章节,无需 grid-world):</p>
+
+  <div data-component="iteration-stepper" data-config='{
+    "steps": [
+      {
+        "title": "Step 0: 初始化",
+        "description": "初始化 actor 参数 θ₀(策略网络),critic 参数 w₀(值函数网络)。选定学习率 α_θ、α_w 和折扣因子 γ。",
+        "formula": "\\theta_0 \\in \\mathbb{R}^m,\\quad w_0 \\in \\mathbb{R}^n,\\quad \\alpha_\\theta, \\alpha_w, \\gamma > 0"
+      },
+      {
+        "title": "Step 1: Actor 采样动作",
+        "description": "在当前状态 sₜ,按策略 π(·|sₜ;θₜ) 采样动作 aₜ。与环境交互,观察下一个状态 sₜ₊₁ 和奖励 rₜ₊₁。",
+        "formula": "a_t \\sim \\pi(\\cdot|s_t;\\theta_t),\\quad \\text{observe } r_{t+1}, s_{t+1}"
+      },
+      {
+        "title": "Step 2: Critic 再采样 aₜ₊₁",
+        "description": "在新状态 sₜ₊₁ 下,按当前策略采样 aₜ₊₁(Sarsa on-policy 要求)。此 aₜ₊₁ 仅用于 TD 计算,保证 critic 评估的是当前策略下的 q 值。",
+        "formula": "a_{t+1} \\sim \\pi(\\cdot|s_{t+1};\\theta_t)"
+      },
+      {
+        "title": "Step 3: 计算 TD 误差 δₜ",
+        "description": "Critic 用 bootstrap 估算当前动作价值估计的误差。δₜ > 0 说明 critic 低估了当前动作的价值,需要向上调整。",
+        "formula": "\\delta_t = r_{t+1} + \\gamma \\hat{q}(s_{t+1}, a_{t+1}; w_t) - \\hat{q}(s_t, a_t; w_t)"
+      },
+      {
+        "title": "Step 4: 更新 Actor(θ 梯度上升)",
+        "description": "用 critic 给出的 q̂(sₜ,aₜ;wₜ) 作为 q_π 的估计,对策略参数 θ 做梯度上升。critic 越准,actor 梯度方向越可靠。",
+        "formula": "\\theta_{t+1} = \\theta_t + \\alpha_\\theta \\nabla_\\theta \\ln\\pi(a_t|s_t;\\theta_t) \\cdot \\hat{q}(s_t, a_t; w_t)"
+      },
+      {
+        "title": "Step 5: 更新 Critic(w 半梯度下降)",
+        "description": "用 TD 误差 δₜ 更新 critic 参数 w。不断重复 Step 1–5 直到收敛。Actor 和 critic 互相促进、共同进化。",
+        "formula": "w_{t+1} = w_t + \\alpha_w \\delta_t \\nabla_w \\hat{q}(s_t, a_t; w_t)"
+      }
+    ]
+  }'></div>
+
+  <!-- §5 常见误解 -->
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>Actor-critic 是两个完全独立的网络,actor 不依赖 critic,critic 也不依赖 actor。<br>
+    <strong>实际上:</strong>两者<em>互相依赖</em>。Critic 评估的是<em>当前 actor 的策略 \(\pi_\theta\)</em> 下的 \(q_\pi\),策略一变 critic 的目标也变;Actor 的梯度方向由 critic 的估值决定,critic 不准 actor 就往错方向走。这种耦合是 AC 调参难的根本原因。<br>
+    <strong>因为:</strong>AC 的数学根是 PG 定理中的 \(q_\pi\),它本身就是策略 \(\pi\) 的函数。Critic 试图追踪一个<em>随策略动态变化的目标</em>,而 actor 同时在改变这个目标。这个"追着移动靶子"的现象在深度 RL 中是核心工程挑战(DQN 用 target network 缓解,A3C 用多进程异步缓解)。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>QAC 的 critic 可以用 Q-learning(取 \(\max_a \hat{q}(s_{t+1}, a)\))替代 Sarsa。<br>
+    <strong>实际上:</strong>这会让 QAC 变成 <em>off-policy</em> 风格——critic 评估的是贪心策略 \(\pi_{\text{greedy}}\),但 actor 学的是随机策略 \(\pi_\theta\)。两者<em>不匹配</em>,理论收敛性不保证。若想用 Q-learning 风格的 critic,需要额外的 IS 修正(§10.3 的内容)。<br>
+    <strong>因为:</strong>on-policy 的核心要求是"采样分布与目标策略一致"。Sarsa 用 \(a_{t+1} \sim \pi(\theta)\) 保证这一点;Q-learning 的 \(\max_a\) 相当于隐式用了贪心策略采样,打破了一致性。
+  </div>
+
+  <!-- §6 自检 + 视频 + teaser -->
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> 写出 QAC 的 actor 和 critic 更新公式,并说明 critic 为什么用 Sarsa 而非 Q-learning。</summary>
+    <p><strong>A.</strong> <em>Actor</em>: \(\theta_{t+1} = \theta_t + \alpha_\theta \nabla_\theta \ln\pi(a_t|s_t;\theta_t) \cdot \hat{q}(s_t,a_t;w_t)\)。<em>Critic(Sarsa)</em>: \(w_{t+1} = w_t + \alpha_w [r_{t+1} + \gamma\hat{q}(s_{t+1},a_{t+1};w_t) - \hat{q}(s_t,a_t;w_t)] \nabla_w \hat{q}(s_t,a_t;w_t)\)。用 Sarsa 是因为 QAC 是 on-policy:\(a_{t+1}\) 按当前策略 \(\pi(\theta)\) 采样,critic 估的是 \(q_\pi\) 而非贪心策略的 q 值,两者保持一致性。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> REINFORCE 和 QAC 的区别是什么?各有什么优缺点?</summary>
+    <p><strong>A.</strong> <em>REINFORCE</em>:用 MC 回报 \(G_t = \sum_{k=t+1}^T \gamma^{k-t-1} r_k\) 估 \(q_\pi\)——无偏但高方差,必须等整个 episode 结束才能更新,不适合长/无限时域任务。<em>QAC</em>:用 critic 网络 \(\hat{q}_w\) 估 \(q_\pi\)——有偏(TD bootstrap 引入偏差)但低方差,每步都能在线更新。方差-偏差权衡:REINFORCE 是 MC 极端(无偏高方差),QAC 是 TD 极端(有偏低方差)。工程上 QAC 通常更实用。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> QAC 中 actor 和 critic 为什么要分开两个学习率?</summary>
+    <p><strong>A.</strong> 两者的<em>更新量纲</em>不同:\(\theta\) 控制策略分布(softmax 输出概率),\(w\) 控制值函数估计(输出标量值)。统一学习率会让其中一个过快过慢。更深层:critic 若收敛太慢,actor 就在用"不准的裁判"做决策;critic 若收敛太快,可能对还没收敛的 actor 过拟合。分开学习率是一种解耦,实际调参中常见 \(\alpha_w > \alpha_\theta\)(让 critic 先收敛)。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=50&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=50" target="_blank">YouTube 备链</a></p>
+
+  <h3>下一节预告</h3>
+  <p>QAC 已经把方差从 MC 降到了 TD 级别。但还有一个巧妙的技巧可以<em>进一步</em> 降低方差而不引入额外偏差——在 \(\hat{q}_w\) 里减去一个只依赖 \(s\) 的 baseline。下一节(L2)讲 <strong>Advantage Actor-Critic (A2C)</strong>:引入优势函数 \(A(s,a) = q(s,a) - v(s)\),从理论上证明 baseline 不改期望只减方差,并推导出使用 TD 误差近似 advantage 的高效算法。</p>
+
+  <!-- Bottom nav -->
+  <nav class="lesson-nav">
+    <a href="../ch09/lesson-05.html">← Prev (Ch.9)</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-02.html">Next →</a>
+  </nav>
+</div>
+
+<!-- Components -->
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>
