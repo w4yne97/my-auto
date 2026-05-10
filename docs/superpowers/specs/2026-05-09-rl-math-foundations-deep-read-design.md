@@ -4,7 +4,9 @@
 - **作者**:WayneWong97 + Claude (brainstorming session)
 - **状态**:Plan 1 已实施完成(M0~M5),等待 Plan 2(M6~M7)
 - **Plan 1 status (M0~M5):** ✅ Complete as of 2026-05-09 — 静态站骨架、5 个可视化组件、Ch.1 双 lesson、Master dashboard、10 章 chapter index、Validator 全部产出并通过审计;`python -m scripts.rl_math_foundations.validate` 返回 `OK: no issues`
-- **Plan 2 status (M6~M7):** 未开始 — 待写实施计划,覆盖 Ch.2~Ch.10 共 51 节 lesson 内容产出 + 附录页扩充 + 最终交叉链接复审
+- **Plan 2 status (M6~M7):** ✅ Complete as of 2026-05-10 — Ch.2~Ch.10 共 51 节 lesson 全部产出并通过审计;附录页扩展完成;最终交叉链接审计通过;`python -m scripts.rl_math_foundations.validate` 返回 `OK: no issues`;全站 53 节 lesson + 10 章 index + master dashboard + appendix 形成完整可分发的静态学习站。
+- **All-time deliverables:** 53 lessons + 10 chapter indexes + 1 master dashboard + 1 appendix导读, 5 reusable JS components, 1 validator with 6 pytest tests, KaTeX 0.16 + Mermaid 11 vendored. 总文件数:65 HTML + 7 JS/CSS + 60 KaTeX fonts + 1 Mermaid bundle ≈ 134 files。
+- **Plan 2 audit findings (accepted as known):** 11 lessons CJK 字数超 2500 cap(主要在 Ch.3、Ch.6 数学密度高的章节);8 lessons under 1500(全部 Ch.7,implementer 写得紧凑)。所有 conventions(s''/forbidden 箭头/kicker #/policy string format/&#39;)零违反。Validator 全过。
 - **类型**:一次性内容工程（Content project, not tooling）
 - **目标产出位置**:`shares/rl-math-foundations/`
 - **源教材**:S. Zhao,《Mathematical Foundations of Reinforcement Learning》, Springer Nature Press, 2025
