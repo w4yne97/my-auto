@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>贝尔曼最优方程(P3):压缩映射与求解 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch03-l03" data-est-minutes="30">
+<div class="container">
+
+  <!-- Top nav -->
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.3 / Lesson 3</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <!-- Header -->
+  <p class="kicker">Bilibili #11 · YouTube #11 · Book §3.3-3.4 pp. 40-49</p>
+  <h1>L3: Bellman Optimality Equation (P3 - More on BOE)<small style="color:var(--color-muted); font-weight:400;">  (贝尔曼最优方程(P3):压缩映射与求解)</small></h1>
+
+  <!-- §1 Why this lesson -->
+  <h2>§1 Why this lesson</h2>
+  <p>L2 给出了 BOE \(v = f(v) = \max_\pi (r_\pi + \gamma P_\pi v)\),并指出它是<em>非线性不动点方程</em>。但还差三个根本问题:<strong>(1) 解存在吗?(2) 解唯一吗?(3) 怎么算?</strong>本节(教材 §3.3.3-3.4,pp. 40-49)用一个工具一次性回答全部 —— <strong>压缩映射定理(Banach fixed-point theorem)</strong>。</p>
+  <p>策略是这样的:先证 \(f(v)\) 在最大范数 \(\|\cdot\|_\infty\) 下是 \(\gamma\)-Lipschitz,即 \(\|f(v_1) - f(v_2)\|_\infty \le \gamma \|v_1 - v_2\|_\infty\)(教材 Theorem 3.2)。这一性质就叫"contraction"(收缩)。然后调用<strong>压缩映射定理</strong>(教材 Theorem 3.1,严格证明在附录 §A.3):任何收缩映射都有<em>唯一</em>不动点 \(v^*\),且迭代 \(v_{k+1} = f(v_k)\) 从任意 \(v_0\) 出发<em>指数收敛</em>到 \(v^*\),收敛率刚好等于 \(\gamma\)。再加上 §3.4 的 Theorem 3.4(\(v^* \ge v_\pi\) 对所有 \(\pi\) 成立)与 Theorem 3.5(确定性贪心 \(\pi^*(s) = \arg\max_a q^*(s, a)\) 是最优策略),L1 / L2 留下的所有问题就都被堵住:<strong>\(v^*\) 唯一存在;\(\pi^*\) 一定存在但<em>未必唯一</em>;一定有确定性贪心版本的 \(\pi^*\);算法就是 \(v_{k+1} = f(v_k)\)(下章会叫它<em>value iteration</em>)。</strong>本节是 Ch.3 的<strong>数学密度峰值</strong>:压缩证明(\(\gamma\)-Lipschitz)、Banach 三个结论、Theorem 3.4 的 \(\gamma^n P_\pi^n \to 0\) 极限论证 —— 一步都不能跳。读懂之后,Ch.4 VI / Ch.7 TD 的"为什么收敛" 都迎刃而解。</p>
+
+  <!-- §2 核心定义 -->
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>不动点 (fixed point,教材 §3.3.3,p. 41)</strong>:对函数 \(f: \mathbb{R}^d \to \mathbb{R}^d\),若存在 \(x^* \in \mathbb{R}^d\) 使 \(f(x^*) = x^*\),则称 \(x^*\) 是 \(f\) 的不动点。"\(f\) 把 \(x^*\) 映成自己" —— 这就是"<em>不动</em>"的字面含义。</li>
+    <li><strong>压缩映射 (contraction mapping,教材 §3.3.3,p. 41)</strong>:函数 \(f: \mathbb{R}^d \to \mathbb{R}^d\) 是<em>压缩映射</em>,若存在 \(\gamma \in (0, 1)\) 使 \(\|f(x_1) - f(x_2)\| \le \gamma \|x_1 - x_2\|\) 对所有 \(x_1, x_2\) 成立。<em>关键</em>:必须 \(\gamma\) <strong>严格小于 1</strong>(\(\gamma < 1\),非 \(\gamma \le 1\)),否则定理不成立。</li>
+    <li><strong>压缩映射定理 (contraction mapping theorem / Banach fixed-point theorem,Theorem 3.1,p. 41)</strong>:若 \(f\) 是压缩映射,则:<em>(a) 存在性</em>:存在不动点 \(x^*\) 满足 \(f(x^*) = x^*\);<em>(b) 唯一性</em>:\(x^*\) 唯一;<em>(c) 算法 + 指数收敛</em>:迭代 \(x_{k+1} = f(x_k)\) 从任意 \(x_0\) 出发,\(x_k \to x^*\) 指数级,\(\|x_k - x^*\| \le \gamma^k \|x_0 - x^*\|\) (实际证明给出更紧界 \(\|x^* - x_n\| \le \dfrac{\gamma^n}{1-\gamma} \|x_1 - x_0\|\))。<em>这个定理本身的严格证明详见附录 §A.3</em> —— 用 Cauchy 列收敛性 + 完备空间的标准分析论证。</li>
+    <li><strong>BOE 右端的压缩性(Theorem 3.2,p. 44)</strong>:\(f(v) \doteq \max_\pi (r_\pi + \gamma P_\pi v)\) 对任意 \(v_1, v_2 \in \mathbb{R}^{|\mathcal{S}|}\) 满足 \(\|f(v_1) - f(v_2)\|_\infty \le \gamma \|v_1 - v_2\|_\infty\)。这里 \(\|\cdot\|_\infty\) 是最大范数 \(\|v\|_\infty = \max_i |v_i|\)。<em>证明思路</em>:利用 \(P_\pi\) 是行随机矩阵(每行概率分布求和为 1),\(\|P_\pi w\|_\infty \le \|w\|_\infty\) 对任意向量 \(w\) 成立,再处理 \(\max_\pi\) 算子。</li>
+    <li><strong>BOE 解的存在唯一性(Theorem 3.3,p. 46)</strong>:把 Theorem 3.2 代入 Theorem 3.1 即得:BOE \(v = f(v)\) 有<em>唯一</em>解 \(v^*\),且迭代 \(v_{k+1} = \max_\pi (r_\pi + \gamma P_\pi v_k)\) 从任意 \(v_0\) 出发<em>指数收敛</em>到 \(v^*\)。<em>这个迭代过程在 Ch.4 叫作 value iteration</em>,算法实现细节延后到 Ch.4。</li>
+    <li><strong>从 \(v^*\) 算 \(\pi^*\)(Theorem 3.5,p. 47-48)</strong>:一旦 \(v^*\) 已知,定义 \(q^*(s, a) \doteq \sum_r p(r\mid s, a) r + \gamma \sum_{s&#39;} p(s&#39;\mid s, a) v^*(s&#39;)\),则<strong>确定性贪心策略</strong> \(\pi^*(a\mid s) = 1\) 当 \(a = \arg\max_a q^*(s, a)\)、否则为 0,是 BOE 的最优策略。<em>关键</em>:\(\pi^*\) 不必唯一(若多个 \(a\) 并列 \(\arg\max\)),但<em>确定性</em>版本一定存在 —— 这是 Theorem 3.5 的内容。</li>
+    <li><strong>\(v^*\) 是真正的"最优状态值"(Theorem 3.4,p. 47)</strong>:解出来的 \(v^*\) 满足 \(v^*(s) \ge v_\pi(s)\) 对所有 \(s\) 与所有 \(\pi\) 成立 —— 即 \(\pi^* = \arg\max_\pi (r_\pi + \gamma P_\pi v^*)\) 真的就是<em>L2 Definition 3.1</em> 意义下的最优策略。证明用 \(v^* - v_\pi \ge \gamma P_\pi (v^* - v_\pi) \ge \gamma^n P_\pi^n (v^* - v_\pi) \to 0\)(\(\gamma^n \to 0\) 且 \(P_\pi^n\) 有界)。</li>
+  </ul>
+
+  <!-- §3 关键公式 + 推导 -->
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节<strong>三个公式</strong>逐个写下来,加 4 个 callout 把"<em>为什么 \(f\) 是 \(\gamma\)-Lipschitz</em>"完整证完。这是 Ch.3 的<strong>数学密度峰值</strong>,密度跟 L4 §3 不在一个量级。</p>
+
+  <p><strong>公式 1:压缩映射定义(教材 §3.3.3,p. 41)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\| f(x_1) - f(x_2) \\| \\le \\gamma \\, \\| x_1 - x_2 \\|, \\quad \\forall x_1, x_2 \\in \\mathbb{R}^d, \\quad \\gamma \\in (0, 1)",
+    "annotations": [
+      {"key": "lipschitz", "label": "γ-Lipschitz", "description": "f 把任意两点的距离按比例 γ 压缩,γ < 1。这就是&#39;contraction&#39;的字面含义。"},
+      {"key": "norm", "label": "‖·‖", "description": "任意向量范数即可,本书 BOE 用最大范数 ‖v‖_∞ = max_i |v_i|(因为 BOE 自然在该范数下压缩)。"},
+      {"key": "strict_lt_1", "label": "γ 严格 < 1", "description": "γ ≤ 1 不行 —— γ = 1(non-expansive)只能保证 Cauchy 列存在,不能保证收敛速率;γ = 1 的不动点可能不唯一(任意常数 v + c 都满足)。"},
+      {"key": "all_pairs", "label": "∀ x_1, x_2", "description": "全局性质:对空间中所有点对成立,不只是某些点。这是&#39;global contraction&#39;,比&#39;local contraction&#39;强。"}
+    ]
+  }'></div>
+
+  <p><strong>公式 2:BOE 右端的压缩性(教材 Theorem 3.2,p. 44)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\| f(v_1) - f(v_2) \\|_\\infty \\le \\gamma \\, \\| v_1 - v_2 \\|_\\infty, \\quad f(v) \\doteq \\max_\\pi (r_\\pi + \\gamma P_\\pi v)",
+    "annotations": [
+      {"key": "f_def", "label": "f(v) = max_π (r_π + γP_π v)", "description": "BOE 右端,即 L2 (3.3) 中的 v = f(v)。注意 max_π 是 elementwise 的(每个 s 独立取 max)。"},
+      {"key": "max_norm", "label": "‖·‖_∞", "description": "为什么用最大范数?因为 P_π 是行随机矩阵,‖P_π w‖_∞ ≤ ‖w‖_∞ —— 这一关键性质在 ‖·‖_2 等其他范数下不一定成立。最大范数是 BOE 的&#39;天然范数&#39;。"},
+      {"key": "gamma_factor", "label": "γ 因子来源", "description": "γ 直接来自 BOE 中的 γP_π 那一项。‖f(v_1) - f(v_2)‖_∞ ≤ ‖γP_π(v_1 - v_2)‖_∞ ≤ γ ‖v_1 - v_2‖_∞ —— γ 是 discount,< 1 是&#39;时间折扣&#39;的本质后果。"},
+      {"key": "uses_random_matrix", "label": "用了 P_π 1 = 1", "description": "证明里关键不等式 |p_i^T(v_1 - v_2)| ≤ p_i^T |v_1 - v_2| ≤ ‖v_1 - v_2‖_∞(因为 p_i 概率向量、和为 1) —— L4 也会复用这一性质。"}
+    ]
+  }'></div>
+
+  <p><strong>公式 3:Banach 定理在 BOE 上的三个结论(Theorem 3.3,p. 46)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "v_{k+1} = f(v_k) = \\max_\\pi (r_\\pi + \\gamma P_\\pi v_k), \\quad v_k \\xrightarrow{k\\to\\infty} v^*, \\quad \\| v_k - v^* \\|_\\infty \\le \\gamma^k \\| v_0 - v^* \\|_\\infty",
+    "annotations": [
+      {"key": "existence", "label": "存在性", "description": "BOE v = f(v) 有解 v* —— 不再是&#39;猜的&#39;,而是 Banach 定理直接给的。"},
+      {"key": "uniqueness", "label": "唯一性", "description": "v* 是 f 的唯一不动点。可能有多个 π* 是 argmax 的&#39;选项&#39;,但 v* 这个数值表是唯一的。"},
+      {"key": "iteration", "label": "迭代算法", "description": "v_{k+1} = f(v_k) 从任意 v_0 ∈ ℝ^|𝒮| 出发都收敛到 v* —— 起点不影响极限,只影响初期速率。这是&#39;v_0 = 0&#39;成为标准&#39;无信息先验&#39;的原因。"},
+      {"key": "exponential", "label": "指数衰减 γ^k", "description": "误差 ‖v_k - v*‖_∞ ≤ γ^k ‖v_0 - v*‖_∞。γ = 0.9 时每轮误差降 10%,~65 轮误差就低于 10⁻³;γ = 0.5 仅需 ~10 轮 —— L4 §3 会做收敛速率的精确估算。"}
+    ]
+  }'></div>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>把 \(f(v_1) - f(v_2)\) 用 \(\arg\max\) 写出(Box 3.2 关键一步)。</em>设 \(\pi_1^* \doteq \arg\max_\pi (r_\pi + \gamma P_\pi v_1)\)、\(\pi_2^* \doteq \arg\max_\pi (r_\pi + \gamma P_\pi v_2)\)(分别是 \(v_1, v_2\) 上贪心策略)。则 \(f(v_1) = r_{\pi_1^*} + \gamma P_{\pi_1^*} v_1\) 且 \(f(v_2) = r_{\pi_2^*} + \gamma P_{\pi_2^*} v_2\)。<strong>关键</strong>:由 \(\arg\max\) 的定义,\(f(v_1) \ge r_{\pi_2^*} + \gamma P_{\pi_2^*} v_1\)(因为 \(\pi_2^*\) 是 \(v_2\) 上的贪心,在 \(v_1\) 上不一定更优),同理 \(f(v_2) \ge r_{\pi_1^*} + \gamma P_{\pi_1^*} v_2\)。两式相减得:\(f(v_1) - f(v_2) \le (r_{\pi_1^*} + \gamma P_{\pi_1^*} v_1) - (r_{\pi_1^*} + \gamma P_{\pi_1^*} v_2) = \gamma P_{\pi_1^*}(v_1 - v_2)\)。同理 \(f(v_2) - f(v_1) \le \gamma P_{\pi_2^*}(v_2 - v_1)\)。两式合起来得到逐元素夹逼 \(\gamma P_{\pi_2^*}(v_1 - v_2) \le f(v_1) - f(v_2) \le \gamma P_{\pi_1^*}(v_1 - v_2)\)(注意符号翻转),即 \(|f(v_1) - f(v_2)| \le \max\{|\gamma P_{\pi_1^*}(v_1 - v_2)|, |\gamma P_{\pi_2^*}(v_1 - v_2)|\}\) 逐元素成立。<em>这是 Box 3.2 的核心代数操作</em>。
+  </div>
+
+  <div class="callout">
+    <strong>Step 2.</strong> <em>用 \(P_\pi\) 行随机性把 \(\|P_\pi w\|_\infty \le \|w\|_\infty\) 取出。</em>对任意行 \(p_i^\top\)(\(P_\pi\) 第 \(i\) 行,\(p_i \ge 0\) 且 \(\sum_j [p_i]_j = 1\)),有 \(|p_i^\top w| = |\sum_j [p_i]_j w_j| \le \sum_j [p_i]_j |w_j| \le \sum_j [p_i]_j \|w\|_\infty = \|w\|_\infty\)(第一步三角不等式;第二步用 \(|w_j| \le \|w\|_\infty\);第三步用行和为 1)。所以 \(\|P_\pi w\|_\infty = \max_i |p_i^\top w| \le \|w\|_\infty\)。这是 Ch.2 L4 §3 那个"行随机矩阵谱半径 \(\le 1\)" 论证的"\(\|\cdot\|_\infty\) 版本",<em>更直接、不需要谱半径</em>。
+  </div>
+
+  <div class="callout">
+    <strong>Step 3.</strong> <em>合成出 Theorem 3.2 的结论</em>。把 Step 1 与 Step 2 接起来:\(\|f(v_1) - f(v_2)\|_\infty \le \max\{\|\gamma P_{\pi_1^*}(v_1 - v_2)\|_\infty, \|\gamma P_{\pi_2^*}(v_1 - v_2)\|_\infty\} \le \gamma \|v_1 - v_2\|_\infty\)(用 Step 2 把 \(\|P_\pi (v_1 - v_2)\|_\infty\) 上界压住)。<strong>结论</strong>:\(f\) 在 \(\|\cdot\|_\infty\) 下是 \(\gamma\)-Lipschitz,即<em>压缩映射</em>。注意 \(\gamma\) 这个收缩因子<em>就是 MDP 的折扣率</em> —— 这把"<em>为什么 RL 需要 \(\gamma < 1\)</em>" 的真相讲明白了:<em>没有 \(\gamma < 1\),BOE 就不再是压缩映射,Banach 定理整套理论塌陷</em>。这也是 Ch.1 把 \(\gamma \in (0, 1)\) 写进 MDP 五元组的根本动机。
+  </div>
+
+  <div class="callout">
+    <strong>Step 4.</strong> <em>用 Banach 定理(教材 Theorem 3.1,严格证明在附录 §A.3)收尾</em>。Banach 定理告诉我们:任何 \(\gamma\)-Lipschitz contraction \(f\) 在完备度量空间 \(\mathbb{R}^{|\mathcal{S}|}\)(配最大范数)上 (a) <em>存在</em>不动点 \(v^*\)、(b) <em>唯一</em>、(c) 迭代 \(v_{k+1} = f(v_k)\) 从任意 \(v_0\) 出发都<em>指数收敛</em> \(\|v^* - v_n\|_\infty \le \dfrac{\gamma^n}{1-\gamma} \|v_1 - v_0\|_\infty\)(教材 (3.4))。具体证明的核心是把 \(\{v_k\}\) 证成 Cauchy 列(用 Step 1-3 给的 \(\gamma\)-Lipschitz 性质),再用 \(\mathbb{R}^{|\mathcal{S}|}\) 的完备性得极限。\(\mathbb{R}^{|\mathcal{S}|}\) 在最大范数下是 Banach 空间(完备赋范向量空间),所以前提满足,结论照单全收。<em>详细完整证明请见附录 §A.3,本节聚焦"为什么 \(f\) 满足该定理的前提"</em>。
+  </div>
+
+  <!-- §4 Grid-world 例子 -->
+  <h2>§4 Grid-world 实例化</h2>
+  <p>用 5×5 网格把<strong>BOE 迭代 \(v_{k+1} = f(v_k)\)</strong> 跑起来,把"<em>指数衰减</em>"画出来。设定:target = \((3, 2)\),forbidden = \(\{(1,1),(2,1),(2,2),(1,3),(3,3)\}\),\(\gamma = 0.9\),baseline 配置 (\(r_\text{boundary} = r_\text{forbidden} = -1\),\(r_\text{target} = +1\),\(r_\text{other} = 0\),L2 §4 已介绍)。从 \(v_0 = 0\)(全零)出发,逐步代入 BOE 右端,每步先在每格上枚举 5 个动作的 \(q^k(s, a)\) 取最大,得 \(v_{k+1}(s)\):</p>
+
+  <div data-component="gridworld" id="gw-ch03-l03" data-config='{
+    "rows": 5, "cols": 5,
+    "target": [3, 2],
+    "forbidden": [[1,1],[2,1],[2,2],[1,3],[3,3]],
+    "policy": [
+      ["↓","→","→","↓","↓"],
+      ["↓","","↓","↓","↓"],
+      ["→","→","","↓","↓"],
+      ["→","→","","↓","↓"],
+      ["↑","→","↑","←","←"]
+    ],
+    "heatmap": [
+      [0,0,0,0,0],
+      [0,0,0,0,0],
+      [0,0,0,0,0],
+      [0,0,0,0,0],
+      [0,0,0,0,0]
+    ]
+  }'></div>
+
+  <div data-component="iteration-stepper" data-config='{
+    "linked-gridworld": "#gw-ch03-l03",
+    "steps": [
+      {
+        "label": "k=0  v_0 = 0",
+        "patch": {
+          "heatmap": [
+            [0,0,0,0,0],
+            [0,0,0,0,0],
+            [0,0,0,0,0],
+            [0,0,0,0,0],
+            [0,0,0,0,0]
+          ]
+        },
+        "note": "起点:对所有 s 都猜 v(s) = 0(无知先验)。Banach 定理保证&#39;不管 v_0 取什么,最后都收敛到同一个 v*&#39;。"
+      },
+      {
+        "label": "k=1  v_1 = max_a q^0(s,a)",
+        "patch": {
+          "heatmap": [
+            [0,0,0,0,0],
+            [0,0,0,0,0],
+            [0,0,0,0,0],
+            [0,0,1,0,0],
+            [0,0,0,0,0]
+          ]
+        },
+        "note": "v_1(s) = max_a [Σ_r p(r|s,a)r + γ·0] = max_a r̄(s,a)。target (3,2) 拿到 +1,其他格的 max_a r̄ 都是 0(墙/forbidden 罚分还没参与,因为只有当 v_0 ≠ 0 时它们才显形)。"
+      },
+      {
+        "label": "k=2",
+        "patch": {
+          "heatmap": [
+            [0,0,0,0,0],
+            [0,0,0,0,0],
+            [0,0,0,0.9,0],
+            [0,0,1.9,0,0.9],
+            [0,0,0.9,0,0]
+          ]
+        },
+        "note": "信息从 target 向邻居扩散一格。max_a 让&#39;指向 target 的格&#39; v 升到 0.9;target 自身累积 1+0.9=1.9。比 Ch.2 L4 同步(策略已固定)略快,因为 max_a 替每格挑了&#39;最有利&#39;的方向。"
+      },
+      {
+        "label": "k=4",
+        "patch": {
+          "heatmap": [
+            [0,0,0,0.81,0.729],
+            [0,0,0.81,0,1.71],
+            [0,0,0,2.71,2.71],
+            [0,0.729,3.439,0,2.71],
+            [0,0,2.71,0.729,0]
+          ]
+        },
+        "note": "v* 的&#39;水波&#39;扩到第 4 圈。注意 (3,3) forbidden 上 v=0(schematic);非 forbidden 格上,max_a 总把每格 v 推到&#39;离 target 折扣最少&#39;的那个动作给的值。"
+      },
+      {
+        "label": "k=10",
+        "patch": {
+          "heatmap": [
+            [3.97, 4.20, 4.62, 5.06, 4.49],
+            [4.62, 0,    6.04, 5.93, 5.27],
+            [5.27, 6.04, 0,    7.21, 6.49],
+            [6.04, 7.21, 0,    8.10, 7.21],
+            [5.93, 7.29, 8.10, 7.29, 6.56]
+          ]
+        },
+        "note": "k=10 后已接近收敛。理论界 ‖v_10 - v*‖_∞ ≤ γ^10 · ‖v_0 - v*‖_∞ ≈ 0.349 × 10 ≈ 3.5,但实际误差比这小很多(界是 worst-case)。每格 v 都还有空间往上走,最终收敛到 baseline 真值。"
+      },
+      {
+        "label": "k→∞  收敛到 v*",
+        "patch": {
+          "heatmap": [
+            [5.8, 5.6, 6.2, 6.5, 5.8],
+            [6.5, 0,   8.0, 7.2, 6.5],
+            [7.2, 8.0, 0,   8.0, 7.2],
+            [8.0, 10.0, 0,  10.0, 8.0],
+            [7.2, 9.0, 10.0, 9.0, 8.1]
+          ]
+        },
+        "note": "迭代收敛到 baseline 最优 v*(L2 §4 / 教材 Figure 3.4(a))。每步取 argmax_a 隐式给出了 π* —— 即 displayed policy。"
+      }
+    ]
+  }'></div>
+
+  <p><strong>"指数衰减"画出来怎么样?</strong>下图把 \(\|v_k - v^*\|_\infty\) 对迭代数 \(k\) 画 log-y 半对数图(理论是 \(\gamma^k\) 几何衰减,在 log-y 下应该是<em>直线</em>,斜率 \(\log_{10} \gamma\))。我们额外画了 \(\gamma = 0.5\) 与 \(\gamma = 0.99\) 作对比 —— 两条线斜率差异巨大,直观印证"<strong>\(\gamma\) 越小,收敛越快</strong>"。</p>
+
+  <div data-component="convergence-plot" data-config='{
+    "x-label": "迭代次数 k",
+    "y-label": "‖v_k − v*‖_∞",
+    "log-y": true,
+    "series": [
+      {"name": "γ = 0.9", "color": "#3b82f6", "points": [[0, 10], [5, 5.9], [10, 3.49], [20, 1.22], [40, 0.148], [60, 0.0181], [80, 0.00221], [100, 0.000266]]},
+      {"name": "γ = 0.5", "color": "#10b981", "points": [[0, 10], [5, 0.3125], [10, 0.00977], [15, 0.000305], [20, 0.00000954]]},
+      {"name": "γ = 0.99", "color": "#ef4444", "points": [[0, 10], [50, 6.05], [100, 3.66], [200, 1.34], [400, 0.180], [800, 0.00324]]}
+    ]
+  }'></div>
+
+  <p><strong>怎么读这张图?</strong>三条线在 log-y 上都<em>近似直线</em>(几何衰减的典型签名);斜率 = \(\log_{10} \gamma\):\(\gamma = 0.5\) 斜率 -0.301、\(\gamma = 0.9\) 斜率 -0.046、\(\gamma = 0.99\) 斜率 -0.0044。<em>γ 越接近 1,直线越平,收敛越慢</em>。Ch.4 价值迭代实现里,\(\gamma\) 的取值是<em>性能与 farsightedness 的核心权衡</em>:\(\gamma\) 大策略远视但收敛慢,\(\gamma\) 小策略近视但收敛快。</p>
+
+  <!-- §5 常见误解 -->
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"<em>压缩</em>就是\(\|f(x_1) - f(x_2)\| < \|x_1 - x_2\|\),严格小于即可。"<br>
+    <strong>实际上:</strong><strong>需要存在<em>统一的</em> \(\gamma < 1\)</strong> 让上界对所有 \((x_1, x_2)\) 都成立 —— 不是逐对都"小于" 就行。逐对严格小于但 \(\sup_{x_1 \ne x_2} \dfrac{\|f(x_1) - f(x_2)\|}{\|x_1 - x_2\|} = 1\) 的映射(<em>non-expansive</em> 但非压缩)<em>不</em>满足 Banach 定理:它的不动点可能不存在或不唯一,迭代可能不收敛。<br>
+    <strong>因为:</strong>Banach 证明里需要把 \(\|x_{m} - x_n\| \le \dfrac{\gamma^n}{1-\gamma} \|x_1 - x_0\|\) 这条几何级数收敛性建立起来,这要求 \(\gamma\) 严格小于 1 的<em>统一上界</em>。"<em>逐对严格小于</em>"的版本叫<em>contractive on each pair</em>,是更弱的条件,Banach 定理在其上失效。本节例 \(f(v) = \max_\pi (r_\pi + \gamma P_\pi v)\) 满足的是<em>统一</em> \(\gamma\)-Lipschitz —— 这比"严格小于" 强,所以 Banach 定理可用。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"BOE 既然有<em>唯一</em>解 \(v^*\),那 \(\pi^*\) 也就唯一了。"<br>
+    <strong>实际上:</strong><strong>\(v^*\) 唯一,\(\pi^*\) 未必唯一</strong>(教材 §3.4 末段明确指出)。具体来说,若某 \(s\) 上 \(\arg\max_a q^*(s, a)\) 有<em>多个</em>动作并列(\(q^*(s, a_1) = q^*(s, a_2) = \max\)),则任何在 \(\{a_1, a_2\}\) 上分布的策略都是最优的 —— 包括 \(\pi^*(a_1\mid s) = 1\)、\(\pi^*(a_2\mid s) = 1\)、以及 \(\pi^*(a_1\mid s) = \pi^*(a_2\mid s) = 0.5\) 等。教材 Figure 3.3 给了这种"多 \(\pi^*\)" 的可视化例子。但 Theorem 3.5 保证<em>确定性贪心</em>版本一定存在,所以"<strong>\(\pi^*\) 未必唯一,但确定性 \(\pi^*\) 一定存在</strong>"。<br>
+    <strong>因为:</strong>\(v^*\) 是 \(f\) 的不动点(数值表),\(\pi^*\) 是 \(\arg\max\) 的<em>argument 表</em>;一个数值表对应可能多个 \(\arg\max\) 选择 —— 这两层的"唯一性"区别不能模糊。Ch.4 PI 实现里"如何在 tie 情况下选 \(\pi^*\)"是一个常见 detail。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"\(\gamma\) 越大,\(v^*\) 越大;那 \(\gamma \to 1\) 应该让 \(v^*\) 最大化,这才是'最优决策'。"<br>
+    <strong>实际上:</strong>\(\gamma \to 1\) 时:(a) BOE 不再是<em>严格</em>压缩映射(\(\gamma = 1\) 是 non-expansive 的边界),Banach 定理失效,\(v^*\) 可能不存在或不唯一;(b) 即使存在,\(v^*\) 量级会爆炸(\(R_\text{max}/(1-\gamma) \to \infty\)),数值计算困难;(c) <strong>\(\gamma\) 是"远视程度",不是"算法目标"</strong> —— 它是 MDP 五元组的一部分,跟 reward 一起<em>定义</em>了优化目标,不是越大越好。<br>
+    <strong>因为:</strong>RL 想优化的目标 \(\max_\pi \mathbb{E}_\pi[\sum_t \gamma^t r_t]\) 由 \(\gamma\) 与 \(r\) <em>共同决定</em>;调 \(\gamma\) 等于<em>换问题</em>(L4 会用 reward shifting / γ rescaling 把这个观察形式化)。\(\gamma = 1\) 时叫"undiscounted"问题,需要不同的数学工具(平均奖励 / 终止状态),本书 Ch.10 之后才会零散涉及。Ch.3-Ch.10 的所有理论默认 \(\gamma \in (0, 1)\)。
+  </div>
+
+  <!-- §6 自检 + 视频 + teaser -->
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> 为什么 BOE 的压缩性证明<em>必须</em>用最大范数 \(\|\cdot\|_\infty\),不能用 \(\|\cdot\|_2\) 或 \(\|\cdot\|_1\)?</summary>
+    <p><strong>A.</strong> 关键不等式 \(\|P_\pi w\|_\infty \le \|w\|_\infty\) 用到了 \(P_\pi\) 行随机性(每行非负、和为 1)。在 \(\|\cdot\|_2\) 范数下,\(\|P_\pi w\|_2 \le \|P_\pi\|_2 \|w\|_2\),其中 \(\|P_\pi\|_2 = \sigma_\text{max}(P_\pi)\) 是<em>最大奇异值</em>,可能 \(> 1\)(行随机矩阵在 2-范数下不必是 contractive 的)。例子:\(P = \begin{pmatrix} 1 & 0 \\ 0.5 & 0.5 \end{pmatrix}\) 行随机,但 \(\|P\|_2 \approx 1.118 > 1\)。所以<em>2-范数下 BOE 不必是压缩映射</em>。<em>1-范数</em>下 \(\|P_\pi^\top w\|_1 \le \|w\|_1\) 对<em>列</em>随机矩阵成立,但 \(P_\pi\) 是<em>行</em>随机的,所以 1-范数也不直接适用。<strong>最大范数是 BOE 的"天然"度量</strong>,这是它在所有 RL 收敛证明里反复出现的根本原因(Ch.4 VI、Ch.7 TD 都用 \(\|\cdot\|_\infty\))。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> 假设 BOE 迭代 \(v_{k+1} = f(v_k)\) 跑了 100 轮,误差 \(\|v_{100} - v^*\|_\infty < 0.01\)。\(\gamma = 0.9\) 与 \(\gamma = 0.99\) 对应的"\(\|v_0 - v^*\|_\infty\) 起始误差" 上界各是多少?</summary>
+    <p><strong>A.</strong> 由 \(\|v_k - v^*\|_\infty \le \gamma^k \|v_0 - v^*\|_\infty\) 反推:\(\|v_0 - v^*\|_\infty \le 0.01 / \gamma^{100}\)。\(\gamma = 0.9\):\(0.9^{100} \approx 2.66 \times 10^{-5}\),起始误差上界 \(\approx 376\)。\(\gamma = 0.99\):\(0.99^{100} \approx 0.366\),起始误差上界 \(\approx 0.0273\)。<em>解读</em>:\(\gamma = 0.9\) 的"100 轮把误差降到 0.01" 容许起始误差<em>非常大</em>(376),非常宽容;\(\gamma = 0.99\) 的"100 轮降到 0.01" 只允许起始误差 0.027,几乎要求初值就接近真值。<em>实践含义</em>:\(\gamma\) 接近 1 时迭代法效率骤降,需要更多轮次或更好的初值估计 —— 这就是<em>warm start</em>(L4 §5 说过)的工程意义。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> Theorem 3.4 用了 \(v^* - v_\pi \ge \gamma^n P_\pi^n (v^* - v_\pi) \to 0\) 这个递推。为什么 \(\lim_{n\to\infty} \gamma^n P_\pi^n (v^* - v_\pi) = 0\)?\(P_\pi^n\) 这个序列<em>本身</em>会发散吗?</summary>
+    <p><strong>A.</strong> \(P_\pi^n\) 是行随机矩阵的幂,仍然是行随机矩阵 —— 它的元素都在 \([0, 1]\) 范围内,不会发散。极限 \(\lim_n P_\pi^n\) 存在(若 \(P_\pi\) 有极限)且行和仍为 1,但<em>具体值</em>不重要 —— 关键是 \(\|P_\pi^n w\|_\infty \le \|w\|_\infty\) 一致有界。所以 \(\|\gamma^n P_\pi^n w\|_\infty \le \gamma^n \|w\|_\infty \to 0\)(因 \(\gamma < 1\))。整套论证的<strong>真正核心</strong>是 \(\gamma^n \to 0\),\(P_\pi^n\) 的"有界" 是<em>背景条件</em>而非"魔法"。这跟 Ch.2 L4 收敛证明 \(\delta_k = \gamma^k P_\pi^k \delta_0\) 几何衰减是同一套机器,只是这里用在了"\(v^*\) 比 \(v_\pi\) 大"上而不是"迭代误差"上。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <p style="font-size:0.85rem;color:var(--color-muted);">视频:首选 Bilibili 直播(下方 iframe);若 iframe 不显示,用 YouTube 链接打开。BVID 当前是占位,实际 BVID 等首次部署时填。</p>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=11&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=11" target="_blank"><strong>▶ YouTube 备链(建议优先点这个)</strong></a></p>
+
+  <h3>下一节预告</h3>
+  <p>这一节我们用 Banach 定理把"BOE 一定有唯一解、迭代一定收敛、收敛速率 \(\gamma\)"全部钉死。<em>但 Ch.3 还差最后一块拼图</em>:<strong>\(v^*\) 与 \(\pi^*\) 在更换 MDP 参数时怎么变?</strong>具体而言,如果把 \(\gamma\) 调小(变近视),\(\pi^*\) 会怎么变?如果把所有 reward 加一个常数(<em>shifting</em>)或乘一个正数(<em>scaling</em>),\(\pi^*\) 会变吗?\(v^*\) 会怎么变?下一节(L4,Book §3.5-3.7)用<strong>Theorem 3.6 (optimal policy invariance under affine transformations)</strong> 系统回答这些问题:<em>仿射变换 \(r \to \alpha r + \beta\)(\(\alpha > 0\))保持 \(\pi^*\) 不变,\(v^*\) 按 \(\alpha v^* + \beta/(1-\gamma) \cdot \mathbf{1}\) 变换</em>;<em>而调 \(\gamma\) 是<strong>真换问题</strong>,\(\pi^*\) 一般会变(短视化)</em>。L4 会用 5×5 grid + γ 表 + 实例数据把这两件事区分清楚 —— 这是后面 Ch.4-Ch.10 调参时不踩坑的基础。</p>
+
+  <!-- Bottom nav -->
+  <nav class="lesson-nav">
+    <a href="lesson-02.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-04.html">Next →</a>
+  </nav>
+</div>
+
+<!-- Components -->
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>

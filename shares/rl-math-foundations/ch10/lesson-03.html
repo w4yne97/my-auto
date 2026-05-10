@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>Actor-Critic 方法(P3):重要性采样与离线 AC — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch10-l03" data-est-minutes="30">
+<div class="container">
+
+  <!-- Top nav -->
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.10 / Lesson 3</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <!-- Header -->
+  <p class="kicker">Bilibili #52 · YouTube #52 · Book §10.3 pp. 221-227</p>
+  <h1>L3: Actor-Critic Methods (P3 — Importance Sampling &amp; Off-policy AC)<small style="color:var(--color-muted); font-weight:400;">  (Actor-Critic 方法(P3):重要性采样与离线 AC)</small></h1>
+
+  <!-- §1 Why this lesson -->
+  <h2>§1 Why this lesson</h2>
+  <p>QAC 和 A2C 都是 on-policy 算法:采样用的策略(behavior policy)和正在优化的策略(target policy)是<em>同一个</em> \(\pi(\theta)\)。这意味着一旦 \(\theta\) 更新,旧数据就作废了——每条 experience 只能用一次。在需要大量样本才能收敛的任务里,这种"用完即扔"的代价极高。</p>
+  <p>本节(教材 §10.3,pp. 221-227)引入 <strong>重要性采样(importance sampling, IS)</strong> 技术。核心思路:设有一个 behavior policy \(\beta\) 在环境里采样,目标是学习另一个 target policy \(\pi\)。只要在梯度里乘上"纠正比" \(\rho = \pi(a|s) / \beta(a|s)\),期望就能从 \(\beta\) 的分布转换成 \(\pi\) 的分布,使旧数据可以重复利用。这是 off-policy AC 的数学基础,也是现代 PPO(clip IS ratio)算法的前身。</p>
+  <p>重要性采样技术并不局限于 RL——它是统计学中估计跨分布期望的通用工具。理解它对后续学习 PPO、TRPO、SAC 等前沿算法都至关重要。</p>
+
+  <!-- §2 核心定义 -->
+  <h2>§2 核心定义</h2>
+  <ul>
+    <li><strong>Behavior policy \(\beta\)(行为策略)</strong>:真正在环境中执行动作、产生数据的策略。可以是任何探索性策略(ε-greedy、高斯噪声、旧版本的 \(\pi_\theta\) 等)。关键要求:凡是 \(\pi(a|s) > 0\) 的 \((s,a)\),\(\beta(a|s)\) 也必须 \(> 0\),否则某些动作永远采不到。</li>
+    <li><strong>Target policy \(\pi\)(目标策略)</strong>:我们想要优化的策略,参数为 \(\theta\)。Off-policy 的目标就是:用 \(\beta\) 采到的数据来提升 \(\pi\) 的性能指标 \(J(\theta)\)。</li>
+    <li><strong>重要性权重(importance weight)\(\rho\)</strong>:\(\rho(a|s) = \pi(a|s;\theta) / \beta(a|s)\)。这是两个概率分布在同一动作上的比值。\(\rho > 1\) 说明 \(\pi\) 比 \(\beta\) 更倾向于这个动作(需要放大这个样本的权重);\(\rho < 1\) 说明 \(\pi\) 不那么倾向(需要缩小权重)。</li>
+    <li><strong>IS 恒等式(教材 (10.9))</strong>:\(\mathbb{E}_{X\sim p_0}[X] = \mathbb{E}_{X\sim p_1}\big[\frac{p_0(X)}{p_1(X)} X\big]\)。这是 IS 的数学根基:任何分布 \(p_0\) 下的期望,都可以用另一个分布 \(p_1\) 的加权期望来表示,权重就是比值 \(p_0/p_1\)。</li>
+    <li><strong>Off-policy PG 定理(教材 Theorem 10.1)</strong>:在 behavior policy \(\beta\) 采样下,目标函数 \(J(\theta) = \mathbb{E}_{S\sim d_\beta}[v_\pi(S)]\) 的梯度为 \(\nabla_\theta J(\theta) = \mathbb{E}_{S\sim\rho, A\sim\beta}\big[\frac{\pi(A|S;\theta)}{\beta(A|S)} \nabla_\theta \ln\pi(A|S;\theta) q_\pi(S,A)\big]\),其中 \(\rho(s)\) 是混合了 \(d_\beta\) 和 \(\pi\) 的状态分布。</li>
+    <li><strong>Off-policy AC 算法(教材 Algorithm 10.3)</strong>:与 A2C 完全相同,只是 actor 和 critic 的更新中都乘上了 IS 比 \(\rho_t = \pi(a_t|s_t;\theta_t)/\beta(a_t|s_t)\)。这个小小的乘法让整个框架从 on-policy 变成 off-policy。</li>
+  </ul>
+
+  <!-- §3 关键公式 + 推导 -->
+  <h2>§3 关键公式 + 推导</h2>
+
+  <p><strong>核心:IS 恒等式推导(教材 (10.9)-(10.10))</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\mathbb{E}_{X\\sim p_0}[X] = \\sum_{x} p_0(x) x = \\sum_{x} p_1(x) \\underbrace{\\frac{p_0(x)}{p_1(x)}}_{\\text{IS weight}} x = \\mathbb{E}_{X\\sim p_1}\\!\\left[\\frac{p_0(X)}{p_1(X)} X\\right]",
+    "annotations": [
+      {"key": "p0_exp", "label": "目标分布期望(难以直接采)", "description": "我们想估计 p₀ 下的期望 E[X],但 p₀ 的样本难以获取(比如 p₀=π 但 π 还没收敛,无法有效探索)。"},
+      {"key": "multiply_divide", "label": "乘以 p₁/p₁ = 1 的技巧", "description": "把每一项乘以 p₁(x)/p₁(x)(= 1),重新分组后就变成了对 p₁ 的期望。只要能从 p₁ 采样,就能估计 p₀ 下的期望。"},
+      {"key": "is_weight", "label": "重要性权重 p₀/p₁", "description": "权重 = 目标分布 / 采样分布。若某样本 x 在 p₀ 下概率高但在 p₁ 下概率低,权重大,该样本被强调;反之权重小,该样本被削弱。"}
+    ]
+  }'></div>
+
+  <p><strong>Off-policy AC Actor 更新(教材 §10.3.3)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\theta_{t+1} = \\theta_t + \\alpha_\\theta \\frac{\\pi(a_t|s_t;\\theta_t)}{\\beta(a_t|s_t)} \\delta_t \\nabla_\\theta \\ln\\pi(a_t|s_t;\\theta_t)",
+    "annotations": [
+      {"key": "rho", "label": "ρₜ = π/β — IS 比率", "description": "这是 on-policy A2C 和 off-policy AC 唯一的差异。ρₜ 纠正了采样偏差:β 采到但 π 不常用的动作(ρ < 1)被降权;π 常用但 β 少采的动作(ρ > 1)被升权。"},
+      {"key": "delta_advantage", "label": "δₜ — TD 误差(advantage 近似)", "description": "和 A2C 一样,δₜ = rₜ₊₁ + γv̂(sₜ₊₁;w) - v̂(sₜ;w)。IS 只修正动作采样分布的偏差,advantage 的估计方式不变。"},
+      {"key": "log_pi", "label": "∇ ln π — 仍然是 target policy 的梯度", "description": "注意这里 ln π 用的是 target policy π(θ) 的对数,而不是 β 的。我们在更新 θ,梯度方向仍然是 π 的梯度。IS 只是调整了每个样本的权重。"}
+    ]
+  }'></div>
+
+  <p>推导步骤:</p>
+  <div class="callout">
+    <strong>Step 1.</strong> <em>为什么直接用 β 的样本不行:</em>on-policy PG 定理要求 \(A \sim \pi(\theta)\)。若用 \(\beta\) 采样的 \(a_t\),期望 \(\mathbb{E}_{A\sim\beta}[\nabla\ln\pi \cdot q_\pi]\) 不等于 \(\mathbb{E}_{A\sim\pi}[\nabla\ln\pi \cdot q_\pi] = \nabla J\)。需要 IS 修正。
+  </div>
+  <div class="callout">
+    <strong>Step 2.</strong> <em>IS 修正的代价——方差增大:</em>\(\text{Var}(\rho X)\) 可能远大于 \(\text{Var}(X)\),尤其是当 \(\pi\) 和 \(\beta\) 差异大时(某些 \(\rho\) 值极大)。PPO 的核心工程创新就是把 \(\rho\) clip 在 \([1-\epsilon, 1+\epsilon]\) 区间,牺牲一点理论上的 IS 精度换取方差的稳定。
+  </div>
+  <div class="callout">
+    <strong>Step 3.</strong> <em>Critic 也需要 IS:</em>off-policy 时,critic 更新也要加 IS:\(w_{t+1} = w_t + \alpha_w \rho_t \delta_t \nabla_w \hat{v}(s_t;w_t)\)。原因:critic 评估的是 \(\pi\) 下的 \(v_\pi\),但数据由 \(\beta\) 产生,同样需要 IS 纠正采样偏差。Actor 和 critic 两边都加 \(\rho\) 是 Algorithm 10.3 和 A2C 的唯一区别。
+  </div>
+
+  <!-- §4 distribution-bar -->
+  <h2>§4 π 与 β 动作分布对比</h2>
+  <p>用 distribution-bar 展示在同一状态 \(s\) 下,target policy \(\pi\) 与 behavior policy \(\beta\) 的动作概率分布。重要性权重 \(\rho(a|s) = \pi(a|s)/\beta(a|s)\) 就是两条柱子的高度之比。以三个离散动作 \(\{a_1, a_2, a_3\}\) 为例:</p>
+
+  <div data-component="distribution-bar" data-config='{
+    "title": "动作分布:π (target) vs β (behavior)",
+    "bars": [
+      {
+        "label": "Target policy π",
+        "color": "#3498db",
+        "values": [
+          {"action": "a₁", "prob": 0.60},
+          {"action": "a₂", "prob": 0.30},
+          {"action": "a₃", "prob": 0.10}
+        ]
+      },
+      {
+        "label": "Behavior policy β",
+        "color": "#e67e22",
+        "values": [
+          {"action": "a₁", "prob": 0.20},
+          {"action": "a₂", "prob": 0.50},
+          {"action": "a₃", "prob": 0.30}
+        ]
+      }
+    ]
+  }'></div>
+
+  <p>解读上图:
+    <em>(1)</em> \(a_1\) 的 IS 权重 \(\rho(a_1) = 0.60/0.20 = 3.0\) — \(\pi\) 比 \(\beta\) 更倾向于 \(a_1\),\(\beta\) 采到 \(a_1\) 的样本会被放大 3 倍来代表 \(\pi\) 的视角。
+    <em>(2)</em> \(a_2\) 的 IS 权重 \(\rho(a_2) = 0.30/0.50 = 0.6\) — \(\pi\) 不那么喜欢 \(a_2\),样本被缩小到 0.6 倍。
+    <em>(3)</em> \(a_3\) 的 IS 权重 \(\rho(a_3) = 0.10/0.30 \approx 0.33\) — \(\beta\) 过度探索了 \(a_3\),该样本的贡献被大幅削减。
+    <em>(4)</em> 加权之后的期望等价于在 \(\pi\) 下直接采样的期望 — IS 恒等式的精髓。</p>
+  <p>注意:若 \(\pi\) 和 \(\beta\) 差异极大(如 \(\rho(a_1) = 10\)),IS 权重爆炸导致高方差。实际工程中通常限制两者的 KL 散度不超过某个阈值(TRPO),或者 clip IS 比率(PPO)。</p>
+
+  <!-- §5 常见误解 -->
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>off-policy 就是可以随便用任何历史数据——只要加上 IS 权重就万事大吉。<br>
+    <strong>实际上:</strong>IS 有一个严格的前提条件——<em>support coverage</em>:凡是 \(\pi(a|s) > 0\) 的 \((s,a)\),\(\beta(a|s)\) 必须也 \(> 0\)。如果 behavior policy 从未采过某个 \(\pi\) 想用的动作,IS 就无法修正这个偏差(分母为零或采样频率为零)。这就是"用很老的策略产生的数据"往往不能直接拿来训练新策略的原因。<br>
+    <strong>因为:</strong>IS 估计量 \(\frac{1}{n}\sum_i \frac{p_0(x_i)}{p_1(x_i)} x_i\) 在 \(p_1\) 下是 \(\mathbb{E}_{p_0}[X]\) 的<em>无偏</em>估计——但仅当 \(p_1(x) > 0\) 对所有 \(p_0(x) > 0\) 的 \(x\) 都成立时。否则某些 \(x\) 永远不会出现在样本里,期望的那部分贡献永远缺失。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>Off-policy AC 和 DQN 的 experience replay 是同一件事。<br>
+    <strong>实际上:</strong>两者动机相似(都想复用旧数据)但机制不同。DQN 用 Q-learning(off-policy 本身就不需要 IS,因为 Q-learning 用 \(\max_a\) 隐式处理了分布问题);Off-policy AC 用的是随机策略梯度,必须显式加 IS 权重来修正分布偏差。DQN replay buffer 可以随机混合任意时期的数据;off-policy AC 若 \(\pi\) 与 \(\beta\) 差距太大,即使加 IS 权重方差也会爆炸。<br>
+    <strong>因为:</strong>Q-learning 的 \(\max_a\) 操作让它天生 off-policy(无需知道采样策略是什么);而 AC 的策略梯度里含有 \(\ln\pi\) 的梯度,采样分布必须通过 IS 显式纠正。
+  </div>
+
+  <!-- §6 自检 + 视频 + teaser -->
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> 写出 IS 恒等式,并解释为什么 \(\beta(a|s) > 0\) 是必要条件。</summary>
+    <p><strong>A.</strong> IS 恒等式:\(\mathbb{E}_{A\sim\pi}[X] = \mathbb{E}_{A\sim\beta}[\frac{\pi(A|S)}{\beta(A|S)} X]\)。必要条件:\(\beta(a|s) > 0\) 对所有 \(\pi(a|s) > 0\) 的 \((s,a)\) 都成立(support coverage)。若 \(\beta(a|s) = 0\) 而 \(\pi(a|s) > 0\),分母为零 IS 权重无穷大;或该动作 \(\beta\) 从不采,该动作对期望的贡献永远缺失,导致 IS 估计有偏。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> Off-policy AC(Algorithm 10.3)与 A2C(Algorithm 10.2)的唯一区别是什么?</summary>
+    <p><strong>A.</strong> 唯一区别:Actor 和 Critic 的更新公式中都<em>乘以了 IS 权重</em> \(\rho_t = \pi(a_t|s_t;\theta_t)/\beta(a_t|s_t)\)。<em>Actor</em>:\(\theta_{t+1} = \theta_t + \alpha_\theta \rho_t \delta_t \nabla_\theta\ln\pi(a_t|s_t;\theta_t)\)。<em>Critic</em>:\(w_{t+1} = w_t + \alpha_w \rho_t \delta_t \nabla_w \hat{v}(s_t;w_t)\)。数据生成改为由 \(\beta\) 执行而非 \(\pi\)。其余(TD 误差定义、advantage 近似方式)完全相同。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> 为什么实际工程(PPO)要 clip IS 权重?不 clip 有什么问题?</summary>
+    <p><strong>A.</strong> 不 clip 时,若 \(\pi\) 和 \(\beta\) 差异大,某些动作的 \(\rho = \pi/\beta\) 极大(比如 \(\pi\) 概率 0.8,\(\beta\) 概率 0.01,则 \(\rho = 80\))。这个样本的梯度贡献被放大 80 倍,导致方差爆炸、梯度步长不可控。PPO 的 clip:\(\rho_{\text{clip}} = \text{clip}(\rho, 1-\epsilon, 1+\epsilon)\),牺牲一点 IS 无偏性换取梯度稳定性。\(\epsilon = 0.2\) 是常用值,意味着策略更新不会让 IS 权重超过 1.2 或低于 0.8。这是 PPO 高效稳定的核心工程技巧。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=52&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=52" target="_blank">YouTube 备链</a></p>
+
+  <h3>下一节预告</h3>
+  <p>L1-L3 的 actor 都是随机策略 \(\pi(a|s;\theta)\)——输出动作的概率分布。但在连续动作空间(机器人关节力矩、车辆方向盘角度)里,离散化精度不够,而且 \(\arg\max\) 在连续空间上计算代价极高。L4 引入 <strong>确定性策略(deterministic policy)</strong> \(\mu(s;\theta)\):直接输出一个确定的动作值,不再是分布。这是 DPG 和 DDPG 的基础。</p>
+
+  <!-- Bottom nav -->
+  <nav class="lesson-nav">
+    <a href="lesson-02.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-04.html">Next →</a>
+  </nav>
+</div>
+
+<!-- Components -->
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>

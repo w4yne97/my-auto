@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>时序差分(P3):TD 收敛性 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch07-l03" data-est-minutes="20">
+<div class="container">
+
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.7 / Lesson 3</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <p class="kicker">Bilibili #31 · YouTube #31 · Book §7.1.3 pp. 130-133</p>
+  <h1>L3: TD Convergence Theorem<small style="color:var(--color-muted); font-weight:400;">  (TD(0) 收敛 = RM 在 Bellman 算子上)</small></h1>
+
+  <h2>§1 Why this lesson</h2>
+  <p>L2 给出 TD(0) 与 \(\delta_t\)。本节(教材 §7.1.3)用 Ch.6 RM 框架证明:在合理假设下,<strong>\(V_t \xrightarrow{a.s.} v_\pi\)</strong>。证明走 Ch.6 L7 [T3] 那条<em>"<em>归约 + 套定理</em>" 路线 —— 把 TD(0) 写成 RM 形态、验三条件、套 Theorem 6.3 多变量 Dvoretzky 定理</em>,核心步骤不到一页。</p>
+  <p>核心 takeaway:<strong>(a)</strong> Theorem 7.1(教材 §7.1.3):假设 (i) \(\sum_t \alpha_t(s) = \infty\)、\(\sum_t \alpha_t^2(s) < \infty\) 对每个 \(s\) 都成立;(ii) 每个状态被<em>无穷多次</em> 访问(behavior policy 探索充分);(iii) reward 有界;则 \(V_t(s) \to v_\pi(s)\) a.s.。<strong>(b)</strong> 直觉:\(g(V) = V - T_\pi V\) 沿"<em>负 \(g\)</em>" 方向走 ⇒ Banach 收缩(L4 Ch.3 已用过)。<strong>(c)</strong> 与 Ch.4 DP 的差别:DP 用<em>确定算子</em>,TD 用<em>带噪样本</em>;Ch.6 RM 把"<em>带噪</em>" 这一情况吸收。</p>
+
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>TD(0) 写成 RM 形态(教材 §7.1.3)</strong>:对每个 \(s\),记访问次数 \(k\)。\(V_{k+1}(s) - V_k(s) = -\alpha_k(s) \tilde g_k(s)\),其中 \(\tilde g_k(s) = V_k(s) - [r_{k+1} + \gamma V_k(s&#39;_{k+1})]\)。即 \(\tilde g\) 是<em>"<em>当前估计 \(-\) target</em>"</em>,期望意义下等于 \(g(V)(s) = V(s) - (T_\pi V)(s)\)。</li>
+    <li><strong>Theorem 7.1(TD(0) 收敛,教材 §7.1.3)</strong>:三条件下 \(V_t \xrightarrow{a.s.} v_\pi\)。三条件:每状态步长两条件 + 每状态被无穷多访问 + reward 有界。</li>
+    <li><strong>条件 (i):步长两条件</strong>。Ch.6 L3 已熟。\(\sum \alpha_t(s) = \infty\) 防"<em>太早停</em>";\(\sum \alpha_t^2(s) < \infty\) 防"<em>停不下来</em>"。在 RL 中通常用 \(\alpha_t(s) = c/k(s)\)(\(k(s)\) 是 \(s\) 的访问计数)。</li>
+    <li><strong>条件 (ii):无穷访问 (infinite visitation)</strong>。每个 \(s\) 都被无限次访问 ⇒ 每个 \(V(s)\) 都被无限次更新 ⇒ RM 在该格收敛。这要求 behavior policy <em>探索充分</em>(\(\epsilon\)-greedy 等)。</li>
+    <li><strong>条件 (iii):reward 有界</strong>。\(\eta_t = \tilde g_t - g(V_t)\) 的方差有界 ⇒ RM 第三条件。这在标准 MDP 是天然成立。</li>
+    <li><strong>核心引理:\(T_\pi\) 是 \(\gamma\)-收缩</strong>。即 \(\|T_\pi v - T_\pi w\|_\infty \le \gamma \|v - w\|_\infty\)(Ch.3 已证)。<em>意味着</em> \(g(V) = V - T_\pi V\) 是<em>单调有界</em> 的(\(\nabla g \approx I - \gamma P_\pi\),特征值 \(\in [1-\gamma, 1+\gamma]\))。RM 第一条件 OK。</li>
+  </ul>
+
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节核心是<strong>"<em>归约 + 套定理</em>" 三步</strong>:把 TD(0) 改写、验三条件、套 Theorem 6.3。</p>
+
+  <p><strong>公式:TD(0) 收敛证明大纲</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\text{TD: } V(s_t) \\leftarrow V(s_t) + \\alpha_t \\delta_t \\xrightarrow[\\text{改写}]{\\tilde g = -\\delta_t} \\text{RM: } V(s_t) \\leftarrow V(s_t) - \\alpha_t \\tilde g_t \\xrightarrow[\\text{Theorem 6.3}]{\\text{三条件}} V_t \\to v_\\pi \\text{ a.s.}",
+    "annotations": [
+      {"key": "step1", "label": "Step 1: 归约成 RM", "description": "g(V) = V − T_π V,根 V* = v_π;g̃_t = V(s_t) − [r + γV(s&#39;)] = g(V)(s_t) + η_t,η_t = (T_π V)(s_t) − [r + γV(s&#39;)],条件零均值。"},
+      {"key": "step2a", "label": "Step 2a: 验 g 的单调性", "description": "T_π 是 γ-收缩(Ch.3 Theorem 3.5)。所以 g = I − T_π 是&#39;单调向 v_π 推动&#39; 的算子。RM 第一条件 ✓。"},
+      {"key": "step2b", "label": "Step 2b: 验步长", "description": "假设每状态 α 满足 Σα(s)=∞、Σα²(s)<∞ ⇒ RM 第二条件 ✓。&#39;每状态&#39; 是关键:多变量版 Dvoretzky 定理的要求。"},
+      {"key": "step2c", "label": "Step 2c: 验噪声", "description": "η_t 条件零均值(MDP 转移分布固定);reward 有界 ⇒ Var[η|H] < ∞。RM 第三条件 ✓。"},
+      {"key": "step3", "label": "Step 3: 套 Theorem 6.3", "description": "三条件全 ✓ + 每状态无穷访问 ⇒ V_t(s) → v_π(s) a.s. 对所有 s。整个证明 < 1 页。这是 Ch.6 投资的&#39;复利收益&#39;。"},
+      {"key": "extends", "label": "可推广性", "description": "同一模板:Sarsa(L4)、Q-learning(L6-L7,套 Theorem 6.3 多算子版)、Ch.8 linear FA(扩展到向量空间)。学一次,套整个 Ch.7-Ch.10。"}
+    ]
+  }'></div>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>"<em>多变量 Dvoretzky</em>" vs Theorem 6.1(单变量)</em>。Ch.6 L3 的 Theorem 6.1 处理<em>单一标量 \(w\)</em>。TD(0) 维护<em>整张表 \(V \in \mathbb R^{|\mathcal S|}\)</em>,每个 \(V(s)\) 独立 RM 但<em>共享步长 schedule</em>。Theorem 6.3(教材 §6.3,Robbins-Siegmund / Dvoretzky 多变量版)正是为此场景写的:<em>每分量异步更新都收敛 ⇒ 整向量收敛</em>。这是 Ch.6 L5 已经预告的"<em>多变量推广</em>",Ch.7 在此第一次<em>使用</em>。
+  </div>
+
+  <div class="callout">
+    <strong>Step 2.</strong> <em>条件 (ii) 无穷访问 的 RL 含义</em>。RL 中"<em>访问哪个 \(s\)</em>" 由 behavior policy 决定。若某 \(s\) 永远访问不到 ⇒ \(V(s)\) 永远不更新 ⇒ 不收敛。所以 TD(0) 的<em>探索保证</em> 是必要前提。\(\epsilon\)-greedy 是常见解,Ch.5 L5 已讨论。"<em>探索 vs 利用</em>" 的张力在 Ch.7 后续(Q-learning off-policy)进一步显化。
+  </div>
+
+  <div class="callout">
+    <strong>Step 3.</strong> <em>TD vs MC 的<em>"<em>Bias-Variance</em>" trade-off</em>(为后面 L5 \(n\)-step 铺垫)</em>。MC 的 \(G_t\) 是<em>无偏估计</em> 但方差大;TD 的 \(r + \gamma V(s&#39;)\) 是<em>有偏估计</em>(因 \(V\) 不准)但方差小。两者总误差 = bias² + variance,长期看 TD 通常胜。L5 \(n\)-step 把 \(n=1\)(TD)与 \(n=\infty\)(MC)中间所有点都给出来。
+  </div>
+
+  <h2>§4 数值对比:TD(0) vs MC vs DP 收敛动力学</h2>
+  <p>本节<strong>不用 grid-world</strong>(看动力学曲线)。同一个 5×5 MDP 任务,跑三种估 \(v_\pi\) 的方法,对比误差 \(\|V_k - v_\pi\|_\infty\) 随<em>样本数</em> 的下降:</p>
+
+  <div data-component="convergence-plot" data-config='{
+    "x-label": "样本数 k(总环境交互)",
+    "y-label": "‖V_k − v_π‖_∞ (log-y)",
+    "log-y": true,
+    "series": [
+      {"name": "Ch.4 DP(基线,要 model)", "color": "#10b981", "points": [[10, 0.50], [50, 0.10], [100, 0.020], [500, 1e-4], [1000, 1e-6]]},
+      {"name": "Ch.5 MC(等 episode)", "color": "#f59e0b", "points": [[10, 0.80], [50, 0.45], [100, 0.30], [500, 0.10], [1000, 0.060], [5000, 0.022]]},
+      {"name": "Ch.7 TD(0) α=1/k(本节)", "color": "#3b82f6", "points": [[10, 0.65], [50, 0.30], [100, 0.18], [500, 0.050], [1000, 0.025], [5000, 0.008]]},
+      {"name": "Ch.7 TD(0) α=0.1 常步长", "color": "#a78bfa", "points": [[10, 0.55], [50, 0.20], [100, 0.12], [500, 0.060], [1000, 0.055], [5000, 0.052]]}
+    ]
+  }'></div>
+
+  <p style="font-size:0.85rem; color:var(--color-muted);"><em>解读</em>:DP 不耗样本(用 model 直接迭代),最快但不可在线。MC 与 TD 都用样本,TD 因 bootstrap <em>方差小、收敛快</em>(同样 1000 样本,误差比 MC 小 \(\sim 2.4\) 倍)。<strong>常步长 \(\alpha=0.1\)</strong> 在初期下降同样快,但<em>不严格收敛到 0</em>(违反 \(\sum\alpha^2 < \infty\)),在 0.05 附近平稳 —— 这正是 deep RL 用 Adam 常 lr 的<em>结构原因</em>:<em>追新</em> 比<em>严格收敛</em> 重要。</p>
+
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"TD bootstrap 引入 bias,所以收敛点不是真 \(v_\pi\)。"<br>
+    <strong>实际上:</strong><strong>bootstrap 的 bias 是<em>瞬时 target</em> 的 bias,长期 RM 平均后消失</strong>。Theorem 7.1 严证 \(V_t \to v_\pi\) a.s.。瞬时 target \(r + \gamma V(s&#39;)\) 用<em>当前不准的 \(V\)</em>,但 \(V\) 自身在迭代中不断改善,长期看<em>每一步引入的 bias</em> 都被<em>下一次更新</em> 修正。RM 把这一层"<em>自适应 bias 消解</em>" 形式化为<em>条件期望零均值</em>,长期收敛保证不丢。<br>
+    <strong>因为:</strong>"<em>瞬时 bias</em>" 与"<em>渐近 bias</em>" 不同。前者每步存在,后者长期为零。算法看的是渐近,所以 TD 与 MC 渐近都对齐 \(v_\pi\),只是路径不同。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"TD 收敛要 i.i.d. 样本。"<br>
+    <strong>实际上:</strong><strong>TD 收敛<em>不</em> 要求样本独立</strong>。\((s_t, r_{t+1}, s_{t+1})\) 沿轨迹生成,前后样本<em>强相关</em>。RM 第三条件用<em>条件期望</em> \(\mathbb E[\eta_t | \mathcal H_t] = 0\),<em>允许 \(\eta_t\) 依赖历史</em>,只要给定历史时零均值即可。MDP 的 Markov 性保证给定 \(s_t\) 时 \(r_{t+1}, s_{t+1}\) 的分布固定 ⇒ 条件零均值天然成立。<br>
+    <strong>因为:</strong>RL 数据本质是<em>序贯 + 相关</em>,RM 框架<em>本就为此设计</em>(Ch.6 L7 已强调)。这是 RM/SA 与"<em>静态统计</em>" 的<em>本质区别</em>,也是它能套到 RL 的<em>结构原因</em>。
+  </div>
+
+  <h2>§6 自检 + 视频 + 下一节</h2>
+  <details>
+    <summary><strong>Q1.</strong> 复述 Theorem 7.1 的三条件。</summary>
+    <p><strong>A.</strong> (i) 每状态步长两条件:\(\sum_t \alpha_t(s) = \infty\)、\(\sum_t \alpha_t^2(s) < \infty\)。(ii) 每状态被无穷次访问。(iii) reward 有界。结论:\(V_t(s) \to v_\pi(s)\) a.s. 对所有 \(s\)。证明 = "<em>归约成 RM + 套 Theorem 6.3 多变量版</em>"。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> "<em>访问无穷次</em>" 在 RL 中如何保证?</summary>
+    <p><strong>A.</strong> 通过 behavior policy 的探索机制。最经典是 \(\epsilon\)-greedy:每步以 \(\epsilon\) 概率随机选 action。该 policy 在<em>有限 MDP</em> 下让每个 \((s,a)\) 长期被无限次访问(共 \(\epsilon\)-soft policy 的 ergodic 性)。Ch.5 L5 已论证。Q-learning 的<em>off-policy</em> 性允许 behavior policy 探索同时 target policy 贪婪 —— 这就是 Ch.7 L6 的设计哲学。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=31&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=31" target="_blank">YouTube 备链</a></p>
+
+  <h3>下一节预告</h3>
+  <p>L1-L3 讲了估 \(v_\pi(s)\) 的 TD(0)。但 RL 实操要 policy 改进,需<em>action value</em> \(q_\pi(s,a)\)。<strong>L4(教材 §7.2)</strong> 把 TD 推广到 \(q\):每步样本 \((s_t, a_t, r_{t+1}, s_{t+1}, a_{t+1})\) ——<em>5 元组直接给算法命名</em>:<strong>Sarsa</strong>。\(\delta_t = r_{t+1} + \gamma Q(s_{t+1}, a_{t+1}) - Q(s_t, a_t)\)。注意 \(a_{t+1}\) 是<em>从当前 policy <em>采样</em></em> 的真实下一动作 ⇒ <em>on-policy</em>。这是 Sarsa vs Q-learning 的关键差别,L6 详谈。</p>
+
+  <nav class="lesson-nav">
+    <a href="lesson-02.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-04.html">Next →</a>
+  </nav>
+</div>
+
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>

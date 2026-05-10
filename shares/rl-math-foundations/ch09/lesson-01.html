@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>策略梯度方法(P1):基本思想 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch09-l01" data-est-minutes="20">
+<div class="container">
+
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.9 / Lesson 1</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <p class="kicker">Bilibili #45 · YouTube #45 · Book §9.1 pp. 191-193</p>
+  <h1>L1: Policy Gradient Methods (P1) — Basic Idea<small style="color:var(--color-muted); font-weight:400;">  (策略梯度方法 P1:基本思想)</small></h1>
+
+  <h2>§1 Why this lesson</h2>
+  <p>Ch.8 L8 §6 留下一句关键话:DQN 的 \(\max_{a&#39;}\hat q(s&#39;, a&#39;; w_T)\) <em>钉</em> 住了<strong>discrete actions</strong>。连续控制 ⇒ <em>无 max 可言</em>,DQN 失效。本节(教材 §9.1, pp. 191-193)给一个<em>结构性的另一支</em>:不再先学 \(\hat q\) 再 \(\arg\max\),而是<strong>直接</strong> 把<em>策略</em> 自己<em>参数化</em> 成 \(\pi(a|s; \theta)\),用<em>梯度上升</em> 优化某个<em>标量目标</em> \(J(\theta)\)。这一步看似简单,实际上<em>整个 deep RL 的另一半都从这里展开</em>:Ch.10 actor-critic、PPO、SAC、DDPG 全是该思路的变体。</p>
+  <p>核心 takeaway:<strong>(a) 表 vs 函数</strong>:Ch.1-Ch.8 的 \(\pi(a|s)\) 是<em>表</em>(Table 9.1),Ch.9 换成 \(\pi(a|s; \theta)\)(NN softmax,Fig. 9.2),\(\theta \in \mathbb R^m\)、\(m \ll |\mathcal S||\mathcal A|\)。<strong>(b) 最优定义改写</strong>:表式"<em>最优</em>" = "<em>逐状态价值最大</em>"(Ch.3 BOE);函数式"<em>最优</em>" = "<em>标量指标 \(J(\theta)\) 最大</em>"。<strong>(c) 更新规则一统</strong>:一个公式 \(\theta_{t+1} = \theta_t + \alpha \nabla_\theta J(\theta_t)\),不再"<em>策略评估 + 策略改进</em>" 双层循环。<strong>(d) 三大优势</strong>:大/连续空间可学;参数共享 ⇒ 泛化 + 样本效率;策略天然<em>随机</em>(\(\pi > 0\)),自带探索。<strong>(e) 桥到 Ch.6</strong>:SGD 模板第三次应用 —— Ch.7 估 \(V/Q\),Ch.8 优化 \(\hat v\),Ch.9 优化 \(\pi_\theta\)。骨架不变,目标对象换。</p>
+
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>参数化策略 (parameterized policy) \(\pi(a|s; \theta)\)</strong>:输入 \(s\)(可附 \(a\)),输出动作概率,参数为 \(\theta \in \mathbb R^m\)。常见实现是 <em>softmax</em>(教材 (9.12)):\(\pi(a|s; \theta) = e^{h(s, a; \theta)} / \sum_{a&#39;} e^{h(s, a&#39;; \theta)}\),其中 \(h(s, a; \theta)\) 是<em>偏好函数</em>(NN 的 logits)。这保证 \(\pi > 0\)(策略<em>恒</em> 探索)且 \(\sum_a \pi = 1\)。</li>
+    <li><strong>策略目标函数 (policy objective) \(J(\theta)\)</strong>:把"<em>策略好坏</em>" 浓缩成<em>一个</em> 标量。L2 给<em>平均状态值</em> \(\bar v_\pi = \mathbb E_{s\sim d}[v_\pi(s)]\),L3 给<em>平均奖励</em> \(\bar r_\pi = \mathbb E_{s\sim d_\pi}[r_\pi(s)]\)。两者在 \(\gamma < 1\) 下等价(\(\bar r_\pi = (1-\gamma)\bar v_\pi\),Lemma 9.1)。</li>
+    <li><strong>梯度上升 (gradient ascent) 模板</strong>:\(\theta_{t+1} = \theta_t + \alpha \nabla_\theta J(\theta_t)\)。\(\alpha > 0\) 是学习率,\(\nabla_\theta J\) 是<em>本章最核心的对象</em>(L4 给出 PG 定理)。注意是<em>+</em> 不是<em>-</em>:\(J\) 越大越好。</li>
+    <li><strong>policy-based vs value-based 的<em>结构差</em></strong>:value-based(Ch.4-Ch.8)走<em>"<em>v / q → π</em>"</em> 路径(先学价值,greedy 导出策略);policy-based 走<em>"<em>θ → π</em>" 直达</em>(把策略当主优化对象)。两者输出都是 \(\pi\),但<em>谁是 first-class object</em> 不同。Ch.10 actor-critic 把两者合并:critic 学价值帮 actor 估梯度。</li>
+    <li><strong>"<em>表</em> 不再可写</em>"</strong>:Ch.1-Ch.8 的 \(\pi\) 总能<em>显式</em> 列出每 \((s, a)\) 概率;Ch.9 的 \(\pi(a|s; \theta)\) 是<em>函数</em>,改 \(\theta\) 一次,所有 \((s, a)\) 概率<em>同时</em> 改。这是泛化能力的<em>根</em>(类比 Ch.8 FA),也是连续动作能跑的<em>根</em>(无需枚举)。</li>
+    <li><strong>策略<em>一定</em> 随机</strong>:softmax 给的 \(\pi(a|s) \in (0, 1)\),无<em>纯</em> 0 / 纯 1。这与 Ch.5 ε-greedy 类似但<em>更彻底</em>:ε-greedy 是"<em>greedy + 一点随机</em>",softmax 是"<em>整个</em> 概率分布由 \(\theta\) 决定"。最优策略可能是<em>近</em> 确定性(\(h\) 一项远大于其他)而非<em>纯</em> 确定。</li>
+    <li><strong>桥到 Ch.6 SGD 模板</strong>:\(\theta_{t+1} = \theta_t + \alpha \nabla_\theta J(\theta_t)\) 是 RM/SGD 应用在 \(J\) 上;真梯度未知 ⇒ 用样本估(Ch.6 L4 SGD 范式)。L4 给真梯度形式,L5 REINFORCE 把它变成<em>样本可估</em>。</li>
+  </ul>
+
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节核心是<strong>"<em>从表到函数</em>" 的<em>形式化</em></strong>,以及 PG 算法的<em>骨架</em>。</p>
+
+  <p><strong>公式 1:策略表示 — softmax 函数(教材 (9.12))</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\pi(a | s; \\theta) = \\frac{e^{h(s, a; \\theta)}}{\\sum_{a&#39;\\in\\mathcal A} e^{h(s, a&#39;; \\theta)}}, \\quad a \\in \\mathcal A",
+    "annotations": [
+      {"key": "preference", "label": "h(s, a; θ) 偏好函数", "description": "NN 的 logits 输出。h 越大,对应动作越受偏好。h 的形式可以是线性 φ(s,a)^T θ,也可以是深度网络。h 不是概率,可正可负。"},
+      {"key": "softmax", "label": "softmax 归一化", "description": "把任意实数 h 映射到 (0,1) 且和为 1 的概率分布。这是 Ch.9 选 softmax 而非 sigmoid 的关键 —— 多动作 + 概率约束自然满足。"},
+      {"key": "positive", "label": "π > 0 ⇒ 自带探索", "description": "softmax 输出永远 > 0(指数恒正)。所以 π 永远&#39;能选&#39; 任何动作,只是概率有大有小。这避免了 Ch.5 ε-greedy 的&#39;探索由人工 ε 注入&#39; ⇒ 探索-利用是&#39;θ 长出来的&#39;。"},
+      {"key": "log_valid", "label": "ln π 有定义", "description": "因 π > 0,ln π 永远有限,这让 L4 的 log-derivative trick ∇π/π = ∇ln π 在所有 (s,a) 处都成立。若用 0/1 硬策略,ln 0 = -∞ ⇒ PG 失效。"},
+      {"key": "near_deterministic", "label": "近确定性", "description": "若某 h(s, a*) ≫ 其他,π(a*|s) → 1。最优 θ 一般使每状态有唯一&#39;高 h&#39; 动作 ⇒ 实践中 π 可逼近确定性,但永远不是纯 0/1。"}
+    ]
+  }'></div>
+
+  <p><strong>公式 2:策略梯度上升的<em>骨架</em>(教材 (9.0) 与开篇)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\theta_{t+1} = \\theta_t + \\alpha \\nabla_\\theta J(\\theta_t)",
+    "annotations": [
+      {"key": "ascent", "label": "+ 号:上升不下降", "description": "目标 J(θ) 越大越好(策略&#39;好&#39; 是&#39;状态值大&#39; 或&#39;每步奖励大&#39;)。所以是 ascent 不是 descent。这与 Ch.6/Ch.8 的&#39;损失下降&#39;(− 号)在<em>方向</em> 上恰好相反 —— 但本质都是梯度法。"},
+      {"key": "alpha", "label": "α 学习率", "description": "可常数(Adam 的常用做法)或满足 RM 步长(Ch.6 L3 Σα=∞、Σα²<∞)。实践中常用 1e-3 ~ 1e-4 + Adam 自适应。"},
+      {"key": "true_grad", "label": "∇J(θ) 是&#39;真&#39; 梯度", "description": "L4 PG 定理给出 ∇J = E[∇ln π · q_π]。&#39;真&#39; 梯度需要遍历所有 (s, a) 求期望,计算上不可达。"},
+      {"key": "stochastic_grad", "label": "样本估 → 随机梯度", "description": "L5 REINFORCE 用单条 episode 的 (s_t, a_t, G_t) 估期望,得 θ ← θ + α ∇ln π(a_t|s_t; θ) · G_t。这是 Ch.6 SGD 模板第三次应用(Ch.7/Ch.8/Ch.9)。"},
+      {"key": "vs_value_based", "label": "vs Ch.4-Ch.8", "description": "Ch.4-Ch.8 优化的是 v̂ 或 q̂ 的损失,θ 出现在&#39;价值&#39; 里;Ch.9 直接优化策略目标,θ 出现在&#39;策略&#39; 里。最终都用梯度法,但&#39;首要对象&#39; 不同。"}
+    ]
+  }'></div>
+
+  <p>这两条公式合在一起就是<em>整个 Ch.9 的骨架</em>:剩下的 4 节全部回答<em>"<em>\(J(\theta)\) 是什么</em>"(L2-L3)、<em>"\(\nabla_\theta J\) 怎么算</em>"(L4)、<em>"用样本怎么估</em>"(L5)</em>。</p>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>"<em>表 → 函数</em>" 不只是<em>形式</em> 改</em>。表式 \(\pi(a|s)\) 有 \(|\mathcal S|\cdot|\mathcal A|\) 个独立数,改一个不影响其他;函数式 \(\pi(a|s; \theta)\) 由 \(\theta\) 决定<em>所有</em> \((s, a)\),改一个 \(\theta_i\) <em>同时</em> 改所有 \(\pi\) 值。这是<em>共享参数</em> 的<em>双刃剑</em>:好处 = 泛化(在没访问的 \(s\) 上也有合理 \(\pi\)),坏处 = 互相干扰(改某 \((s, a)\) 可能<em>反向</em> 影响其他)。Ch.8 FA 在<em>价值</em> 上揭示了这点;Ch.9 在<em>策略</em> 上重演。
+  </div>
+
+  <div class="callout">
+    <strong>Step 2.</strong> <em>"<em>最优</em>" 定义的<em>松绑</em></em>。表式下 BOE 要求<em>每个</em> 状态值最大(Ch.3 严苛定义);函数式下只能要求<em>标量指标</em> \(J\) 最大,无法对<em>每个</em> \(s\) 都最优(参数共享 ⇒ 不同 \(s\) 的最优策略可能<em>互斥</em>)。这是<em>结构上的妥协</em>:换来的是大空间可学。教材原文:<em>"<em>policy is defined as optimal if it can maximize certain scalar metrics</em>"</em>,把"<em>逐状态最优</em>" 弱化为"<em>整体指标最优</em>"。
+  </div>
+
+  <div class="callout">
+    <strong>Step 3.</strong> <em>"<em>探索 = 随机性</em>" 自动满足</em>。Ch.5 MC ε-greedy 用<em>外加</em> ε 保证<em>每动作 ≥ ε/|A|</em>,Ch.7 Q-learning 类似。Ch.9 softmax 天然 \(\pi > 0\) ⇒ 不需 ε,概率小但<em>非零</em> 的动作仍偶尔被选。这是 Ch.9 比 value-based <em>原生</em> 优雅的一点 —— exploration 是<em>策略表示</em> 的副产品。<em>但代价</em>:不能输出<em>纯</em> 确定性策略(对某些问题如 chess 不利,Ch.10 deterministic AC 解决)。
+  </div>
+
+  <h2>§4 数值演示:softmax 策略随 \(\theta\) 演化</h2>
+  <p>本章不用 grid-world(geometry 不出彩);改用<em>"<em>3 动作 softmax</em>" 玩具</em> 看 \(\theta\) 如何<em>整体</em> 推动 \(\pi\)。设状态 \(s\) 固定,3 动作偏好 \(h_1 = \theta_1, h_2 = \theta_2, h_3 = 0\)(动作 3 作 baseline)。</p>
+
+  <p><strong>初始 \(\theta = (0, 0)\),三动作均匀</strong>:</p>
+  <div data-component="distribution-bar" data-config='{
+    "title": "softmax 策略 π(a|s; θ),θ=(0,0):均匀分布",
+    "items": [
+      {"label": "a₁ (h=0)", "value": 0.333},
+      {"label": "a₂ (h=0)", "value": 0.333},
+      {"label": "a₃ (h=0, baseline)", "value": 0.333}
+    ]
+  }'></div>
+
+  <p><strong>更新一步,\(\theta = (1.0, -0.5)\),偏向 a₁</strong>:</p>
+  <div data-component="distribution-bar" data-config='{
+    "title": "softmax 策略,θ=(1.0, -0.5):a₁ 概率上升",
+    "items": [
+      {"label": "a₁ (h=1.0)", "value": 0.563},
+      {"label": "a₂ (h=-0.5)", "value": 0.126},
+      {"label": "a₃ (h=0)", "value": 0.207}
+    ]
+  }'></div>
+
+  <p><strong>再更新,\(\theta = (3.0, -1.5)\),近确定性偏 a₁</strong>:</p>
+  <div data-component="distribution-bar" data-config='{
+    "title": "softmax 策略,θ=(3.0, -1.5):近确定性",
+    "items": [
+      {"label": "a₁ (h=3.0)", "value": 0.910},
+      {"label": "a₂ (h=-1.5)", "value": 0.010},
+      {"label": "a₃ (h=0)", "value": 0.045}
+    ]
+  }'></div>
+
+  <p style="font-size:0.85rem; color:var(--color-muted);">观察:仅<em>2 维</em> \(\theta\) 控制<em>3 维</em> 概率单纯形上的<em>整条</em> 轨迹;\(\theta\) 走得越远,\(\pi\) 越接近"<em>选 a₁</em>" 的确定性策略,但<em>永远</em> 不是纯 1。<em>"<em>梯度上升</em>"</em> 的几何就是:在 \(\theta\) 空间走斜上方向,推 \(\pi\) 朝"<em>更好动作</em>" 集中。L4 PG 定理告诉我们这<em>斜上方向</em> 长什么样。</p>
+
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"既然 Ch.8 DQN 能用 NN 学 Q,直接 NN 学策略<em>不就一样</em>?把 Q 网络的输出层改成 softmax 概率不就完事了?"<br>
+    <strong>实际上:</strong><strong>"<em>NN 学 Q</em>" 与"<em>NN 学 \(\pi\)</em>" 训练目标<em>结构</em> 不同</strong>。DQN 的目标是<em>"<em>减小 TD 误差</em>"</em>(Ch.8 L2 MSPBE),loss 形式是<em>回归</em> \((y_T - \hat q)^2\),有<em>明确</em> 的 supervision-style label \(y_T\);PG 的目标是<em>"<em>增大 \(J(\theta)\)</em>"</em>,loss 形式是<em>"<em>负</em> \(\nabla \ln \pi \cdot q_\pi\)</em>"(L4),没有<em>"<em>label \(\pi^*\)</em>"</em>(策略本身就是要学的东西)。两者都用 SGD,但<em>"<em>梯度方向从哪来</em>"</em> 完全不同:DQN 从<em>预测误差</em> 来,PG 从<em>采样轨迹的回报</em> 来(L5 REINFORCE)。<br>
+    <strong>因为:</strong>价值学习是<em>supervised-style</em>(有 \(y_T\) 当 label);策略学习是<em>direct-policy</em>(目标 \(J\) 是<em>策略</em> 的函数,无 label)。这一<em>结构差</em> 导致 PG 比 DQN 方差大、需 baseline 减方差(Ch.10),但<em>能</em> 处理 DQN 不能的连续动作。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"\(\pi\) 既然必须随机,<em>最优</em> 策略肯定不是确定性 —— 与 Ch.3 BOE 矛盾。"<br>
+    <strong>实际上:</strong><strong>softmax 下 \(\pi\) 可<em>近</em> 确定性</strong>。当 \(h(s, a^*)\) 远大于其他时 \(\pi(a^*|s) \to 1\)。Ch.3 BOE 说"<em>最优策略<em>存在</em> 确定性形式</em>";softmax 能<em>逼近</em> 但不<em>等于</em>。实践上 \(\pi\) 仍有极小 exploration 残留(\(\theta\) 有限),通常是<em>优点</em>(鲁棒)。<br>
+    <strong>因为:</strong>极限可达,但<em>有限 \(\theta\)</em> 永远 stochastic。Ch.10 DPG 用 \(\mu(s; \theta)\) 直接输出确定动作,绕开 softmax 限制。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"PG 看上去比 DQN 简洁(无 target net、无 replay),应该<em>更稳定</em>。"<br>
+    <strong>实际上:</strong><strong>PG 反而<em>方差大、收敛慢</em></strong>。原因:<em>(i)</em> 梯度是<em>策略期望</em> 的样本估,episode 间方差大(L5 REINFORCE);<em>(ii)</em> 无 bootstrap(MC 风格 ⇒ 方差高);<em>(iii)</em> on-policy 严格 ⇒ 数据用一次就废。Ch.10 AC 专门缓解 —— critic 替代 \(G_t\)、A=q-v 进一步减、IS 让数据可重用。<br>
+    <strong>因为:</strong>DQN 的 target net + replay 是 deadly triad 的工程缓解;PG 不 bootstrap 价值故无 deadly triad,但<em>方差</em> 是 PG 的主要敌人。Ch.10 把 Ch.8 critic 与 Ch.9 actor 合并,同时解决两者代价。
+  </div>
+
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> 写出 softmax 策略形式,并说明<em>为什么</em> Ch.9 选用 softmax 而非 sigmoid。</summary>
+    <p><strong>A.</strong> \(\pi(a|s; \theta) = e^{h(s, a; \theta)} / \sum_{a&#39;} e^{h(s, a&#39;; \theta)}\)(教材 (9.12))。<em>为什么 softmax</em>:<em>(i)</em> 多动作场景下,sigmoid 给每动作一个 \([0,1]\) 但<em>和不为 1</em>(独立伯努利),需事后归一;softmax <em>原生</em> 满足 \(\sum_a \pi = 1\)。<em>(ii)</em> softmax 把<em>偏好 \(h\)</em> 与<em>概率 \(\pi\)</em> 分离 —— \(h\) 可任意实数(NN logits 自由),\(\pi\) 自动 (0,1)。<em>(iii)</em> \(\pi > 0\) ⇒ \(\ln \pi\) 有限 ⇒ L4 log-derivative trick \(\nabla \pi / \pi = \nabla \ln \pi\) 在所有 \((s, a)\) 处都成立,这是 PG 算法<em>能存在</em> 的形式根。换 sigmoid 或硬 0/1 ⇒ \(\ln 0 = -\infty\),PG 在某些动作上失效。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> 表式策略下的"<em>最优</em>" 定义(BOE)与函数式策略下的"<em>最优</em>" 定义有何不同?</summary>
+    <p><strong>A.</strong> 表式下"<em>\(\pi^*\) 最优</em>" = "<em>对每个 \(s\),\(v_{\pi^*}(s) \ge v_\pi(s)\) 对任意 \(\pi\)</em>"(逐状态最优,Ch.3 BOE)。函数式下"<em>\(\theta^*\) 最优</em>" = "<em>\(J(\theta^*) \ge J(\theta)\) 对任意 \(\theta\)</em>"(标量指标最优)。两者差别:<em>(a)</em> 表式逐状态严苛,函数式只能保证<em>整体</em> 指标(L2 平均状态值或 L3 平均奖励)。<em>(b)</em> 函数式因<em>共享 \(\theta\)</em> ⇒ 不同状态的最优策略可能<em>互斥</em>(参数干扰),无法同时逐状态最优;表式则可独立调每格。<em>(c)</em> 实际工程接受这种"<em>松绑</em>",换大空间可学(连续动作、像素状态)。Ch.9 整章都建立在<em>函数式 + 标量指标</em> 这个新框架上。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> 为什么 PG 比 DQN <em>原生</em> 适合连续动作?DQN 的具体瓶颈在哪?</summary>
+    <p><strong>A.</strong> DQN 核心 update 含 \(y_T = r + \gamma \max_{a&#39;}\hat q(s&#39;, a&#39;; w_T)\),\(\max_{a&#39;}\) 要求<em>枚举</em> 所有 \(a&#39;\)。连续动作 \(a \in \mathbb R^d\) <em>无</em> 枚举(无穷多);若用<em>数值优化</em> 求 max 每步训练成本爆炸(每条 transition 一次内层优化)。PG 不<em>计算</em> max,而<em>直接</em> 把策略写成 \(\pi(a|s; \theta)\) —— 对连续动作可输出<em>Gaussian</em> 分布参数 \((\mu(s; \theta), \sigma(s; \theta))\),采样 \(a \sim \mathcal N(\mu, \sigma^2)\)。\(\nabla_\theta \ln \pi\) 对 Gaussian 是<em>解析</em> 闭形式,PG 直接套。<em>结果</em>:DDPG / SAC / PPO 全在连续控制(机器人、Atari 离散变种、自动驾驶)上是 SOTA,DQN 只能在 Atari 离散动作。这是 Ch.9 与 Ch.8 的<em>能力分界线</em>。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=45&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=45" target="_blank">YouTube 备链</a></p>
+
+  <h3>下一节预告</h3>
+  <p>本节立了"<em>策略 = 函数 \(\pi_\theta\),目标 = 标量 \(J(\theta)\),更新 = 梯度上升</em>" 的<em>骨架</em>,但<em>没</em> 定义 \(J(\theta)\) 的具体形式。<strong>L2(教材 §9.2)</strong> 给<em>第一种</em> 指标:<em>平均状态值 (average value)</em> \(\bar v_\pi = \mathbb E_{s\sim d}[v_\pi(s)] = \sum_s d(s) v_\pi(s)\)。关键设计选择是<em>"<em>加权分布 \(d(s)\) 怎么选</em>"</em>:可<em>独立</em> 于 \(\pi\)(\(d_0\),如均匀或起点 \(s_0\))得 \(\bar v_\pi^0\),也可<em>依赖</em> \(\pi\)(stationary distribution \(d_\pi\))。L2 还把 \(\bar v_\pi\) 与<em>"<em>discounted return</em>"</em> \(\mathbb E[\sum_{t=0}^\infty \gamma^t R_{t+1}]\) 联系起来 —— 这两者其实是<em>同一件事的不同写法</em>(教材 (9.1))。</p>
+
+  <nav class="lesson-nav">
+    <a href="../ch08/lesson-08.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-02.html">Next →</a>
+  </nav>
+</div>
+
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>

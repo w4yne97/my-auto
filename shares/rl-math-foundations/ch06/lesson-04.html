@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>随机近似与 SGD(P4):SGD 介绍 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch06-l04" data-est-minutes="20">
+<div class="container">
+
+  <!-- Top nav -->
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.6 / Lesson 4</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <!-- Header -->
+  <p class="kicker">Bilibili #25 · YouTube #25 · Book §6.4 pp. 114-116</p>
+  <h1>L4: SGD Algorithm — Introduction<small style="color:var(--color-muted); font-weight:400;">  (随机梯度下降:RM 在期望优化上的化身)</small></h1>
+
+  <!-- §1 Why this lesson -->
+  <h2>§1 Why this lesson</h2>
+  <p>L1-L3 把 RM 算法 \(w_{k+1} = w_k - a_k \tilde g(w_k, \eta_k)\) 的<em>形态</em>(L2)+ <em>收敛性</em>(L3)讲透。本节(教材 §6.4,pp. 114-116)把视角切到机器学习与深度学习每天都在用的<strong>Stochastic Gradient Descent (SGD)</strong>,并给出 Ch.6 整章的<em>核心命题之一</em>:<strong>SGD 是 RM 的特例</strong> —— 不是"<em>类似</em>",而是"<em>把 RM 中的 \(g\) 替换成 \(\nabla J\)、把 \(\tilde g\) 替换成<em>带噪梯度</em>" 的字面套用</em>。</p>
+  <p>关键洞察(教材 §6.4 + Box 6.1):<strong>(a)</strong> SGD 解的是<em>期望优化</em>:\(\min_w J(w) = \mathbb E_X[f(w, X)]\)(教材 (6.10))。<strong>(b)</strong> 普通梯度下降 \(w_{k+1} = w_k - \alpha_k \mathbb E[\nabla_w f(w_k, X)]\)(教材 (6.11))在<em>分布未知</em> 时不可用 —— 求不出期望。<strong>(c)</strong> SGD 用<em>单样本梯度</em> 替代:\(w_{k+1} = w_k - \alpha_k \nabla_w f(w_k, x_k)\)(教材 (6.13))。<strong>(d)</strong> 与 RM 同构(教材 Box 6.1):令 \(g(w) \doteq \nabla_w J(w) = \mathbb E[\nabla_w f(w, X)]\),则 SGD 求的是 \(g(w) = 0\) 的根;\(\tilde g(w_k, x_k) = \nabla_w f(w_k, x_k) = g(w_k) + \eta_k\),其中 \(\eta_k \doteq \nabla_w f(w_k, x_k) - \mathbb E[\nabla_w f(w_k, X)]\)。\(\eta_k\) 由 \(x_k\) i.i.d. 抽样保证<em>条件零均值</em>(教材 (6.13) 后段)。<strong>(e)</strong> SGD 收敛证明(Theorem 6.4)直接套 RM 三条件:\(c_1 \le \nabla^2 f \le c_2\)(强凸 + 光滑)、\(\sum\alpha=\infty,\sum\alpha^2<\infty\)、i.i.d. 样本。<strong>(f)</strong> "<em>L1 均值估计</em>" 是 SGD 在 \(f(w, X) = \|w - X\|^2/2\) 上的特例(L5 详谈) —— 整个 Ch.6 因此<em>首尾闭环</em>:从均值估计出发,经过 RM 抽象,回到均值估计作 SGD 第一例。
+
+  <!-- §2 核心定义 -->
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>期望优化问题(教材 (6.10))</strong>:\(\min_w J(w) \doteq \mathbb E_X[f(w, X)]\)。\(w\) 是参数(标量或向量),\(X\) 是随机变量。<em>典型场景</em>:监督学习里 \(X = (\text{input}, \text{label})\),\(f\) 是单样本损失;RL 里 \(X\) 是 trajectory 样本,\(f\) 是某种 surrogate loss。</li>
+    <li><strong>普通梯度下降 (Gradient Descent,GD,教材 (6.11))</strong>:\(w_{k+1} = w_k - \alpha_k \nabla_w J(w_k) = w_k - \alpha_k \mathbb E_X[\nabla_w f(w_k, X)]\)。<em>问题</em>:期望要么<em>无法解析求</em>(分布未知),要么<em>太贵</em>(数据集巨大,每步算 \(\nabla J\) 要扫一遍全数据)。</li>
+    <li><strong>批量梯度下降 (Batch GD,BGD,教材 (6.12))</strong>:用 \(n\) 个 i.i.d. 样本 \(\{x_i\}_{i=1}^n\) 估期望:\(w_{k+1} = w_k - \frac{\alpha_k}{n}\sum_{i=1}^n \nabla_w f(w_k, x_i)\)。<em>当 \(n\) 大时</em> 接近真梯度,但<em>每步成本 \(O(n)\)</em>,数据巨量时仍贵。</li>
+    <li><strong>随机梯度下降 (SGD,教材 (6.13))</strong>:\(w_{k+1} = w_k - \alpha_k \nabla_w f(w_k, x_k)\)。<em>每步只用一个样本 \(x_k\)</em>,成本 \(O(1)\)。"<em>stochastic</em>" 名字来源:\(x_k\) 是从 \(X\) 分布<em>随机抽样</em> 一次。</li>
+    <li><strong>SGD = RM 在 \(g = \nabla J\) 上跑(教材 Box 6.1)</strong>:把 SGD 的 \(\nabla_w f(w_k, x_k)\) 拆成 \(\mathbb E[\nabla_w f(w, X)] + (\nabla_w f(w_k, x_k) - \mathbb E[\nabla_w f(w_k, X)]) = g(w_k) + \eta_k\)。代入 SGD 得 \(w_{k+1} = w_k - \alpha_k[g(w_k) + \eta_k]\),正是 RM (6.5)。所以<em>SGD ⊂ RM</em>。</li>
+    <li><strong>\(\eta_k\) 在 SGD 中的具体形式</strong>:\(\eta_k = \nabla_w f(w_k, x_k) - \mathbb E_X[\nabla_w f(w_k, X)]\)。<em>条件零均值</em>:\(\mathbb E[\eta_k|\mathcal H_k] = \mathbb E_{x_k}[\nabla_w f(w_k, x_k) | w_k] - \mathbb E_X[\nabla_w f(w_k, X)] = 0\)(因为 \(x_k \sim X\) i.i.d. 与 \(\mathcal H_k\) 独立)。<em>方差有界</em>:若 \(|\nabla_w f(w, x)| < \infty\) 对所有 \(w, x\),则 \(\mathbb E[\eta^2|\mathcal H] < \infty\)。RM 第三条件自动满足。</li>
+    <li><strong>SGD 收敛定理(Theorem 6.4)</strong>:在 (a) \(0 < c_1 \le \nabla_w^2 f(w, X) \le c_2\)(\(f\) 关于 \(w\) 强凸 + 光滑)、(b) \(\sum\alpha_k = \infty,\sum\alpha_k^2 < \infty\)、(c) \(\{x_k\}\) i.i.d. 下,\(w_k \xrightarrow{a.s.} w^* \doteq \arg\min J\)。<em>证明</em>:Box 6.1 把 SGD 写成 RM 形式,直接套 Theorem 6.1。</li>
+  </ul>
+
+  <!-- §3 关键公式 + 推导 -->
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节核心是<strong>(6.13)</strong> 的简洁形式 + Box 6.1 的<strong>"<em>SGD ≡ RM 在 \(g = \nabla J\) 上</em>"</strong> 严格归约。</p>
+
+  <p><strong>公式 1:SGD 算法(教材 (6.13))</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "w_{k+1} = w_k - \\alpha_k \\nabla_w f(w_k, x_k), \\quad x_k \\overset{i.i.d.}{\\sim} X",
+    "annotations": [
+      {"key": "single_sample", "label": "单样本梯度", "description": "每步只取一个 x_k,算单点 ∇_w f(w_k, x_k)。这是&#39;stochastic&#39; 的来源 —— 不是&#39;算法不确定&#39;,而是&#39;每步用随机样本&#39;。"},
+      {"key": "alpha_k", "label": "α_k 步长", "description": "与 RM 的 a_k 完全同义。L3 的两条件 Σα=∞, Σα²<∞ 直接搬过来。深度学习里 Adam 等&#39;自适应&#39; 步长是工程优化,但核心仍是 SGD + step-size schedule。"},
+      {"key": "vs_bgd", "label": "vs BGD", "description": "BGD 每步用 n 样本,SGD 用 1。SGD 单步噪声大(单样本梯度 vs 真梯度差很多),但单步快 n 倍。L6 详谈两者权衡。"},
+      {"key": "vs_gd", "label": "vs GD", "description": "GD 用真期望 E[∇f] 不带噪;SGD 用单点 ∇f 带噪。GD 在分布已知 + 期望可算时是&#39;理论上最优&#39;;SGD 是&#39;期望不可算时&#39; 的实操替代。"}
+    ]
+  }'></div>
+
+  <p><strong>公式 2:SGD = RM 在 \(g = \nabla J\) 上的归约(教材 Box 6.1,p. 122)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "g(w) \\doteq \\nabla_w J(w) = \\mathbb E[\\nabla_w f(w, X)]; \\quad \\tilde g(w_k, x_k) = \\nabla_w f(w_k, x_k) = g(w_k) + \\eta_k",
+    "annotations": [
+      {"key": "g_is_grad", "label": "g 即真梯度", "description": "把 J 的真梯度 ∇J 命名为 g。SGD 的目标&#39;arg min J&#39; 等价于&#39;solve g(w*)=0&#39;(凸 J 假设下),正是 RM 的根 finding 问题。"},
+      {"key": "noisy_obs", "label": "g̃ 即带噪梯度", "description": "单样本梯度 ∇_w f(w_k, x_k) 是 g(w_k) 的&#39;一次带噪观测&#39;。噪声 η_k = ∇f(w_k, x_k) − E[∇f(w_k, X)] 是&#39;单点梯度与真梯度的差&#39;。"},
+      {"key": "verify_rm_iii", "label": "验 RM 第三条件", "description": "E[η_k|H_k] = E_{x_k}[∇f(w_k, x_k)|w_k] − E_X[∇f(w_k, X)] = 0(x_k 独立采样)。E[η²|H] < ∞ 若 ∇f 在 w 与 X 上都有界。RM 第三条件直接满足。"},
+      {"key": "verify_rm_i", "label": "验 RM 第一条件", "description": "RM 第一条件 c_1 ≤ ∇g ≤ c_2 在 g = ∇J 时变成 c_1 ≤ ∇²J ≤ c_2 —— J 的 Hessian 上下有界 —— 即 J 强凸 + 光滑。这是凸优化的标配假设(Theorem 6.4 (a))。"},
+      {"key": "rm_subset", "label": "RM ⊃ SGD", "description": "SGD 是 RM 在&#39;g = ∇J 且 J = E[f]&#39; 这个特例上的具体形态。RM 还能解非梯度根问题(L2 §5 已述)。所以集合上 SGD ⊊ RM。"}
+    ]
+  }'></div>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>从 GD 到 SGD 的"<em>实用主义</em>" 推导(教材 §6.4 中段)</em>。GD (6.11) 要 \(\mathbb E[\nabla_w f(w_k, X)]\),分布未知时无解。<em>方案 A</em>:用 \(n\) 样本估期望 (6.12) BGD,代价 \(O(n)\) 每步。<em>方案 B</em>:每步只用<em>一个</em> 样本估期望 (6.13) SGD,代价 \(O(1)\) 每步。SGD 的<em>每步估计有偏 / 高方差</em>,但<em>多步累积</em> 趋向真梯度(类似 L1 (6.2) 用 (1/k) 累积)。这就是"<em>用大量便宜的不准估计</em> 替代<em>少量昂贵的准确估计</em>" 的设计哲学,大数据时代 SGD 主导 ML 的根本原因。
+  </div>
+
+  <div class="callout">
+    <strong>Step 2.</strong> <em>SGD 收敛的<em>三步证明</em>(教材 Box 6.1)</em>。<strong>(i)</strong> 建立 \(g(w) \doteq \nabla J(w),\ \tilde g(w_k, x_k) \doteq \nabla_w f(w_k, x_k) = g(w_k) + \eta_k\)。<strong>(ii)</strong> 验 RM 三条件:(a) \(\nabla g = \nabla^2 J\) 在 \([c_1, c_2]\) ⇐ Theorem 6.4 (a);(b) \(\sum \alpha = \infty, \sum \alpha^2 < \infty\) ⇐ Theorem 6.4 (b);(c) \(\mathbb E[\eta|\mathcal H] = 0\)(i.i.d. 抽样)、\(\mathbb E[\eta^2|\mathcal H] < \infty\)(\(\nabla f\) 有界)⇐ Theorem 6.4 (c)。<strong>(iii)</strong> 套 Theorem 6.1:\(w_k \to w^*\) a.s.。<em>整个证明 < 1 页</em> —— 这是 RM 框架的<em>力量</em>:抽象代价付一次,所有特例自动收益。
+  </div>
+
+  <div class="callout">
+    <strong>Step 3.</strong> <em>"<em>单样本梯度</em>" 不<em>等于</em> "<em>差梯度</em>"</em>(教材 §6.4 末段直觉,L6 详谈)。SGD 看似"<em>每步只用一个样本</em>" 估计很差,但<em>当 \(w_k\) 远离 \(w^*\) 时</em>,真梯度 \(\nabla J(w_k)\) 本身就大,<em>单样本梯度的相对噪声小</em> ⇒ SGD 此时几乎与 GD 等效快速下降。<em>当 \(w_k\) 接近 \(w^*\) 时</em> 真梯度小,单样本梯度的<em>相对噪声大</em> ⇒ SGD 在 \(w^*\) 附近<em>抖动</em> 不收敛到精确点。这就是 L6 要详谈的 SGD"<em>远处快、近处慢</em>" pattern,与"<em>常步长 SGD 不严格收敛</em>" 是同一根。
+  </div>
+
+  <!-- §4 SGD 与 RM 的代码对照 -->
+  <h2>§4 SGD 与 RM 的算法骨架对照</h2>
+  <p>本章<strong>不用 grid-world</strong>。我们用<em>iteration-stepper</em> 把 SGD 与 RM 的<em>一行代码</em> 并排展示,凸显"<em>SGD 不过是 RM 的换名</em>"。</p>
+
+  <div data-component="iteration-stepper" data-config='{
+    "steps": [
+      {
+        "label": "RM 通用框架(L2 (6.5))",
+        "note": "for k = 1, 2, ...:\n    g̃_k = sample_noisy_observation(w_k)  ← 黑箱给一次带噪输出\n    w_{k+1} = w_k − a_k · g̃_k\n这里 g̃ 是&#39;函数 g 的带噪估计&#39;,g 满足 g(w*) = 0 即可。"
+      },
+      {
+        "label": "SGD 特例(L4 (6.13))",
+        "note": "for k = 1, 2, ...:\n    x_k ~ X         ← 从数据分布抽一个样本\n    g̃_k = ∇_w f(w_k, x_k)  ← 单样本梯度,即 g̃\n    w_{k+1} = w_k − α_k · g̃_k\n两段代码骨架一字不差,只在 g̃ 的&#39;来源&#39; 上不同 —— RM 是黑箱,SGD 是&#39;单样本梯度&#39;。"
+      },
+      {
+        "label": "L1 均值估计((6.2)/(6.4))",
+        "note": "for k = 1, 2, ...:\n    x_k ~ X\n    g̃_k = w_k − x_k       ← 用单点估 g(w) = w − E[X]\n    w_{k+1} = w_k − α_k · g̃_k\n这是 SGD 在 f(w, X) = (w − X)²/2 上的展开!∇_w f = w − X = w − x_k 自动出现。L1 故事的&#39;首尾&#39; 在 L4 这里闭环。"
+      },
+      {
+        "label": "Ch.7 TD 学习预告",
+        "note": "for t = 1, 2, ...:\n    与环境交互一次得 (s_t, a_t, r_{t+1}, s_{t+1})\n    g̃_t = V(s_t) − [r_{t+1} + γ V(s_{t+1})]   ← TD error,即 g̃\n    V(s_t) ← V(s_t) − α_t · g̃_t\n这是 RM 在 g(V) = V − T_π V 上跑 —— 求 Bellman 算子的固定点。Ch.7 把这个故事讲透。"
+      },
+      {
+        "label": "&#39;一行更新&#39; 的统一",
+        "note": "RM、SGD、TD 都是 w_{k+1} = w_k − α_k · g̃_k 的变奏。差别只在&#39;g̃ 怎么从数据里采&#39;。这就是 Ch.6 在全书中作为&#39;数学中心&#39; 的核心价值 —— 它给出&#39;所有 incremental learning 算法的最小骨架&#39;。"
+      }
+    ]
+  }'></div>
+
+  <!-- §5 常见误解 -->
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"SGD 只是<em>近似</em> 梯度下降,损失精度。"<br>
+    <strong>实际上:</strong><strong>SGD 在<em>无穷数据极限</em> 与 GD 收敛到同一 \(w^*\)</strong>(Theorem 6.4)。短期看 SGD 单步嘈杂,长期看<em>样本均值无偏</em>。具体:\(\mathbb E[\nabla_w f(w_k, x_k) | w_k] = \nabla J(w_k)\),所以 SGD 的<em>更新方向期望</em> 就是 GD 的更新方向 —— 单步有偏差,但整体路径无偏。这是 Robbins-Monro 1951 年的核心洞察:<em>用大量便宜带噪估计累积,等效于少量昂贵精确估计</em>。<br>
+    <strong>因为:</strong>这是<em>大数定律</em> 在迭代算法上的具体化。\(\sum_k \alpha_k \nabla f(w_k, x_k) \approx \sum_k \alpha_k \mathbb E[\nabla f(w_k, X)]\)(Cesàro 类平均),只要 \(\alpha_k\) 满足 RM 第二条件,SGD 累积梯度就等于 GD 累积梯度。在数据规模上,SGD 比 GD 节省 \(O(n)\) 倍计算 ⇒ 大数据时代主导地位。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"SGD 是<em>新算法</em>,与 RM 是<em>独立</em> 的两个东西。"<br>
+    <strong>实际上:</strong><strong>SGD ⊂ RM,两者是<em>包含关系</em></strong>(Box 6.1 严证)。SGD 是 RM 在"<em>\(g = \nabla J\) 且 \(J = \mathbb E[f]\)</em>" 这个特例上的具体形态。RM 比 SGD 更广 —— 可以解<em>非梯度</em> 根问题(\(g(w) = w^3 - 5\) 没"<em>对应优化目标</em>")、可以处理<em>不可微</em> 的 \(g\)(只要单调有界)、可以处理<em>固定点方程</em>(\(g(w) = w - T(w)\) 不一定是某个 \(J\) 的梯度,如 Ch.7 TD 的 Bellman 算子)。<br>
+    <strong>因为:</strong>RM 是 1951 年提出的<em>统计 root-finding 框架</em>,SGD 是 ML 后续在 RM 上的<em>命名 + 应用</em>。两者历史顺序也<em>反向</em>(RM 早 SGD 半世纪)。教学顺序上先讲 RM 再讲 SGD,是因为<em>从抽象到具体</em> 比<em>从具体到抽象</em> 教学效率高 —— 你看一次 RM 的收敛证明,就能<em>免费</em> 推出 SGD、TD、Q-learning、policy gradient 等十几个算法的收敛性。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"SGD 配 \(\alpha_k = 1/k\) 才严格收敛,深度学习用常数 lr 是不严谨。"<br>
+    <strong>实际上:</strong><strong>常数 lr SGD <em>不严格收敛到 \(w^*\)</em>,但<em>稳定在 \(w^*\) 附近邻域</em>,这是<em>设计选择</em></strong>(L1/L3 已多次提)。深度学习目标不是"<em>严格找到 \(w^*\)</em>",而是"<em>找到泛化好的 \(w\)</em>"。常数 lr 下 \(w_k\) 在邻域内"<em>探索</em>",有助于跳出尖锐局部最优(<em>generalization vs convergence</em> trade-off)。Adam、RMSProp 等都属于"<em>常 lr + 自适应</em>" 流派,本质仍是 RM 框架内,但优化的是"<em>实操速度</em>" 而非"<em>渐近收敛</em>"。<br>
+    <strong>因为:</strong>"<em>渐近收敛</em>"(\(k \to \infty\))是数学家关心的;"<em>有限步效率</em>" 是工程师关心的。RM 给前者保证,常步长是为后者妥协。两者不矛盾 —— 都在 RM 大伞下。Ch.8 deep RL 默认 lr=3e-4 等常数是工程实操,不影响收敛理论的<em>正确性</em>。
+  </div>
+
+  <!-- §6 自检 + 视频 + teaser -->
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> 写出 \(f(w, X) = (w - X)^2/2\) 的 \(\nabla_w f\),代入 SGD (6.13),验证它就是 L1 (6.4)。</summary>
+    <p><strong>A.</strong> \(\nabla_w f(w, X) = w - X\)(对 \(w\) 求导,\(X\) 当常数)。代入 SGD:\(w_{k+1} = w_k - \alpha_k(w_k - x_k)\),与 L1 (6.4) 完全一致。再看 \(g(w) = \mathbb E[\nabla_w f(w, X)] = \mathbb E[w - X] = w - \mathbb E[X]\),\(g\) 的根 \(w^* = \mathbb E[X]\) 即<em>真均值</em>。所以"<em>L1 均值估计</em>" 是 SGD 在 \(f = (w-X)^2/2\) 上的具体化,Ch.6 故事首尾闭环。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> SGD (6.13) 与 RM (6.5) 的<em>条件</em> 对应:RM 第一条件 \(c_1 \le \nabla g \le c_2\) 对应 SGD 的什么?</summary>
+    <p><strong>A.</strong> SGD 中 \(g(w) = \nabla J(w)\),所以 \(\nabla g(w) = \nabla^2 J(w)\) 是<em>Hessian</em>(\(J\) 二阶导)。RM 第一条件 \(c_1 \le \nabla g \le c_2\) 对应 \(c_1 I \le \nabla^2 J \le c_2 I\)(矩阵不等式),即 <em>\(J\) 强凸(\(c_1 > 0\))+ 光滑(\(c_2 < \infty\))</em>。这是凸优化的标配假设。Theorem 6.4 (a) 直接写 \(c_1 \le \nabla_w^2 f \le c_2\)(对 \(f\) 而非 \(J\)),由 \(J = \mathbb E[f]\) 与求导线性 \(\nabla^2 J = \mathbb E[\nabla^2 f]\),\(f\) 强凸光滑 ⇒ \(J\) 强凸光滑。<em>实操</em>:深度学习里 \(f\) 通常<em>非凸</em>,Theorem 6.4 严格不适用;但<em>局部</em> 仍可应用("局部凸 + warm start"),收敛性需要更精细分析(<em>Bottou-Curtis-Nocedal</em> 等)。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> "SGD ⊂ RM" 的反向是否成立 —— 任意 RM 都能找到对应 \(J\) 把它写成 SGD?</summary>
+    <p><strong>A.</strong> <em>不一定</em>。要把 RM 写成 SGD,需要找 \(J\) 使 \(g(w) = \nabla_w J(w)\) ⇔ \(g\) 是<em>梯度场</em>。在 \(\mathbb R^1\) 总能找(\(J(w) = \int_0^w g(u) du\)),但<em>是否有意义</em> 依赖 \(g\)。例:\(g(w) = w^3 - 5\) ⇒ \(J(w) = w^4/4 - 5w\),无<em>下界</em>,不是合法的"<em>极小化目标</em>" —— 这个"<em>SGD</em>" 不会停。在 \(\mathbb R^d\)(向量),\(g\) 是梯度场要求<em>Jacobian 对称</em>(\(\partial g_i / \partial w_j = \partial g_j / \partial w_i\)),一般 \(g\) 不满足。<em>典型反例</em>:Ch.7 TD 算法 \(g(V) = V - T_\pi V\) 在线性 FA 下<em>不是</em> 任何 \(J\) 的梯度(deadly triad 的根)—— 所以 TD 是 RM 但不是 SGD,Ch.8 详谈。<em>结论</em>:RM 严格更广,SGD 是它的"<em>梯度场特例</em>"。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <p style="font-size:0.85rem; color:var(--color-muted);">视频:首选 Bilibili 直播(下方 iframe);若 iframe 不显示,用 YouTube 链接打开。BVID 当前是占位,实际 BVID 等首次部署时填。</p>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=25&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=25" target="_blank"><strong>▶ YouTube 备链(建议优先点这个)</strong></a></p>
+
+  <h3>下一节预告</h3>
+  <p>L4 把 SGD 的<em>定义</em> 与<em>RM 关系</em> 讲清。<strong>L5(教材 §6.4.1-6.4.2)</strong> 切到具体例子:在<em>均值估计问题</em> \(\min_w \mathbb E[\|w - X\|^2/2]\) 上跑 SGD,对应的 \(w_{k+1} = w_k - \alpha_k(w_k - x_k)\) 不正是 L1 (6.4)?Ch.6 的故事在这里"<em>首尾闭环</em>"。L5 还把 SGD 在 2D 平面上跑出来 —— 设 \(X\) 服从均匀分布 \([-10,10]^2\),起点远离原点(true mean = 0),观察 SGD 轨迹(教材 Figure 6.5)。可以看到典型的<em>convergence pattern</em>:远处 SGD 几乎直线冲向均值(像 GD),近处开始<em>抖动</em>(单样本噪声相对真梯度变大)。这就是 L6 要讲的<em>"远处快、近处慢"</em> 现象的<em>起点</em>。</p>
+
+  <!-- Bottom nav -->
+  <nav class="lesson-nav">
+    <a href="lesson-03.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-05.html">Next →</a>
+  </nav>
+</div>
+
+<!-- Components -->
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>

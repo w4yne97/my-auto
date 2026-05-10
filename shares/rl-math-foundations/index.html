@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>Mathematical Foundations of RL — 中文学习站</title>
+<link rel="stylesheet" href="_assets/css/style.css">
+<style>
+  .layout { display: grid; grid-template-columns: 240px 1fr; gap: 2rem; max-width: 1200px; margin: 0 auto; padding: 2rem 1rem; }
+  .sidebar { position: sticky; top: 1rem; align-self: start; max-height: calc(100vh - 2rem); overflow: auto; font-size: 0.9rem; }
+  .sidebar details summary { cursor: pointer; padding: 0.25rem 0; }
+  .sidebar a { display: block; padding: 0.15rem 0.5rem; color: #444; text-decoration: none; border-radius: 3px; }
+  .sidebar a.done::before { content: "✓ "; color: var(--color-success); }
+  .sidebar a:not(.done)::before { content: "○ "; color: #ccc; }
+  .sidebar a:hover { background: #f3f4f6; }
+
+  .dash-section { background: var(--color-card-bg); border: 1px solid var(--color-card-border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
+  .dash-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .progress-bar { background: #e5e7eb; height: 12px; border-radius: 6px; overflow: hidden; margin: 0.5rem 0; }
+  .progress-fill { background: var(--color-success); height: 100%; transition: width 0.3s; }
+  .next-card { background: linear-gradient(135deg, #2563eb, #3b82f6); color: #fff; border-radius: 8px; padding: 1rem; }
+  .next-card a.btn { display: inline-block; background: #fff; color: var(--color-accent); padding: 0.5rem 1rem; border-radius: 6px; text-decoration: none; font-weight: bold; margin-top: 0.5rem; }
+
+  .ch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 1rem; }
+  .ch-card { background: #fff; border: 1px solid var(--color-card-border); border-radius: 8px; padding: 1rem; text-decoration: none; color: var(--color-fg); transition: transform 0.15s; }
+  .ch-card:hover { transform: translateY(-2px); border-color: var(--color-accent); }
+  .ch-card .ch-num { font-size: 0.8rem; color: var(--color-muted); }
+  .ch-card .ch-title { font-weight: bold; margin: 0.25rem 0 0.5rem; }
+  .ch-card .ch-progress { font-size: 0.85rem; color: #555; }
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main>
+    <h1>Mathematical Foundations of Reinforcement Learning</h1>
+    <p class="kicker">S. Zhao · Springer Nature Press · 2025 · 中文学习站(非官方)</p>
+
+    <section class="dash-section">
+      <h2>学习路径(章节依赖)</h2>
+      <pre class="mermaid">
+graph LR
+  Ch1[Ch.1 Basic Concepts] --> Ch2[Ch.2 Bellman Equation]
+  Ch2 --> Ch3[Ch.3 BOE]
+  Ch3 --> Ch4[Ch.4 VI/PI]
+  Ch4 --> Ch5[Ch.5 MC]
+  Ch4 --> Ch6[Ch.6 RM]
+  Ch5 --> Ch7[Ch.7 TD]
+  Ch6 --> Ch7
+  Ch7 --> Ch8[Ch.8 Value Function Methods]
+  Ch8 --> Ch9[Ch.9 Policy Gradient]
+  Ch9 --> Ch10[Ch.10 Actor-Critic]
+      </pre>
+    </section>
+
+    <div class="dash-grid">
+      <section class="dash-section">
+        <h2>进度</h2>
+        <div id="progress-stats">加载中…</div>
+        <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0"></div></div>
+        <button id="reset-progress-btn" style="font-size:0.85rem;">重置进度</button>
+      </section>
+
+      <section class="next-card">
+        <h2 style="margin-top:0;">下一步学什么</h2>
+        <div id="next-card-body">加载中…</div>
+      </section>
+    </div>
+
+    <section class="dash-section">
+      <h2>章节</h2>
+      <div class="ch-grid" id="ch-grid"></div>
+    </section>
+
+    <section class="dash-section">
+      <h2>附录</h2>
+      <p><a href="appendix/index.html">附录导读 →</a> (数学基础不翻译,提供原 PDF 页码索引)</p>
+    </section>
+  </main>
+</div>
+
+<script src="_assets/vendor/mermaid/mermaid.min.js"></script>
+<script src="_assets/js/progress.js"></script>
+<script>
+async function lessons() {
+  try {
+    const r = await fetch('_data/lessons.json');
+    if (r.ok) return await r.json();
+  } catch (_) {}
+  return window.LESSONS_DATA || null;
+}
+
+(async () => {
+  const data = await lessons();
+  if (!data) {
+    document.getElementById('progress-stats').textContent = '无法加载 lessons.json — 用 file:// 打开时可能受限,请用本地 http server';
+    return;
+  }
+  const allIds = data.chapters.flatMap(c => c.lessons.map(l => l.id));
+  const totalLessons = allIds.length;
+
+  // Sidebar
+  const sb = document.getElementById('sidebar');
+  data.chapters.forEach(ch => {
+    const det = document.createElement('details');
+    if (ch.id === data.chapters[0].id) det.open = true;
+    const sum = document.createElement('summary');
+    sum.textContent = `Ch.${ch.number} ${ch.title_zh}`;
+    det.appendChild(sum);
+    ch.lessons.forEach(l => {
+      const a = document.createElement('a');
+      a.href = `${ch.id}/lesson-${String(l.lesson_number).padStart(2,'0')}.html`;
+      a.textContent = `L${l.lesson_number} ${l.title_zh}`;
+      if (Progress.isComplete(l.id)) a.classList.add('done');
+      det.appendChild(a);
+    });
+    sb.appendChild(det);
+  });
+
+  // Progress card
+  const stats = Progress.stats();
+  document.getElementById('progress-stats').innerHTML =
+    `<strong>${stats.totalCompleted} / ${totalLessons}</strong> 节完成 · 累计约 ${Math.round(stats.totalMinutes / 60 * 10) / 10} 小时` +
+    (stats.lastVisitedAt ? ` · 上次学习 ${new Date(stats.lastVisitedAt).toLocaleString('zh-CN')}` : '');
+  document.getElementById('progress-fill').style.width = `${(stats.totalCompleted / totalLessons * 100).toFixed(1)}%`;
+
+  // Next card
+  const nextId = Progress.nextLessonId(allIds) || allIds[0];
+  const nextCh = data.chapters.find(c => c.lessons.some(l => l.id === nextId));
+  const nextLesson = nextCh.lessons.find(l => l.id === nextId);
+  document.getElementById('next-card-body').innerHTML = `
+    <p><strong>Ch.${nextCh.number} / Lesson ${nextLesson.lesson_number}</strong></p>
+    <p>${nextLesson.title_zh}</p>
+    <p style="font-style:italic;font-size:0.9rem;">${nextLesson.teaser}</p>
+    <a class="btn" href="${nextCh.id}/lesson-${String(nextLesson.lesson_number).padStart(2,'0')}.html">开始 →</a>
+  `;
+
+  // Chapter grid
+  const grid = document.getElementById('ch-grid');
+  data.chapters.forEach(ch => {
+    const a = document.createElement('a');
+    a.href = `${ch.id}/index.html`;
+    a.className = 'ch-card';
+    const done = ch.lessons.filter(l => Progress.isComplete(l.id)).length;
+    a.innerHTML = `
+      <div class="ch-num">Ch.${ch.number}</div>
+      <div class="ch-title">${ch.title_zh}</div>
+      <div class="ch-progress">${done} / ${ch.lessons.length} 完成</div>
+    `;
+    grid.appendChild(a);
+  });
+
+  // Mermaid
+  if (window.mermaid) mermaid.initialize({ startOnLoad: true, theme: 'default' });
+
+  // Reset
+  document.getElementById('reset-progress-btn').addEventListener('click', () => {
+    if (confirm('确定要重置所有进度吗?(只清浏览器本地数据,无法撤销)')) {
+      Progress.reset();
+      location.reload();
+    }
+  });
+})();
+</script>
+</body>
+</html>

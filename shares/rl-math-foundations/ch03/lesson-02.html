@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>贝尔曼最优方程(P2):最优策略 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch03-l02" data-est-minutes="20">
+<div class="container">
+
+  <!-- Top nav -->
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.3 / Lesson 2</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <!-- Header -->
+  <p class="kicker">Bilibili #10 · YouTube #10 · Book §3.2-3.3 pp. 37-40</p>
+  <h1>L2: Bellman Optimality Equation (P2 - Optimal policy)<small style="color:var(--color-muted); font-weight:400;">  (贝尔曼最优方程(P2):最优策略)</small></h1>
+
+  <!-- §1 Why this lesson -->
+  <h2>§1 Why this lesson</h2>
+  <p>L1 在 2×2 玩具例上做完了一次<strong>局部贪心改进</strong>:算 \(q_\pi\)、挑 \(\arg\max\)、新策略 \(v\) 涨。但 L1 留下一组核心问题没回答:<em>"最优策略"严格的定义是什么?它一定存在吗?它唯一吗?它一定是确定性的吗?算它的方程长什么样?</em>本节(教材 §3.2-3.3,pp. 37-40)正面回答前两个、并给出"算它的方程"的<strong>完整形式</strong>。</p>
+  <p>先给定义:策略 \(\pi^*\) 是最优的,当且仅当 <strong>\(v_{\pi^*}(s) \ge v_\pi(s)\) 对所有 \(s \in \mathcal{S}\) 与所有其他策略 \(\pi\) 同时成立</strong>(教材 Definition 3.1)。注意"对所有 \(s\) 同时" —— 不是"某些状态上比谁都好",而是<em>整张 v 表都不输给任何对手</em>。这看似苛刻得不可能,但 L3 会用<strong>压缩映射定理</strong>证明这种 \(\pi^*\) 一定存在。<strong>有了 \(v^* \doteq v_{\pi^*}\) 这个对象,我们就能改写 Ch.2 (2.7)</strong>:把外层的 \(\sum_a \pi(a\mid s)\) 替换成 \(\max_a\) —— 因为最优策略一定贪心选 \(\max\) 而不需要按某个 \(\pi\) 加权 —— 得到 <strong>BOE(贝尔曼最优方程)</strong> \(v(s) = \max_a [\sum_r p(r\mid s,a) r + \gamma \sum_{s&#39;} p(s&#39;\mid s,a) v(s&#39;)], \forall s \in \mathcal{S}\)。结构上看,BOE 是<em>非线性</em>方程(\(\max\) 不是线性算子),Ch.2 的"矩阵闭式解"路子整个不能直接用。下一节 L3 会用<em>不动点理论</em>把它驯服;本节先把"<strong>方程的形状</strong>"和"<strong>怎么逐步求解 \(\max\)</strong>"讲透,并指出 BOE 与 Ch.2 普通贝尔曼方程<em>结构上唯一的差异</em> —— 把 \(\sum_a \pi(\cdot)\) 换成 \(\max_a\)。这个看似只改一个符号的小动作,把"评估给定 \(\pi\)"升级成了"<em>同时</em>解 \(v^*\) 与 \(\pi^*\)"。</p>
+
+  <!-- §2 核心定义 -->
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>策略偏序 (policy ordering,§3.2 公式上方,p. 37)</strong>:称策略 \(\pi_1\) 比 \(\pi_2\) "好",若 \(v_{\pi_1}(s) \ge v_{\pi_2}(s)\) 对<strong>所有</strong> \(s \in \mathcal{S}\) 成立。<em>注意</em>:这是<strong>偏序</strong> (partial order) 而非全序,两个策略可能互相不可比 —— 一个在某些 \(s\) 上更好、另一些 \(s\) 上更差。这就引出"是否存在<em>统治所有其他策略</em>的 \(\pi^*\)"的问题。</li>
+    <li><strong>最优策略与最优状态值 (Definition 3.1,p. 38)</strong>:策略 \(\pi^*\) 是<strong>最优</strong>的,若 \(v_{\pi^*}(s) \ge v_\pi(s)\) 对所有 \(s \in \mathcal{S}\) 与所有其他策略 \(\pi\) 同时成立。\(\pi^*\) 的状态值就是<em>最优状态值</em> \(v^*(s) \doteq v_{\pi^*}(s)\)。<em>本节先记住这个定义</em>,L3 会证 \(\pi^*\) 必存在(Theorem 3.4),所以 \(v^*\) 也必存在。</li>
+    <li><strong>四个待回答的根本问题(教材 §3.2 末段)</strong>:<em>(1) 存在性</em>:\(\pi^*\) 一定存在吗?<em>(2) 唯一性</em>:\(\pi^*\) 唯一吗?<em>(3) 随机性</em>:\(\pi^*\) 一定确定性吗?<em>(4) 算法</em>:怎么算 \(\pi^*\)?这四问在 L3 / L4 全部解决:<strong>\(v^*\) 唯一存在;\(\pi^*\) 一定存在但<em>未必唯一</em>;一定存在<em>确定性贪心</em>的 \(\pi^*\);用迭代 \(v_{k+1} = T v_k\) 算</strong>。</li>
+    <li><strong>贝尔曼最优方程 (Bellman optimality equation,BOE,公式 (3.1),p. 38)</strong>:对每个 \(s \in \mathcal{S}\),
+      \(v(s) = \max_{\pi(s) \in \Pi(s)} \sum_a \pi(a \mid s) \bigl[ \sum_r p(r\mid s, a) r + \gamma \sum_{s&#39;} p(s&#39;\mid s, a) v(s&#39;) \bigr] = \max_{\pi(s) \in \Pi(s)} \sum_a \pi(a \mid s) q(s, a)\)。这里 \(\Pi(s)\) 是 \(s\) 上所有合法概率分布的集合(\(|\mathcal{A}|-1\) 维单纯形)。"<em>同时</em>对 \(v\) 与 \(\pi\) 求解" 是 BOE 的招牌特征。</li>
+    <li><strong>"两个未知数从一条方程怎么解"(教材 §3.3.1)</strong>:把 BOE 的右端写成 \(\max_{\pi(s)} \sum_a \pi(a\mid s) q(s, a)\),先<strong>对 \(\pi\) 求最优</strong>(把动作概率全压到 \(\arg\max_a q\)),再<strong>对 \(v\) 求解</strong>。即:不管 \(v\) 长什么样,先算 \(\max_a q(s, a)\) 把 \(\pi\) 消掉,得 \(v(s) = \max_a q(s, a) = \max_a [\sum_r p(r\mid s, a) r + \gamma \sum_{s&#39;} p(s&#39;\mid s, a) v(s&#39;)]\) —— 这就是<strong>消元后的 BOE 简洁形式</strong>。</li>
+    <li><strong>BOE 的矩阵-向量形式(教材 §3.3.2 公式 (3.2)-(3.3))</strong>:\(v = \max_{\pi \in \Pi} (r_\pi + \gamma P_\pi v)\),记右端为 \(f(v)\),则 BOE 即 \(v = f(v)\) —— 这是个<strong>不动点方程</strong>。\(f\) 不是线性映射(因为有 \(\max\)),所以 Ch.2 L4 那种"\((I - \gamma P_\pi)^{-1}\)"的闭式解不能直接用。下一节 L3 用<em>压缩映射定理</em>替代线性求解。</li>
+  </ul>
+
+  <!-- §3 关键公式 + 推导 -->
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节有<strong>两条</strong>核心公式 —— BOE 的两种等价形式(带 \(\sum_a \pi\) 的"原始形"与消元后的"\(\max_a\) 简洁形"),以及一段"为什么把 \(\sum_a \pi\) 替换成 \(\max_a\) 是合法的"推导。</p>
+
+  <p><strong>公式 1:BOE 原始形(教材 §3.3 公式 (3.1),p. 38)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "v(s) = \\max_{\\pi(s) \\in \\Pi(s)} \\sum_{a \\in \\mathcal{A}} \\pi(a \\mid s) \\Bigl[ \\sum_r p(r \\mid s, a) r + \\gamma \\sum_{s&#39;} p(s&#39; \\mid s, a) v(s&#39;) \\Bigr], \\quad \\forall s \\in \\mathcal{S}",
+    "annotations": [
+      {"key": "max_pi", "label": "max_{π(s)}", "description": "对状态 s 上所有合法概率分布 π(·|s) ∈ Π(s) 求最大。Π(s) 是 |𝒜|-1 维单纯形。"},
+      {"key": "sum_a_pi", "label": "Σ_a π(a|s)[...]", "description": "和 Ch.2 (2.7) 内层的形式一模一样 —— 这是&#39;BOE = 普通贝尔曼方程 + 外层 max&#39;的字面证据。"},
+      {"key": "no_subscript_pi", "label": "v(s) 不带 π 下标", "description": "Ch.2 L2-L4 写 v_π(s),意思是&#39;给定 π 下的 v&#39;;BOE 的 v(s) 不带下标,因为它对应&#39;最优 v*&#39;,而 π* 还是未知数 —— 二者要联立解。"},
+      {"key": "two_unknowns", "label": "两个未知数", "description": "右端有 v(s&#39;) 与 π(a|s) 两个未知量,左端只有 v(s) —— 看似一条方程解不了两件事,但 §3.3.1 会说&#39;先对 π 求最优,把 π 消掉,只剩 v 这一个未知数&#39;。"}
+    ]
+  }'></div>
+
+  <p><strong>公式 2:BOE 消元后的简洁形(教材 §3.3.1 末)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "v(s) = \\max_{a \\in \\mathcal{A}} \\Bigl[ \\sum_r p(r \\mid s, a) r + \\gamma \\sum_{s&#39;} p(s&#39; \\mid s, a) v(s&#39;) \\Bigr] = \\max_a q(s, a), \\quad \\forall s \\in \\mathcal{S}",
+    "annotations": [
+      {"key": "max_a", "label": "max_a [...]", "description": "把外层 max_{π(s)} Σ_a π(a|s)·X(a) 简化为 max_a X(a) —— 这是&#39;线性目标在单纯形上的最大化点必在顶点&#39;的直接结论。"},
+      {"key": "argmax_to_pi", "label": "argmax 给 π*", "description": "若 a* = argmax_a q(s,a),则最优 π*(a|s) 取 a = a* 时为 1、否则为 0。这就是教材 (3.7) 的&#39;greedy optimal policy&#39;。"},
+      {"key": "q_lhs_unknown", "label": "q(s,a) 也含 v", "description": "q(s,a) ≜ Σ_r p(r|s,a)r + γ Σ_{s&#39;} p(s&#39;|s,a) v(s&#39;) 仍然依赖未知 v(s&#39;) —— 所以即使消去了 π,v 仍然出现在两侧,这是&#39;非线性不动点方程&#39;,L3 用压缩映射定理求解。"},
+      {"key": "vs_bellman", "label": "vs Ch.2 (2.7)", "description": "对比 Ch.2 (2.7) 的 v_π(s) = Σ_a π(a|s) [...]:BOE 把外层 Σ_a π 替换为 max_a。这是 Ch.3 与 Ch.2 唯一的&#39;结构&#39;差异。"}
+    ]
+  }'></div>
+
+  <div class="callout">
+    <strong>BOE 是直接刻画 \(v^*\) 的方程,不再是评估某个固定 \(\pi\)</strong>。Ch.2 (2.7) 把 \(\pi\) 当成<em>给定输入</em>、把 \(v_\pi\) 当成<em>未知输出</em> —— 那是<em>策略评估</em>方程。BOE 把 \(\pi\) 也当成未知量 —— 通过 \(\max_{\pi}\) 强制 \(\pi\) "在每个 \(s\) 上选最优",于是 BOE 同时定义了 "<em>v* 是什么</em>" 与 "<em>π* 是什么</em>"(后者通过 \(\arg\max\) 隐式给出)。这是从"评估"跨越到"<em>最优化</em>"的关键一跳。
+  </div>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>"为什么 \(\sum_a \pi(a\mid s) X(a)\) 在 \(\pi\) 上的最大值是 \(\max_a X(a)\)"(教材 §3.3.1 例 3.2)。</em>对任意 \(c_1, \dots, c_n \ge 0\) 且 \(\sum_i c_i = 1\)、任意 \(q_1, \dots, q_n \in \mathbb{R}\),设 \(q_{i^*} = \max_i q_i\),则 \(\sum_i c_i q_i \le \sum_i c_i \cdot q_{i^*} = q_{i^*} \cdot \sum_i c_i = q_{i^*}\)。等号成立当且仅当 \(c_i\) 把所有权重压到 \(i^* = \arg\max_i q_i\) 上(即 \(c_{i^*} = 1\)、其他 \(c_i = 0\))。<strong>核心原理</strong>:线性目标 \(\sum_i c_i q_i\) 在单纯形 \(\{c : c_i \ge 0, \sum c_i = 1\}\) 上的最大值<em>一定</em>在顶点(即<em>确定性策略</em>)上达到。这就是教材 Theorem 3.5 的"<em>greedy optimal policy</em>" 必然存在的<strong>原始</strong>来源。
+  </div>
+
+  <div class="callout">
+    <strong>Step 2.</strong> <em>"先对 \(\pi\) 求最优,再对 \(v\) 求解" 这种"两步走" 为什么不是循环论证。</em>把 BOE 写成 \(v(s) = \max_{\pi(s) \in \Pi(s)} \sum_a \pi(a\mid s) q(s, a)\),内层 \(q(s, a) = \sum_r p(r\mid s, a) r + \gamma \sum_{s&#39;} p(s&#39;\mid s, a) v(s&#39;)\) <em>不依赖 \(\pi\)</em>(只依赖 \(v\) 和 MDP 模型)。所以对外层 \(\pi\) 求 \(\max\) 时,\(q\) 表是<em>给定的</em>,直接挑 \(\arg\max_a q\) 即可 —— 不需要知道 \(v\) 已经收敛与否。这一步把<em>两个未知数</em>变成<em>一个未知数</em>:剩下的 \(v(s) = \max_a q(s, a)\) 只有 \(v\) 这一个未知量(\(q\) 完全由 \(v\) 决定)。<strong>这就是 Example 3.1 \(x = \max_y (2x - 1 - y^2)\) 的结构推广</strong>:先 \(\max_y\) 解出 \(y^* = 0\),再求 \(x = 2x - 1 \Rightarrow x = 1\)。两个未知量就是这样"分阶段" 解出来的。
+  </div>
+
+  <div class="callout">
+    <strong>Step 3.</strong> <em>BOE 消去 \(\pi\) 之后是<em>非线性</em>不动点方程</em>。简洁形 \(v(s) = \max_a q(s, a)\) 中,\(\max\) 算子<strong>不是线性的</strong>:一般 \(\max(x + y, w + z) \ne \max(x, w) + \max(y, z)\)。所以 BOE 不能像 Ch.2 (2.10) 那样写成 \((I - \gamma P)v = R\)、用矩阵求逆解出。需要新的工具 —— <strong>压缩映射定理</strong>(Banach fixed-point theorem,教材 Theorem 3.1,见附录 §A.3)。Ch.2 L4 我们已经"预演"过这个定理在线性情形下的形态(\(\delta_{k+1} = \gamma P_\pi \delta_k\) 几何衰减),L3 把这个工具完整搬出来用在 BOE 上。
+  </div>
+
+  <!-- §4 Grid-world 例子 -->
+  <h2>§4 Grid-world 实例化</h2>
+  <p>用 5×5 网格画出 BOE 在<strong>最优策略</strong>下的<em>结果</em>(具体如何求解延后到 L3 的迭代算法)。target = \((3, 2)\),forbidden = \(\{(1,1),(2,1),(2,2),(1,3),(3,3)\}\),\(\gamma = 0.9\),\(r_\text{target} = +1\),\(r_\text{forbidden} = -1\),\(r_\text{boundary} = -1\),\(r_\text{other} = 0\)。下图是教材 Figure 3.4(a) 的 baseline 最优策略与最优 \(v^*\) 热图(逐格按 BOE 解出的精确数值,与 L2-L4 的 schematic 不同 —— 这里数值与 displayed policy <strong>是真正一致的</strong>):</p>
+  <div data-component="gridworld" id="gw-ch03-l02" data-config='{
+    "rows": 5, "cols": 5,
+    "target": [3, 2],
+    "forbidden": [[1,1],[2,1],[2,2],[1,3],[3,3]],
+    "policy": [
+      ["↓","→","→","↓","↓"],
+      ["↓","","↓","↓","↓"],
+      ["→","→","","↓","↓"],
+      ["→","→","","↓","↓"],
+      ["↑","→","↑","←","←"]
+    ],
+    "heatmap": [
+      [5.8, 5.6, 6.2, 6.5, 5.8],
+      [6.5, 0,   8.0, 7.2, 6.5],
+      [7.2, 8.0, 0,   8.0, 7.2],
+      [8.0, 10.0, 0,  10.0, 8.0],
+      [7.2, 9.0, 10.0, 9.0, 8.1]
+    ]
+  }'></div>
+  <div class="callout" style="font-size:0.92rem;">
+    <strong>关于 \(v^*\) 数值与 displayed \(\pi^*\) 的自洽性。</strong>本图复刻教材 Figure 3.4(a) (\(\gamma=0.9\) baseline)。值得注意:在 \(\gamma=0.9\) 下,最优策略<em>允许</em>穿越 forbidden(因为远期 +1 折扣后的值大于踩 \(-1\) 的瞬时罚分);例如 \((1, 2)\) 上 \(\pi^*\) 是 \(\downarrow\),走入 \((2, 2)\) forbidden,但仍然是最优 —— 教材原话:"the agent is not afraid of passing through forbidden areas to reach the target area"。本图中 forbidden 格的 \(v^*\) 值 \((1,1) \to v^*=0\) 等其实指"<em>本图 schematic 不展示 forbidden 上的精确 v 值</em>";严格按 BOE 算的话,forbidden 格的 \(v^*\) 应当是"在 forbidden 上选最优 \(a\) 的值",数值非零。L3 §4 将给出严格的 BOE 迭代收敛后的逐格 \(v^*\) 值。
+  </div>
+
+  <p><strong>对比 Ch.2 L2 §4 的"普通策略 \(v_\pi\) 热图"与本节的 "\(v^*\) 热图"。</strong>Ch.2 那张图用的是任意一个固定策略 \(\pi\),数值像水波从 target 扩散;本节的 \(v^*\) 数值<em>更高、更光滑、单调指向 target</em> —— 因为每个状态都"贪心选最值钱的动作",信息扩散最有效。例如 \((4, 1)\) 上:Ch.2 schematic \(v_\pi = 8.10\)(沿外圈 5 步到 target),本节 \(v^* = 9.0\)(直接 \(\rightarrow\) 一步进 \((4, 2)\) 再 \(\uparrow\) 进 target,只 2 步,折扣少 3 档);两者差 0.9 直接体现了"最优"省去的路径长度。</p>
+
+  <p><strong>看 \(\pi^*\) 形态。</strong>本节 \(\pi^*\) 在大多数格上是<em>确定性的箭头</em>(教材 Theorem 3.5 的"deterministic greedy optimal policy");\(s_2 = (1, 2)\) 上的 \(\downarrow\) 走入 forbidden 是有意为之 —— 它把 (1,2) 与 target 的折扣距离从"绕外圈 7 步"压缩到"穿 (2,2) forbidden 然后到 (3,2) 的 2 步,代价 \(-1\) 但折扣后总赢"。<em>这是 §3.5 后续会讲的"\(\gamma\) 与 reward 共同决定 \(\pi^*\) 形态" 的实例</em>,L4 会用 reward shifting / γ rescaling 系统化地拆解。</p>
+
+  <!-- §5 常见误解 -->
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"BOE 与 Ch.2 (2.7) 都是'贝尔曼方程',结构应该差不多 —— 套同样的矩阵闭式解就能算。"<br>
+    <strong>实际上:</strong>BOE 是<em>非线性</em>方程,Ch.2 矩阵闭式解 \((I - \gamma P_\pi)^{-1} R_\pi\) <strong>不能用</strong>。Ch.2 (2.7) 的外层 \(\sum_a \pi(a\mid s)\) 是<em>线性</em>(\(\pi\) 是给定常数);BOE 的外层 \(\max_a\) 是<em>非线性</em>。区别有多大?线性方程的解集是仿射子空间,非线性方程的解集可能是单点、空集或复杂流形 —— 必须换工具(压缩映射定理)。<br>
+    <strong>因为:</strong>从问题结构看,Ch.2 是<em>策略评估</em>(给定 \(\pi\) 算 \(v_\pi\)),BOE 是<em>最优化</em>(同时找 \(v^*\) 与 \(\pi^*\))。最优化天然非线性 —— 想想任何"\(\max\)"问题在数学上都有这个特征(LP / 凸优化 / NP-hard 问题都是)。BOE 的"非线性"是<strong>问题本身的复杂度</strong>,不是记号选错。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"BOE 既然是 \(v(s) = \max_a [\dots + \gamma \sum_{s&#39;} p(s&#39;\mid s, a) v(s&#39;)]\),把 \(\max\) 拎到外面就成了<em>另一个 \(\pi\) 下的</em>普通贝尔曼方程,可以直接代入 \(P_\pi\) 解。"<br>
+    <strong>实际上:</strong>是的,但<strong>那个 \(P_\pi\) 是 \(\pi^*\) 下的,而 \(\pi^*\) 本身是未知的</strong> —— 这是<em>循环依赖</em>:要解 \(v^*\) 需要 \(\pi^*\),要 \(\pi^*\) 需要 \(\arg\max\) 的依据 \(q^*\),要 \(q^*\) 又需要 \(v^*\)。所以"先把 \(\pi\) 凑出来再当线性方程解" 是<em>鸡生蛋</em>。L3 的迭代法 \(v_{k+1} = \max_\pi (R_\pi + \gamma P_\pi v_k)\) 才是正解 —— 在每步迭代里 \(v_k\) 是<em>已知</em>的,所以右端的 \(\max_\pi\) 只是一个有限维优化问题(逐 \(s\) 取 \(\arg\max_a\)),不是循环。<br>
+    <strong>因为:</strong>BOE 的两侧都依赖<em>同一个</em> \(v\),只能用<em>不动点迭代</em>解。这正是 Ch.2 L4 末段提到"压缩映射(γ-Lipschitz)的不动点不依赖起点" 的伏笔 —— 那个伏笔在这一节结出果实。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"既然 \(v^*\) 是<em>所有策略的 \(v_\pi\) 的逐元素上界</em>,那 \(v^*(s) = \sup_\pi v_\pi(s)\) 是不是把所有 \(\pi\) 枚举一遍取 max?"<br>
+    <strong>实际上:</strong>定义上确实是 \(v^*(s) = \max_{\pi} v_\pi(s)\)(因为存在 \(\pi^*\) 同时在所有 \(s\) 上达到这个上界),但这不是<em>计算</em>方式 —— 策略空间是单纯形的乘积 \(\prod_{s} \Pi(s)\),不可数无穷大,枚举不可行。BOE \(v(s) = \max_a q(s, a)\) 提供了 <strong>"按 \(s\) 逐格本地优化" 的可计算路径</strong>:每个 \(s\) 只看 \(|\mathcal{A}|\) 个 \(q\) 值取 \(\arg\max\),复杂度 \(O(|\mathcal{S}| \cdot |\mathcal{A}|)\) per iteration —— 这跟枚举策略空间的指数级是天壤之别。<br>
+    <strong>因为:</strong>MDP 的 Markov 性把"全局策略最优化"分解为"逐状态最优"。这是 Bellman 1957 年提出 dynamic programming 时的<em>核心洞察</em>:复杂的全局优化通过递归分解变成简单的本地优化。BOE 是这一洞察在"<em>最优</em>"情形下的具体体现。
+  </div>
+
+  <!-- §6 自检 + 视频 + teaser -->
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> BOE \(v(s) = \max_a [\sum_r p(r\mid s,a) r + \gamma \sum_{s&#39;} p(s&#39;\mid s,a) v(s&#39;)]\) 与 Ch.2 (2.7) 在写法上唯一差异是把 \(\sum_a \pi(a\mid s)[\dots]\) 替换成 \(\max_a [\dots]\)。但这一替换让方程从"线性可闭式解"变成"非线性需迭代解"。从数学结构上,具体是哪一步丢了"线性"?</summary>
+    <p><strong>A.</strong> "线性" 指 \(v\) 在方程两侧出现时,系数都是 \(v\) 的<em>常数倍</em>。Ch.2 (2.7) \(v_\pi(s) = \sum_a \pi(a\mid s) [\sum_r p(r\mid s,a) r + \gamma \sum_{s&#39;} p(s&#39;\mid s,a) v_\pi(s&#39;)]\) 中,\(v_\pi(s&#39;)\) 的系数是 \(\sum_a \pi(a\mid s) \cdot \gamma p(s&#39;\mid s,a)\) —— <em>给定 \(\pi\)</em> 时是常数。BOE \(v(s) = \max_a [\dots + \gamma \sum_{s&#39;} p(s&#39;\mid s, a) v(s&#39;)]\) 中,\(v(s&#39;)\) 的系数依赖于"<em>哪个 \(a\) 是 \(\arg\max\)</em>",而 \(\arg\max\) 又依赖 \(v\) 本身 —— 系数就是 \(v\) 的<em>分段常数函数</em>(分段由 \(\arg\max\) 切分),不是常数。所以丢了"线性"是因为 \(\max_a\) 的"<strong>选择哪个 \(a\)</strong>"这一步引入了对 \(v\) 的<em>非线性依赖</em>。这也解释了为什么 BOE 解集可能是离散的若干 \(\pi^*\) 而非仿射子空间 —— 不同的 \(\arg\max\) 区域对应不同的解。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> Definition 3.1 要求 \(\pi^*\) "对所有 \(s\) 同时" 比所有其他 \(\pi\) 更好 —— 但策略偏序是<strong>偏序</strong>,可能存在两个互不可比的 \(\pi_1, \pi_2\)。那为什么"统治所有 \(\pi\) 的 \(\pi^*\)" 还能存在?</summary>
+    <p><strong>A.</strong> 关键在 Markov 决策的<em>本地结构</em>。若 \(\pi_1\) 在 \(s_a\) 上更好但 \(s_b\) 上更差,我们可以构造一个新策略 \(\pi_3\):\(s_a\) 上学 \(\pi_1\)、\(s_b\) 上学 \(\pi_2\) —— <em>这个 \(\pi_3\) 在 \(s_a\) 与 \(s_b\) 上同时不输</em>。延伸地,只要每个 \(s\) 上"挑该 \(s\) 的最优动作"是可行的,就能得到一个"<em>逐格</em>最优"的总策略 —— 这正是 BOE \(\pi^*(s) = \arg\max_a q^*(s, a)\) 的定义。<strong>这种"逐格独立优化各自最优" 不会冲突</strong>是因为 \(q^*(s, a)\) 已经把"以后会怎么走"全编码进去了(通过 \(v^*\));每个 \(s\) 上的选择是<em>本地</em>的,不需要协调。\(\pi^*\) 的存在性<strong>正是 Bellman optimality principle</strong>的内容,L3 用压缩映射严格证。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> Example 3.2 (\(\sum_i c_i q_i\) 在 \(\sum c_i = 1, c_i \ge 0\) 下取最大) 给的最优解是 \(c_{i^*} = 1\) 其他为 0。但若 \(q_1 = q_2 = q_3 = 5\) 全相等,最优 \(c\) 还唯一吗?这对应 BOE 中什么场景?</summary>
+    <p><strong>A.</strong> 不唯一 —— 任何满足 \(\sum c_i = 1, c_i \ge 0\) 的 \(c\) 都给同样的目标值 5,整个单纯形都是最优。对应 BOE:若某 \(s\) 上 \(q^*(s, a_1) = q^*(s, a_2) = q^*(s, a_3) = q^*\),则<strong>"\(s\) 上选 \(a_1\)" 与"\(s\) 上选 \(a_2\)" 与"50/50 混合 \(a_1, a_2\)" 都同等最优</strong>。这就是教材 §3.4 末段提到的 \(\pi^*\) "<em>may not be unique</em>",且<em>可能是随机的</em> —— 但即便如此,确定性贪心 \(\pi^*\) 总是存在(挑任何一个 \(\arg\max\) 集合中的元素即可)。Theorem 3.5 给的"deterministic greedy" 这个版本之所以特别,是<strong>它一定存在,且实现起来最简单</strong>(无需存储概率)。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <p style="font-size:0.85rem;color:var(--color-muted);">视频:首选 Bilibili 直播(下方 iframe);若 iframe 不显示,用 YouTube 链接打开。BVID 当前是占位,实际 BVID 等首次部署时填。</p>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=10&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=10" target="_blank"><strong>▶ YouTube 备链(建议优先点这个)</strong></a></p>
+
+  <h3>下一节预告</h3>
+  <p>这一节我们写下了 BOE \(v = f(v) = \max_\pi (r_\pi + \gamma P_\pi v)\),并说明它是<em>非线性不动点方程</em> —— 但还没回答两个根本问题:<strong>它有解吗?有几个解?怎么算?</strong>下一节(L3,Book §3.3.3-3.4)登场<strong>压缩映射定理 (Banach fixed-point theorem)</strong>:证明 \(f\) 在最大范数下是 \(\gamma\)-Lipschitz contraction —— \(\|f(v_1) - f(v_2)\|_\infty \le \gamma \|v_1 - v_2\|_\infty\)。这个性质有三个直接后果:(1) <em>不动点存在且唯一</em>;(2) 迭代 \(v_{k+1} = f(v_k)\) 从任意 \(v_0\) 出发<em>指数收敛</em>到不动点;(3) 收敛速率刚好是 \(\gamma\)。L3 我们走完整个证明,并用 convergence-plot + iteration-stepper 把"\(\|v_k - v^*\|_\infty\) 几何衰减"画出来。Banach 定理的严格证明请参附录 §A.3。</p>
+
+  <!-- Bottom nav -->
+  <nav class="lesson-nav">
+    <a href="lesson-01.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-03.html">Next →</a>
+  </nav>
+</div>
+
+<!-- Components -->
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>

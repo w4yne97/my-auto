@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>Ch.4 值迭代与策略迭代 — RL Math Foundations</title>
+<link rel="stylesheet" href="../_assets/css/style.css">
+</head>
+<body data-chapter-id="ch04">
+<div class="container">
+
+  <nav class="lesson-nav">
+    <a href="../index.html">← Master Index</a>
+    <span>Ch.4 of 10</span>
+  </nav>
+
+  <p class="kicker">Chapter 4</p>
+  <h1>Value Iteration and Policy Iteration <small style="font-weight:400; color:var(--color-muted);">(值迭代与策略迭代)</small></h1>
+
+  <p>把第 3 章的 BOE 落地成两个具体算法 VI / PI,以及二者的折中 truncated PI。这是模型已知情况下的最后一站,后续章节将逐步把「模型已知」的假设拆掉。</p>
+
+  <h2>本章 lesson 列表</h2>
+  <ol id="lesson-list"></ol>
+
+  <nav class="lesson-nav">
+    <a href="../ch03/index.html">← Prev Chapter</a>
+    <a href="../index.html">Master Index</a>
+    <a href="../ch05/index.html">Next Chapter →</a>
+  </nav>
+</div>
+
+<script src="../_assets/js/progress.js"></script>
+<script>
+(async () => {
+  const r = await fetch('../_data/lessons.json');
+  const data = await r.json();
+  const ch = data.chapters.find(c => c.id === document.body.dataset.chapterId);
+  const list = document.getElementById('lesson-list');
+  ch.lessons.forEach(l => {
+    const li = document.createElement('li');
+    const a = document.createElement('a');
+    a.href = `lesson-${String(l.lesson_number).padStart(2,'0')}.html`;
+    a.textContent = `${l.title_zh} (${l.title_en})`;
+    li.appendChild(a);
+    if (Progress.isComplete(l.id)) {
+      const tag = document.createElement('span');
+      tag.textContent = ' ✓';
+      tag.style.color = 'var(--color-success)';
+      li.appendChild(tag);
+    }
+    const meta = document.createElement('div');
+    meta.style.fontSize = '0.85rem';
+    meta.style.color = '#666';
+    meta.textContent = `${l.teaser} · ${l.est_minutes} 分钟 · 书 §${l.book_section}`;
+    li.appendChild(meta);
+    list.appendChild(li);
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>RL Math Foundations — Component Tests</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="vendor/katex/katex.min.css">
+<style>
+  .test-section { margin: 2rem 0; padding: 1rem; border: 1px dashed #ccc; }
+  .test-section h2 { margin-top: 0; }
+  .test-section .verify { font-style: italic; color: #666; margin-bottom: 1rem; }
+</style>
+</head>
+<body>
+<div class="container">
+<h1>Component Tests</h1>
+<p>Visual + console-assert harness for the 5 reusable components. Open DevTools to see asserts.</p>
+
+<!-- Each component will append its own <section class="test-section"> below as Tasks 7-11 are implemented. -->
+
+<section class="test-section" id="test-gridworld">
+  <h2>gridworld.js</h2>
+  <div class="verify">Expected: 5×5 grid; cell (3,2) is green target; (1,1)(2,1)(2,2)(1,3)(3,3) are red forbidden; agent shown at (0,0); arrows on every cell; trajectory polyline visible.</div>
+
+  <div data-component="gridworld" id="gw-demo" data-config='{
+    "rows": 5, "cols": 5,
+    "target": [3, 2],
+    "forbidden": [[1,1], [2,1], [2,2], [1,3], [3,3]],
+    "agent": [0, 0],
+    "policy": [
+      ["→","→","↓","←","←"],
+      ["→","→","↓","←","←"],
+      ["→","→","↓","←","←"],
+      ["→","→","↓","←","←"],
+      ["→","→","↑","←","←"]
+    ],
+    "trajectory": [[0,0], [0,1], [1,1], [2,1], [3,1], [3,2]]
+  }'></div>
+
+  <script>
+    window.addEventListener('load', () => {
+      console.assert(
+        document.querySelector('#gw-demo svg'),
+        'gridworld: SVG should be mounted'
+      );
+      console.assert(
+        document.querySelectorAll('#gw-demo svg rect.cell').length === 25,
+        'gridworld: should render 25 cells (5x5)'
+      );
+    });
+  </script>
+</section>
+
+<section class="test-section" id="test-stepper">
+  <h2>iteration-stepper.js</h2>
+  <div class="verify">Expected: a stepper with prev/next buttons + step label "k=0 (init)  (1 / 3)"; clicking next updates the linked gridworld below it from heatmap [[0,0],[0,0]] → [[0.1,0],[0,0.1]] → [[0.5,0.2],[0.2,0.5]].</div>
+
+  <div data-component="gridworld" id="gw-stepper" data-config='{
+    "rows": 2, "cols": 2,
+    "heatmap": [[0,0],[0,0]],
+    "policy": null
+  }'></div>
+
+  <div data-component="iteration-stepper" id="stp-demo" data-config='{
+    "linked-gridworld": "#gw-stepper",
+    "steps": [
+      {"label": "k=0 (init)", "patch": {"heatmap": [[0,0],[0,0]]}, "note": "全部初始化为 0"},
+      {"label": "k=1",        "patch": {"heatmap": [[0.1,0],[0,0.1]]}, "note": "终点附近开始回传"},
+      {"label": "k=2",        "patch": {"heatmap": [[0.5,0.2],[0.2,0.5]]}, "note": "继续传播"}
+    ]
+  }'></div>
+
+  <script>
+    window.addEventListener('load', () => {
+      console.assert(
+        document.querySelector('#stp-demo button[data-action="next"]'),
+        'stepper: next button should exist'
+      );
+    });
+  </script>
+</section>
+
+<section class="test-section" id="test-equation">
+  <h2>equation-walkthrough.js</h2>
+  <div class="verify">Expected: a Bellman equation rendered with KaTeX (single primes — s′ not s″); below it a list of 5 annotation chips. Click any chip → that chip becomes blue (active) and its 中文 description shows in the box below. (No inline highlighting inside the equation — that's an intentional spec-approved degradation; chip is the affordance.)</div>
+
+  <div data-component="equation-walkthrough" id="eq-demo" data-config='{
+    "equation": "v_\\pi(s) = \\sum_a \\pi(a|s) \\sum_{s&#39;,r} p(s&#39;,r|s,a)[r + \\gamma v_\\pi(s&#39;)]",
+    "annotations": [
+      {"key": "v_\\pi(s)",       "label": "v_π(s)",      "description": "策略 π 下从状态 s 出发的 state value(期望回报)"},
+      {"key": "\\pi(a|s)",       "label": "π(a|s)",      "description": "在状态 s 下采取动作 a 的概率"},
+      {"key": "p(s&#39;,r|s,a)",    "label": "p(s&#39;,r|s,a)","description": "环境的状态转移与奖励概率"},
+      {"key": "\\gamma",         "label": "γ",            "description": "折扣因子, γ ∈ [0, 1)"},
+      {"key": "v_\\pi(s&#39;)",     "label": "v_π(s&#39;)",    "description": "下一状态 s&#39; 的 state value(递归项,这就是 Bellman 方程的精髓)"}
+    ]
+  }'></div>
+
+  <script>
+    window.addEventListener('load', () => {
+      console.assert(
+        document.querySelectorAll('#eq-demo .ann-chip').length === 5,
+        'equation: 5 annotation chips should render'
+      );
+    });
+  </script>
+</section>
+
+<section class="test-section" id="test-conv">
+  <h2>convergence-plot.js</h2>
+  <div class="verify">Expected: SVG line chart with 3 colored series (VI/PI/MC), x-axis "iteration k", y-axis "‖v_k - v*‖" with log scale. Legend below plot.</div>
+
+  <div data-component="convergence-plot" id="cp-demo" data-config='{
+    "x-label": "iteration k",
+    "y-label": "‖v_k - v*‖",
+    "log-y": true,
+    "series": [
+      {"name": "VI",  "color": "#3b82f6", "points": [[0,1],[1,0.5],[2,0.25],[3,0.12],[4,0.06],[5,0.03]]},
+      {"name": "PI",  "color": "#10b981", "points": [[0,1],[1,0.2],[2,0.04],[3,0.008],[4,0.0016]]},
+      {"name": "MC",  "color": "#f59e0b", "points": [[0,1],[2,0.7],[5,0.5],[10,0.4],[20,0.32]]}
+    ]
+  }'></div>
+
+  <script>
+    window.addEventListener('load', () => {
+      const lines = document.querySelectorAll('#cp-demo svg polyline');
+      console.assert(lines.length === 3, 'convergence: 3 series polylines expected, got ' + lines.length);
+    });
+  </script>
+</section>
+
+<section class="test-section" id="test-distbar">
+  <h2>distribution-bar.js</h2>
+  <div class="verify">Expected: 3 rows (greedy / ε-greedy / softmax), each row has 5 vertical bars (one per action) with ↑→↓←stay labels underneath. Bar height encodes probability (0~1).</div>
+
+  <div data-component="distribution-bar" id="dbar-demo" data-config='{
+    "actions": ["↑","→","↓","←","stay"],
+    "distributions": [
+      {"label": "greedy",         "values": [0,1,0,0,0]},
+      {"label": "ε-greedy ε=0.1", "values": [0.025,0.9,0.025,0.025,0.025]},
+      {"label": "softmax τ=1",    "values": [0.15,0.4,0.2,0.15,0.1]}
+    ]
+  }'></div>
+
+  <script>
+    window.addEventListener('load', () => {
+      const groups = document.querySelectorAll('#dbar-demo .dist-row');
+      console.assert(groups.length === 3, 'distbar: 3 rows expected, got ' + groups.length);
+    });
+  </script>
+</section>
+
+</div>
+
+<script src="vendor/katex/katex.min.js"></script>
+<script src="vendor/katex/contrib/auto-render.min.js"></script>
+
+<script src="js/gridworld.js"></script>
+<script src="js/iteration-stepper.js"></script>
+<script src="js/equation-walkthrough.js"></script>
+<script src="js/convergence-plot.js"></script>
+<script src="js/distribution-bar.js"></script>
+
+<script>
+  // After components load, auto-mount any [data-component]
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') {
+        handler.mount(el);
+      } else {
+        console.warn(`No mount handler for [data-component="${name}"]`);
+      }
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+  });
+</script>
+</body>
+</html>

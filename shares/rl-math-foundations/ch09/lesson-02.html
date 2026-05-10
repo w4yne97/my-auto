@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>策略梯度方法(P2):指标 1——平均状态值 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch09-l02" data-est-minutes="20">
+<div class="container">
+
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.9 / Lesson 2</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <p class="kicker">Bilibili #46 · YouTube #46 · Book §9.2 pp. 193-198</p>
+  <h1>L2: PG (P2) — Metric 1: Average State Value<small style="color:var(--color-muted); font-weight:400;">  (策略梯度 P2:指标一,平均状态值)</small></h1>
+
+  <h2>§1 Why this lesson</h2>
+  <p>L1 立了"<em>策略 = 函数 \(\pi_\theta\),目标 = 标量 \(J(\theta)\)</em>" 的骨架,但<em>没</em> 给出<em>具体</em> 的 \(J\) 形式。本节(教材 §9.2 第一部分,pp. 193-197)给<strong>第一种</strong> 指标:<em>平均状态值 (average value)</em> \(\bar v_\pi = \sum_s d(s) v_\pi(s) = \mathbb E_{S \sim d}[v_\pi(S)]\)。这是 RL 文献最常用的指标(也是教材 (9.1) \(\mathbb E[\sum_{t=0}^\infty \gamma^t R_{t+1}]\) 的另一种写法)。<strong>三件事</strong>:<em>(a)</em> 给定义;<em>(b)</em> 解释加权 \(d(s)\) 的<em>两种选择</em>(独立于 \(\pi\) 的 \(d_0\) vs 依赖 \(\pi\) 的 \(d_\pi\));<em>(c)</em> 证三种<em>等价表达</em>(求和、期望、discounted return)。</p>
+  <p>核心 takeaway:<strong>(a) 定义</strong>:\(\bar v_\pi \doteq \sum_{s\in\mathcal S} d(s) v_\pi(s)\),其中 \(d(s) \ge 0\)、\(\sum_s d(s) = 1\) 是<em>状态加权分布</em>。<strong>(b) 两种 \(d\) 选法</strong>:<em>(i)</em> \(d = d_0\) <em>独立</em> 于 \(\pi\)(均匀 \(1/|\mathcal S|\) 或固定起点 \(s_0\)),记 \(\bar v_\pi^0\);<em>(ii)</em> \(d = d_\pi\) <em>依赖</em> 于 \(\pi\)(stationary distribution \(d_\pi^\top P_\pi = d_\pi^\top\)),记 \(\bar v_\pi\)(无上标)。<strong>(c) 三种等价</strong>:\(\bar v_\pi = \sum_s d(s) v_\pi(s) = \mathbb E_{S\sim d}[v_\pi(S)] = \lim_{n\to\infty}\mathbb E[\sum_{t=0}^n \gamma^t R_{t+1}]\)(教材 (9.1) 与 Table 9.2)。<strong>(d) 几何 = 内积</strong>:\(\bar v_\pi = d^\top v_\pi\),把 \(v_\pi \in \mathbb R^{|\mathcal S|}\) 与 \(d \in \mathbb R^{|\mathcal S|}\) 看成两个向量做内积 ⇒ L4 求梯度时用得上。<strong>(e) 桥到 L3</strong>:本节是 \(\gamma < 1\) 的<em>discounted</em> 视角;L3 给 \(\gamma = 1\) 的<em>average reward</em> 视角,Lemma 9.1 证两者在 \(\gamma < 1\) 下<em>等价</em>(\(\bar r_\pi = (1-\gamma)\bar v_\pi\))。</p>
+
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>平均状态值 \(\bar v_\pi\)</strong>:\(\bar v_\pi = \sum_{s\in\mathcal S} d(s) v_\pi(s)\)。<em>"<em>把每状态的价值按权 \(d\) 加权平均</em>"</em>。\(d\) 高的状态贡献大,\(d\) 低的状态贡献小。直观:策略<em>常去</em> 的状态价值高 ⇒ 策略<em>整体</em> 好。</li>
+    <li><strong>独立分布 \(d_0\)(教材 §9.2 第一案例)</strong>:\(d_0\) 与 \(\pi\) <em>无关</em>,常见两种:<em>(i)</em> 均匀 \(d_0(s) = 1/|\mathcal S|\) ⇒ "<em>所有状态等权重重要</em>";<em>(ii)</em> 固定起点 \(d_0(s_0) = 1, d_0(s\ne s_0) = 0\) ⇒ "<em>只关心从 \(s_0\) 出发的总回报</em>"。第二种特别有用:对应 RL 中"<em>agent 总从同一起点开始</em>" 的标准设定。</li>
+    <li><strong>策略相关分布 \(d_\pi\)(stationary distribution)</strong>:\(d_\pi^\top P_\pi = d_\pi^\top\),即 \(\pi\) 诱导的马氏链<em>不变分布</em>。直观:策略<em>长期运行</em> 中状态 \(s\) 出现的频率。"<em>常访问的 \(s\) 权大,罕访问的 \(s\) 权小</em>" — 这与"<em>策略实际表现</em>" 一致。</li>
+    <li><strong>等价表达一:求和 vs 期望</strong>:\(\sum_s d(s) v_\pi(s) = \mathbb E_{S\sim d}[v_\pi(S)]\)。这是<em>形式</em> 改写,不改值。期望形式在 SGD 中更便利(单样本估)。</li>
+    <li><strong>等价表达二:discounted return</strong>:\(\mathbb E[\sum_{t=0}^\infty \gamma^t R_{t+1}] = \sum_s d(s) v_\pi(s) = \bar v_\pi\)(教材 (9.1) + 推导)。证明用全概率公式拆 \(R_{t+1}\) 的条件期望,把"<em>从 \(s_0\) 出发的累积回报</em>" 重写成"<em>各 \(s\) 价值的加权和</em>"。这一等价是 RL 文献 \(J = \mathbb E[\sum \gamma^t R]\) 与教材 \(J = \bar v_\pi\) <em>同构</em> 的根。</li>
+    <li><strong>向量内积形式</strong>:\(\bar v_\pi = d^\top v_\pi\),其中 \(d, v_\pi \in \mathbb R^{|\mathcal S|}\)。这一形式在 L4 求 \(\nabla_\theta \bar v_\pi\) 时<em>极其</em> 重要 —— 把求梯度变成"<em>对内积求导</em>",可借线性代数工具。</li>
+    <li><strong>"<em>\(\theta\) 通过 \(\pi\) 影响 \(v_\pi\)</em>"</strong>:\(\bar v_\pi(\theta) = \sum_s d(s) v_\pi(s; \theta)\)。即使 \(d = d_0\) 固定,\(v_\pi(s)\) 仍依赖 \(\theta\)(策略 \(\pi_\theta\) 决定贝尔曼方程的解)。\(d = d_\pi\) 则<em>双重</em> 依赖 ⇒ 求梯度多一项 \(\nabla d_\pi\)(L4 处理)。</li>
+  </ul>
+
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节核心是<strong>三种等价表达 + 几何意义</strong>。先写定义,再写期望,最后写 discounted return。</p>
+
+  <p><strong>公式 1:平均状态值定义(教材 §9.2 Metric 1)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\bar v_\\pi \\doteq \\sum_{s\\in\\mathcal S} d(s) v_\\pi(s) = \\mathbb E_{S\\sim d}[v_\\pi(S)] = d^\\top v_\\pi",
+    "annotations": [
+      {"key": "weighted_sum", "label": "求和形式", "description": "把 |S| 个状态值 v_π(s) 按 d(s) 加权累加。这是最&#39;原生&#39; 的写法 —— 一眼看出&#39;每状态贡献&#39;。"},
+      {"key": "expectation", "label": "期望形式", "description": "S ~ d 是&#39;按分布 d 抽一个状态 S&#39;,然后取 v_π(S) 的期望。两个形式数学等价,期望版在 SGD 中能用样本估(L5 REINFORCE 关键)。"},
+      {"key": "inner_product", "label": "内积形式", "description": "把 d, v_π 看成 R^|S| 中的向量,d^T v_π 是它们的内积。这一形式在 L4 求 ∇_θ v̄_π 时&#39;线性化&#39; 推导 —— 内积对 θ 的梯度 = d^T ∇_θ v_π(若 d 与 θ 无关) 或 双项 ∇d^T v_π + d^T ∇v_π(若 d = d_π 依赖 θ)。"},
+      {"key": "d_choice", "label": "d 的选法", "description": "d 是&#39;状态加权分布&#39;,需 d ≥ 0 且 Σ d = 1。两种选法:d_0(独立于 π,常用均匀或起点 δ_{s_0});d_π(stationary distribution,依赖 π)。两种各有 PG 定理形式(L4 Theorem 9.2 vs 9.3)。"},
+      {"key": "theta_dep", "label": "对 θ 的依赖", "description": "v_π(s) 通过贝尔曼方程 v_π = r_π + γ P_π v_π 依赖 π,π 又依赖 θ ⇒ v_π 依赖 θ。所以 v̄_π = v̄_π(θ) 是 θ 的函数,可对它求 ∇_θ。"}
+    ]
+  }'></div>
+
+  <p><strong>公式 2:discounted-return 等价(教材 (9.1))</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "J(\\theta) = \\lim_{n\\to\\infty} \\mathbb E\\left[\\sum_{t=0}^n \\gamma^t R_{t+1}\\right] = \\mathbb E\\left[\\sum_{t=0}^\\infty \\gamma^t R_{t+1}\\right] = \\sum_{s\\in\\mathcal S} d(s) v_\\pi(s) = \\bar v_\\pi",
+    "annotations": [
+      {"key": "literature", "label": "文献常见形式", "description": "RL 论文(Sutton-Barto、PPO 论文等)常写 J(θ) = E[Σ γ^t R_{t+1}],把目标&#39;打包&#39; 成一个&#39;期望累积回报&#39;。乍看与 v̄_π 无关,实则等价。"},
+      {"key": "law_total", "label": "全概率展开", "description": "E[Σ γ^t R_{t+1}] = Σ_s d(s) E[Σ γ^t R_{t+1} | S_0 = s](全概率公式)。内层 E[Σ γ^t R_{t+1} | S_0 = s] 正是 v_π(s) 的定义(Ch.2 L2)。所以 = Σ_s d(s) v_π(s) = v̄_π。"},
+      {"key": "init_dist", "label": "d = 起点分布", "description": "上式中的 d 是 S_0 的初始分布。若 agent 总从 s_0 出发,d = δ_{s_0};若起点均匀,d = uniform;若按 stationary 起点(理论便利),d = d_π。三种 d 给三种 v̄_π。"},
+      {"key": "implication", "label": "桥两边", "description": "&#39;教材风格&#39; v̄_π 与&#39;论文风格&#39; E[Σ γ^t R] 是<em>同一对象的两种写法</em>。学 PG 时不必纠结哪个是&#39;真&#39; 目标,挑数学便利的(教材选 v̄_π 因 d^T v_π 形式漂亮)。"}
+    ]
+  }'></div>
+
+  <p><strong>分布 \(d\) 的两种选择(直观对比)</strong>:</p>
+
+  <div data-component="distribution-bar" data-config='{
+    "title": "示例:5 状态环境,d_0(均匀) vs d_π(stationary)",
+    "items": [
+      {"label": "s₁: d_0=0.20", "value": 0.20},
+      {"label": "s₂: d_0=0.20", "value": 0.20},
+      {"label": "s₃ (target): d_0=0.20", "value": 0.20},
+      {"label": "s₄: d_0=0.20", "value": 0.20},
+      {"label": "s₅: d_0=0.20", "value": 0.20}
+    ]
+  }'></div>
+
+  <div data-component="distribution-bar" data-config='{
+    "title": "同环境,d_π(策略实际访问频率)",
+    "items": [
+      {"label": "s₁: d_π=0.10", "value": 0.10},
+      {"label": "s₂: d_π=0.15", "value": 0.15},
+      {"label": "s₃ (target): d_π=0.40", "value": 0.40},
+      {"label": "s₄: d_π=0.20", "value": 0.20},
+      {"label": "s₅: d_π=0.15", "value": 0.15}
+    ]
+  }'></div>
+
+  <p style="font-size:0.85rem; color:var(--color-muted);">观察:\(d_0\) 一律均权;\(d_\pi\) 反映"<em>策略常去 target 附近</em>" ⇒ target 状态权大。两种 \(d\) 给两种<em>不同</em> 的 \(\bar v_\pi\) 值,<em>不同</em> 的 \(\nabla_\theta \bar v_\pi\) 形式 —— L4 Theorem 9.2 处理 \(d_0\),Theorem 9.3 处理 \(d_\pi\)。</p>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>"<em>discounted return = 加权 \(v_\pi\)</em>" 的<em>全概率证</em></em>。\(\mathbb E[\sum_{t=0}^\infty \gamma^t R_{t+1}]\) 中的<em>外层</em> \(\mathbb E\) 是对<em>初始 \(S_0\) + 整条轨迹</em> 一起取期望。用全概率拆 \(S_0\):\(\mathbb E[\cdot] = \sum_s \Pr(S_0 = s) \cdot \mathbb E[\cdot | S_0 = s]\)。内层 \(\mathbb E[\sum \gamma^t R_{t+1} | S_0 = s] = v_\pi(s)\)(Ch.2 L2 状态值定义)。外层 \(\Pr(S_0 = s) = d(s)\)(初始分布)。代入 ⇒ \(\sum_s d(s) v_\pi(s) = \bar v_\pi\)。<em>结论</em>:\(J(\theta) = \mathbb E[\sum \gamma^t R]\) 不是<em>新</em> 目标,而是 \(\bar v_\pi\) 的<em>路径展开</em> 写法。
+  </div>
+
+  <div class="callout">
+    <strong>Step 2.</strong> <em>"<em>\(d_\pi\) 加权</em> = 策略表现的<em>自然</em> 度量</em>"。\(d_\pi\) 由 \(\pi\) 自身决定 ⇒ \(\bar v_\pi = d_\pi^\top v_\pi\) 是 \(\pi\) "<em>常访问位置上的平均价值</em>"。两个策略 \(\pi_1, \pi_2\) 比较时,各自在<em>自己</em> 常访问的状态上<em>各自</em> 的 \(v_\pi\) 加权 ⇒ 公平。换 \(d_0\) 均匀加权 ⇒ "<em>策略<em>从未</em> 访问的状态上的 \(v_\pi\)</em>" 也算进总分,可能<em>不公平</em>(那些状态的 \(\pi\) 行为<em>无关紧要</em>)。<em>但</em> \(d_\pi\) 依赖 \(\theta\) ⇒ L4 求梯度时多一项,数学上比 \(d_0\) 麻烦。教材两种都讲,实际工程多取 \(d_\pi\) 隐含(on-policy 样本天然来自 \(d_\pi\),Ch.8 L2 同样道理)。
+  </div>
+
+  <div class="callout">
+    <strong>Step 3.</strong> <em>"<em>内积 \(d^\top v_\pi\)</em>" 的<em>线性代数便利</em></em>。把 \(\bar v_\pi\) 写成内积 ⇒ 求 \(\nabla_\theta\) 时:若 \(d\) 与 \(\theta\) 无关(\(d = d_0\)),\(\nabla_\theta \bar v_\pi = d^\top \nabla_\theta v_\pi\)(只对 \(v_\pi\) 求);若 \(d = d_\pi\) 依赖 \(\theta\),需展开 \(\nabla_\theta(d_\pi^\top v_\pi) = (\nabla_\theta d_\pi)^\top v_\pi + d_\pi^\top \nabla_\theta v_\pi\) 两项。L4 Theorem 9.2 / 9.3 各自处理,后者形式上略不同但<em>同骨架</em>(PG 定理)。<em>关键</em>:线性代数把<em>"<em>策略改一点 \(\pi\) 怎么变</em>"</em> 转换成"<em>矩阵-向量微分</em>",省力。
+  </div>
+
+  <h2>§4 数值演示:三种等价表达对玩具 MDP 给同一数</h2>
+  <p>设 3 状态 MDP:\(\mathcal S = \{s_1, s_2, s_3\}\),\(\gamma = 0.9\),策略 \(\pi\) 给 \(v_\pi = [10, 5, 8]^\top\)、\(d_\pi = [0.3, 0.4, 0.3]\)。验三种表达给同一 \(\bar v_\pi\):</p>
+
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\begin{array}{l|l|l} \\text{表达式} & \\text{计算} & \\text{值} \\\\ \\hline \\sum_s d(s) v_\\pi(s) & 0.3\\cdot 10 + 0.4 \\cdot 5 + 0.3 \\cdot 8 & 7.4 \\\\ \\mathbb E_{S\\sim d_\\pi}[v_\\pi(S)] & \\text{按 } d_\\pi \\text{ 抽 S 取 } v_\\pi(S) \\text{ 期望} & 7.4 \\\\ d_\\pi^\\top v_\\pi & [0.3, 0.4, 0.3] \\cdot [10, 5, 8]^\\top & 7.4 \\\\ \\lim_n \\frac{1}{?} \\mathbb E[\\sum_{t=0}^n \\gamma^t R_{t+1}] & \\text{长 episode 平均累积回报} & \\approx 7.4 \\end{array}",
+    "annotations": [
+      {"key": "all_same", "label": "三表达<em>同值</em>", "description": "上三行严格相等(数学等价)。第四行(discounted return)实际 = (1-γ) v̄_π / γ 的修正版,在 lim 与展开下也给 v̄_π。本玩具中数值一致。"},
+      {"key": "compute_simple", "label": "实际计算简单", "description": "拿到 v_π(贝尔曼方程解)与 d_π(P_π 的左特征向量)就是俩&#39;矩阵作业&#39;,内积一下完事。Ch.2 L4 已会求 v_π;d_π 是 P_π 的 stationary distribution,Ch.6 RM 类工具能解。"},
+      {"key": "vs_expectation", "label": "期望版的便利", "description": "实际 RL 训练中我们用样本估期望(单条 episode 的状态访问频率近似 d_π,样本回报近似 v_π)。这是 L5 REINFORCE&#39;能跑&#39; 的形式根。"},
+      {"key": "discount_link", "label": "discount link 桥 L3", "description": "Lemma 9.1: r̄_π = (1-γ) v̄_π。所以 v̄_π 与 r̄_π(L3 度量)只差常数因子(1-γ),最大化 v̄_π 等价于最大化 r̄_π。两种度量&#39;指向同一最优 θ&#39;。"}
+    ]
+  }'></div>
+
+  <p style="font-size:0.85rem; color:var(--color-muted);">这一表演示三件事:<em>(1)</em> \(\bar v_\pi\) 的计算<em>简单</em> 一旦 \(v_\pi, d\) 已知;<em>(2)</em> 三表达<em>同值</em>,选哪个看推导便利;<em>(3)</em> 与 L3 \(\bar r_\pi\) 只差 \((1-\gamma)\) 因子,两 metric <em>同向</em>。</p>
+
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"\(\bar v_\pi = \mathbb E[\sum \gamma^t R]\) 这个目标显然 —— 直接对它求梯度做 SGD 不就行了?为什么还要写成 \(\sum_s d(s) v_\pi(s)\)?"<br>
+    <strong>实际上:</strong><strong>两种写法各有所长</strong>。\(\mathbb E[\sum \gamma^t R]\) <em>采样</em> 友好(单条 episode 的 \(\sum \gamma^t r_t\) 是无偏样本),但<em>求梯度</em> 不便(要对随机轨迹的整条求 \(\nabla\));\(\sum_s d(s) v_\pi(s)\) <em>分析</em> 友好(转成内积 + 矩阵-向量,L4 PG 定理直接出),但<em>采样</em> 不直观。Ch.9 用<em>分析</em> 形式推 PG 定理(L4),再<em>翻回</em> 期望形式做 SGD(L5 REINFORCE)。<br>
+    <strong>因为:</strong>"<em>推</em>" 与"<em>用</em>" 的<em>形式</em> 需求不同。Ch.9 把这两种形式作为<em>同一目标的两面</em>,根据需要切换。这是 RL 数学论文中常见的"<em>形式切换术</em>",PG 定理本身就是切换的产物。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"\(d\) 选什么不重要 —— 反正都是加权平均,最终 \(\arg\max_\theta\) 应该差不多。"<br>
+    <strong>实际上:</strong><strong>\(d\) 选法<em>显著</em> 影响最优 \(\theta^*\)</strong>。\(d_0 = \delta_{s_0}\)(固定起点) ⇒ 优化"<em>从 \(s_0\) 出发的总回报</em>",在不可达 \(s\) 上的 \(\pi\) 行为<em>不影响</em> \(J\) ⇒ 那些状态训练后<em>无定义</em>(任意值都行)。\(d_0\) 均匀 ⇒ 所有 \(s\) 上 \(\pi\) 都要训好,即使<em>不可达</em> \(s\) 也要(<em>奇怪</em>:策略不去那也要好)。\(d_\pi\) ⇒ 与 on-policy 样本一致,工程默认。<em>不同 \(d\) ≈ 不同任务定义</em>。<br>
+    <strong>因为:</strong>RL 的"<em>最优策略</em>" 本质是<em>加权</em> 优化的解,加权 \(d\) 改变 ⇒ 解改变。教材给两种 \(d\) 不是<em>装饰</em>,而是<em>不同应用场景</em> 下两种合理选择(固定起点 vs 长期运行)。L4 PG 定理对两种 \(d\) <em>各</em> 给一形式(Theorem 9.2 vs 9.3)。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"既然 \(\bar v_\pi = d^\top v_\pi\) 是<em>线性</em> 内积,那 \(\nabla_\theta \bar v_\pi = d^\top \nabla_\theta v_\pi\) 应该<em>显然</em> —— L4 何必整一章?"<br>
+    <strong>实际上:</strong><strong>\(\nabla_\theta v_\pi\) 本身<em>不</em> 显然</strong>。\(v_\pi(s) = \mathbb E[\sum \gamma^t R | S_0 = s]\) 隐式依赖 \(\pi_\theta\)(贝尔曼方程的解),求 \(\nabla_\theta v_\pi\) 要展开 \(v_\pi = \sum_a \pi(a|s; \theta) q_\pi(s, a)\) 再对 \(\theta\) 求导(Lemma 9.2)。结果含 \(\nabla q_\pi\) 项,\(q_\pi\) 又递归依赖 \(v_\pi\) ⇒ 递归方程。L4 用<em>"<em>matrix-vector + Kronecker</em>"</em> 解开这递归,得 \(\nabla v_\pi(s) = \sum_{s&#39;}\Pr_\pi(s&#39;|s) \sum_a \nabla \pi(a|s&#39;) q_\pi(s&#39;, a)\),最终给 PG 定理。<br>
+    <strong>因为:</strong>RL 的<em>价值</em> 是 MDP 全局耦合的函数,改 \(\theta\) 一点 \(\Rightarrow\) 改<em>所有</em> \(s\) 的 \(v_\pi\)(通过马氏链传播)。L4 的工作是把这<em>耦合</em> 形式<em>解析</em> 写出。这不是"<em>显然</em>",是 PG 定理的<em>核心难点</em>。
+  </div>
+
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> 写出 \(\bar v_\pi\) 的<em>三种</em> 等价表达,并说明各自适合<em>什么</em> 用途。</summary>
+    <p><strong>A.</strong> <em>(i)</em> 求和 \(\sum_s d(s) v_\pi(s)\) ⇒ "<em>原生</em>" 定义,强调"<em>每状态贡献</em>"。<em>(ii)</em> 期望 \(\mathbb E_{S\sim d}[v_\pi(S)]\) ⇒ <em>采样</em> 便利,SGD 单样本估;L5 REINFORCE 用此形式取 \(\hat v_\pi(s_t) \approx G_t\)。<em>(iii)</em> 内积 \(d^\top v_\pi\) ⇒ <em>线性代数</em> 便利,L4 求 \(\nabla_\theta\) 时把"<em>策略改一点</em>" 转 \(\nabla v_\pi\) 矩阵-向量。<em>(iv)</em>(等价 disounted return)\(\mathbb E[\sum \gamma^t R_{t+1}]\) ⇒ 文献常见,与 RL 论文衔接。前三种数学严格等价,第四种通过全概率公式化简到第一种。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> \(d_0\) 与 \(d_\pi\) 选法的<em>语义</em> 区别是什么?哪种与 on-policy SGD 更<em>自然</em>?</summary>
+    <p><strong>A.</strong> \(d_0\) <em>独立</em> 于 \(\pi\):均匀 \(1/|\mathcal S|\)("<em>所有 \(s\) 等重要</em>")或 \(\delta_{s_0}\)("<em>只关心固定起点</em>")。\(d_\pi\) <em>依赖</em> \(\pi\):\(d_\pi^\top P_\pi = d_\pi^\top\),反映"<em>\(\pi\) 长期访问频率</em>"。<em>on-policy 自然性</em>:on-policy 样本 \(s_t \sim d_\pi\)(经长 episode 后近似 stationary),拿样本算 \(v_\pi(s_t)\) 平均 = \(\bar v_\pi^{d_\pi}\) 的无偏估,SGD 直接套。换 \(d_0\) ⇒ 需重要性采样修正(IS 比 \(d_0(s_t) / d_\pi(s_t)\),增加方差)。所以工程默认 \(d_\pi\)(教材 Theorem 9.3),理论分析两个都讲。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> 推导 \(\mathbb E[\sum_{t=0}^\infty \gamma^t R_{t+1}] = \sum_s d(s) v_\pi(s)\)(用全概率公式)。</summary>
+    <p><strong>A.</strong> 由全概率公式拆<em>初始</em> \(S_0\):\(\mathbb E[\sum \gamma^t R_{t+1}] = \sum_s \Pr(S_0 = s) \cdot \mathbb E[\sum \gamma^t R_{t+1} | S_0 = s]\)。<em>内层</em>:\(\mathbb E[\sum \gamma^t R_{t+1} | S_0 = s] = v_\pi(s)\)(Ch.2 L2 状态值定义,正是<em>从 \(s\) 出发</em> 的折扣累积回报期望)。<em>外层</em>:\(\Pr(S_0 = s) = d(s)\)(初始分布约定)。代入 ⇒ \(\sum_s d(s) v_\pi(s) = \bar v_\pi\)。<em>意义</em>:文献中"<em>\(J = \mathbb E[\text{return}]\)</em>" 与教材"<em>\(J = \bar v_\pi\)</em>" <em>同义</em>,只是切角度不同。所有 RL 论文的 PG 都从这一等价开始。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=46&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=46" target="_blank">YouTube 备链</a></p>
+
+  <h3>下一节预告</h3>
+  <p>本节给了<em>第一种</em> 指标 \(\bar v_\pi\)(<em>discounted</em> 视角,\(\gamma < 1\))。<strong>L3(同教材 §9.2 第二部分)</strong> 给<em>第二种</em>:<em>平均奖励 (average reward)</em> \(\bar r_\pi = \sum_s d_\pi(s) r_\pi(s) = \mathbb E_{S\sim d_\pi}[r_\pi(S)]\)。直观:<em>每步 reward 的 long-run 平均</em>,适合<em>无折扣</em> (\(\gamma = 1\)) 或<em>无穷 horizon</em> 场景(机器人持续运行、网络流控)。L3 还会证<strong>Lemma 9.1: \(\bar r_\pi = (1-\gamma) \bar v_\pi\)</strong>(discounted 下两 metric <em>等价</em>),并给 \(\bar r_\pi\) 的<em>三种等价</em> 表达(类比本节)。Ch.9 之所以同时讲两 metric:L4 推 PG 定理时<em>both</em> 都用,且<em>无折扣</em> 形式比<em>有折扣</em> 形式<em>梯度更优雅</em>(Theorem 9.5 strictly,9.3 是 approximation)。</p>
+
+  <nav class="lesson-nav">
+    <a href="lesson-01.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-03.html">Next →</a>
+  </nav>
+</div>
+
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>

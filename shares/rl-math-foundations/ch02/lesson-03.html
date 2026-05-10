@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>贝尔曼方程(P3):推导 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch02-l03" data-est-minutes="20">
+<div class="container">
+
+  <!-- Top nav -->
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.2 / Lesson 3</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <!-- Header -->
+  <p class="kicker">Bilibili #6 · YouTube #6 · Book §2.4-2.5 pp. 20-25</p>
+  <h1>L3: Bellman Equation (P3 - Derivation)<small style="color:var(--color-muted); font-weight:400;">  (贝尔曼方程(P3):推导)</small></h1>
+
+  <!-- §1 Why this lesson -->
+  <h2>§1 Why this lesson</h2>
+  <p>上一节(L2)我们给了 \(v_\pi(s)\) 的<strong>语义定义</strong>:从 \(s\) 出发的折现 return 期望。但定义只告诉我们这个量"是什么",没告诉我们"怎么算"。直接按定义去算等于把所有 trajectory 枚举一遍 —— 真随机系统下不可行。本节就来补上"怎么算"。</p>
+  <p>本节是<strong>整章最关键的一节</strong>(教材 §2.4-2.5,pp. 20-25)。我们要从 L2 的定义出发,通过<strong>三步</strong>得到大名鼎鼎的<strong>贝尔曼方程</strong>:(1) 用 \(G_t = R_{t+1} + \gamma G_{t+1}\) 把 return 自己拆成"即时 + 未来";(2) 两边对 \(S_t = s\) 取条件期望,期望线性把它变成两项 \(\mathbb{E}[R_{t+1} \mid S_t=s] + \gamma \mathbb{E}[G_{t+1} \mid S_t=s]\);(3) 用 Markov 性把第二项中的 \(\mathbb{E}[G_{t+1} \mid S_t=s]\) 替换成 \(\sum_{s&#39;} v_\pi(s&#39;) \, p(s&#39; \mid s)\) —— 关键就是这一步用 \(v_\pi(s&#39;)\) 表达了 \(v_\pi(s)\),自洽闭环。最终得到的就是公式 (2.7) —— 一组以 \(\{v_\pi(s)\}_{s \in \mathcal{S}}\) 为未知量的<strong>线性方程组</strong>。下一节 L4 会把它写成矩阵形式直接求解。</p>
+
+  <!-- §2 核心定义 -->
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>return 的递归形式 (recursive form of \(G_t\),教材 §2.4 公式 (2.4) 上方)</strong>:\(G_t = R_{t+1} + \gamma R_{t+2} + \gamma^2 R_{t+3} + \dots = R_{t+1} + \gamma (R_{t+2} + \gamma R_{t+3} + \dots) = R_{t+1} + \gamma G_{t+1}\)。这就是"\(G_t\) = 一步即时 reward + γ 倍未来 return"。是 return<strong>自身</strong>的递归,不是期望。</li>
+    <li><strong>条件期望线性化(教材 §2.4 公式 (2.4))</strong>:\(v_\pi(s) = \mathbb{E}[R_{t+1} \mid S_t = s] + \gamma \, \mathbb{E}[G_{t+1} \mid S_t = s]\)。把"对 \(R_{t+1} + \gamma G_{t+1}\) 取期望"拆成两项分别取期望。</li>
+    <li><strong>第一项展开 — 即时 reward 的期望(教材 §2.4 公式 (2.5))</strong>:\(\mathbb{E}[R_{t+1} \mid S_t = s] = \sum_a \pi(a \mid s) \sum_r p(r \mid s, a) \, r\)。直觉:先按 \(\pi\) 选动作 \(a\),再按环境 \(p(r \mid s, a)\) 看会拿什么 reward,逐层加权。这是<strong>全期望公式</strong>(law of total expectation)的直接应用。</li>
+    <li><strong>第二项展开 — 未来 return 的期望(教材 §2.4 公式 (2.6))</strong>:\(\mathbb{E}[G_{t+1} \mid S_t = s] = \sum_{s&#39;} v_\pi(s&#39;) \, p_\pi(s&#39; \mid s)\),其中 \(p_\pi(s&#39; \mid s) \doteq \sum_a \pi(a \mid s) \, p(s&#39; \mid s, a)\)。<strong>关键一跳</strong>:用 Markov 性把 \(\mathbb{E}[G_{t+1} \mid S_t = s, S_{t+1} = s&#39;]\) 简化为 \(\mathbb{E}[G_{t+1} \mid S_{t+1} = s&#39;] = v_\pi(s&#39;)\) —— 因为未来只依赖现在,与历史无关。</li>
+    <li><strong>合并 → 贝尔曼方程(教材 §2.4 公式 (2.7))</strong>:\(v_\pi(s) = \sum_a \pi(a \mid s) \bigl[ \sum_r p(r \mid s, a) \, r + \gamma \sum_{s&#39;} p(s&#39; \mid s, a) \, v_\pi(s&#39;) \bigr], \forall s \in \mathcal{S}\)。一句话:<em>从 \(s\) 出发的状态值 = 即时 reward 期望 + γ 倍下一状态值的期望</em>。注意"\(\forall s\)"才是 Bellman 方程的真身 —— 它是 \(|\mathcal{S}|\) 条线性方程联立,不是单条等式。</li>
+    <li><strong>等价形式(教材 §2.4 末段)</strong>:用 \(p(s&#39;, r \mid s, a)\) 联合分布合并两个 sum,有 \(v_\pi(s) = \sum_a \pi(a\mid s) \sum_{s&#39;, r} p(s&#39;, r \mid s, a) [r + \gamma v_\pi(s&#39;)]\);若 reward 仅依赖下一状态(\(r = r(s&#39;)\)),则进一步化简为 \(v_\pi(s) = \sum_a \pi(a\mid s) \sum_{s&#39;} p(s&#39; \mid s, a)[r(s&#39;) + \gamma v_\pi(s&#39;)]\) —— Sutton-Barto 用的就是这个形式。</li>
+  </ul>
+
+  <!-- §3 关键公式 + 推导 -->
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节的核心就是 <strong>公式 (2.7)</strong>。我们用 4 个 callout 把它推完(每个 callout 对应一步关键变换),全程不需要超出"全期望公式 + Markov 性"。</p>
+
+  <p><strong>公式:贝尔曼方程(教材 §2.4 公式 (2.7),p. 21)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "v_\\pi(s) = \\sum_{a \\in \\mathcal{A}} \\pi(a \\mid s) \\Bigl[ \\sum_{r \\in \\mathcal{R}} p(r \\mid s, a) \\, r \\;+\\; \\gamma \\sum_{s&#39; \\in \\mathcal{S}} p(s&#39; \\mid s, a) \\, v_\\pi(s&#39;) \\Bigr], \\quad \\forall s \\in \\mathcal{S}",
+    "annotations": [
+      {"key": "outer_sum", "label": "Σ_a π(a|s)", "description": "对所有动作按策略加权 —— 因为不知道 agent 会选哪个 a,先按概率分布求期望。"},
+      {"key": "immediate", "label": "Σ_r p(r|s,a)r", "description": "在 (s, a) 给定后,环境给出 reward 的期望(p(r|s,a) 编码奖励的概率分布)。"},
+      {"key": "future", "label": "γ Σ_{s&#39;} p(s&#39;|s,a) v_π(s&#39;)", "description": "γ 折扣后,对所有可能下一状态的状态值再加权求和 —— 这就是 bootstrap 一步。"},
+      {"key": "for_all_s", "label": "∀ s ∈ 𝒮", "description": "贝尔曼方程不是&#39;一条&#39;方程,而是 |𝒮| 条联立 —— 这正是 L4 用矩阵形式收紧它的动机。"},
+      {"key": "unknown_lhs_rhs", "label": "v_π 同时在两侧", "description": "左边 v_π(s) 与右边 v_π(s&#39;) 都是未知数 —— 这就是 bootstrap,不是循环定义,而是一个线性方程组。"}
+    ]
+  }'></div>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>从 \(G_t\) 的递归到 \(v_\pi\) 的递归(对应教材公式 (2.4))。</em>从 L2 的 \(G_t = R_{t+1} + \gamma R_{t+2} + \dots\) 出发,把第一项分出来:\(G_t = R_{t+1} + \gamma (R_{t+2} + \gamma R_{t+3} + \dots) = R_{t+1} + \gamma G_{t+1}\) —— <strong>注意这是 RV 等式,两边都是随机变量</strong>。两边对 \(S_t = s\) 取条件期望、用期望的线性,得 \(v_\pi(s) = \mathbb{E}[R_{t+1} \mid S_t = s] + \gamma \, \mathbb{E}[G_{t+1} \mid S_t = s]\)。这一步只用到一个事实:<em>常数(\(\gamma\))可以拎出期望算子</em>,期望线性。它对任意 RV 都成立,跟 Markov 性无关。
+  </div>
+
+  <div class="callout">
+    <strong>Step 2.</strong> <em>第一项展开 \(\mathbb{E}[R_{t+1} \mid S_t = s]\)(对应教材公式 (2.5))。</em>用全期望公式按 \(A_t\) 分层:\(\mathbb{E}[R_{t+1} \mid S_t = s] = \sum_a \pi(a \mid s) \, \mathbb{E}[R_{t+1} \mid S_t = s, A_t = a]\)。再按 reward 分布展开 \(\mathbb{E}[R_{t+1} \mid S_t = s, A_t = a] = \sum_r p(r \mid s, a) \, r\)。合并得到 \(\mathbb{E}[R_{t+1} \mid S_t = s] = \sum_a \pi(a \mid s) \sum_r p(r \mid s, a) \, r\)。<strong>记号小心</strong>:这里出现了 \(p(r \mid s, a)\),它是 reward 的概率分布(MDP 五元组中的 \(R\) 部分),与状态转移 \(p(s&#39; \mid s, a)\) 是<em>不同</em>的两个分布。
+  </div>
+
+  <div class="callout">
+    <strong>Step 3.</strong> <em>第二项展开 \(\mathbb{E}[G_{t+1} \mid S_t = s]\)(对应教材公式 (2.6))—— 这是整个推导的"魔术"步。</em>同样用全期望公式按 \(S_{t+1}\) 分层:\(\mathbb{E}[G_{t+1} \mid S_t = s] = \sum_{s&#39;} \mathbb{E}[G_{t+1} \mid S_t = s, S_{t+1} = s&#39;] \cdot p(s&#39; \mid s)\)。<strong>关键一跳</strong>:用 <em>Markov 性</em>(教材 §1.7 写过)把 \(\mathbb{E}[G_{t+1} \mid S_t = s, S_{t+1} = s&#39;]\) 简化为 \(\mathbb{E}[G_{t+1} \mid S_{t+1} = s&#39;]\) —— 因为给定 \(S_{t+1}\),未来 \(G_{t+1}\) 与更早的 \(S_t\) 条件独立。但 \(\mathbb{E}[G_{t+1} \mid S_{t+1} = s&#39;]\) 又恰好<strong>就是 \(v_\pi(s&#39;)\) 的定义</strong>!所以 \(\mathbb{E}[G_{t+1} \mid S_t = s] = \sum_{s&#39;} v_\pi(s&#39;) \, p(s&#39; \mid s)\)。最后用 \(p(s&#39; \mid s) = \sum_a \pi(a \mid s) \, p(s&#39; \mid s, a)\) 把策略分出来,得 \(\mathbb{E}[G_{t+1} \mid S_t = s] = \sum_a \pi(a \mid s) \sum_{s&#39;} p(s&#39; \mid s, a) v_\pi(s&#39;)\)。<strong>这一步是 Bellman 方程"自洽"的根 ——</strong>用 \(v_\pi(s&#39;)\) 表达 \(v_\pi(s)\),Markov 性是它能存在的<em>充分条件</em>。
+  </div>
+
+  <div class="callout">
+    <strong>Step 4.</strong> <em>合并 → 公式 (2.7)。</em>把 Step 2、Step 3 的结果代回 Step 1,得 \(v_\pi(s) = \sum_a \pi(a \mid s) \sum_r p(r\mid s,a) r + \gamma \sum_a \pi(a \mid s) \sum_{s&#39;} p(s&#39; \mid s, a) v_\pi(s&#39;)\)。把外层 \(\sum_a \pi(a \mid s)\) 提出公因子,就是公式 (2.7) 的最终形式。<strong>结构上读它</strong>:外层 \(\sum_a \pi(\cdot)\) 是<em>策略带来的随机性平均</em>,内层方括号 \([\,\,]\) 是<em>给定动作 \(a\) 后的"即时 + 折扣未来"分解</em>。Bellman 方程的整体形状就是 "<em>策略层</em> ∘ <em>动作层</em>(即时 + γ × 未来)"的两层结构,一层对应 \(\pi\)、一层对应 \(p\),把 MDP 的两个随机源都打包进去了。
+  </div>
+
+  <!-- §4 Grid-world 例子 -->
+  <h2>§4 Grid-world 实例化</h2>
+  <p>用教材 §2.5 的两个最小实例(2×2 网格)逐字写出贝尔曼方程,然后求解。target = \(s_4\)(蓝色,右下),forbidden = \(s_2\)(橙色,右上),\(r_\text{forbidden} = -1\)、\(r_\text{target} = +1\)、其他 = 0,\(\gamma = 0.9\)。我们仍把它放回我们贯穿全书的 5×5 框架里看(target = \((3,2)\)、forbidden 集合保持),只是<strong>仅展示 4 个被讨论的状态</strong>:</p>
+  <div data-component="gridworld" id="gw-ch02-l03" data-config='{
+    "rows": 5, "cols": 5,
+    "target": [3, 2],
+    "forbidden": [[1,1],[2,1],[2,2],[1,3],[3,3]],
+    "policy": [
+      ["↓","↓","↓","↓","↓"],
+      ["↓","","↓","","↓"],
+      ["↓","","","→","↓"],
+      ["↓","→","","","←"],
+      ["→","→","↑","←","←"]
+    ],
+    "heatmap": [
+      [4.78, 5.31, 5.90, 6.56, 7.29],
+      [5.31, 0,    6.56, 0,    8.10],
+      [5.90, 0,    0,    9.00, 9.00],
+      [6.56, 7.29, 10.0, 0,    8.10],
+      [7.29, 8.10, 9.00, 8.10, 7.29]
+    ]
+  }'></div>
+
+  <p><strong>2×2 例 1(教材图 2.4,确定性策略)。</strong>把 4 个状态分别写贝尔曼方程,只代入策略给出的<em>那一个</em>动作(其他动作概率为 0,sum 退化):</p>
+  <ul>
+    <li>\(s_1\):\(\pi(a_3 \mid s_1) = 1\),\(p(s_3 \mid s_1, a_3) = 1\),\(p(r=0 \mid s_1, a_3) = 1\)。代入 (2.7):\(v_\pi(s_1) = 0 + \gamma v_\pi(s_3)\)。</li>
+    <li>\(s_2\):\(v_\pi(s_2) = 1 + \gamma v_\pi(s_4)\)(动作下、reward = +1、转移到 \(s_4\))。</li>
+    <li>\(s_3\):\(v_\pi(s_3) = 1 + \gamma v_\pi(s_4)\)(动作右、reward = +1、转移到 \(s_4\))。</li>
+    <li>\(s_4\):\(v_\pi(s_4) = 1 + \gamma v_\pi(s_4)\)(target 自环)。</li>
+  </ul>
+  <p>从最后一条解出 \(v_\pi(s_4) = 1/(1-\gamma) = 10\),回代得 \(v_\pi(s_2) = v_\pi(s_3) = 1 + 0.9 \cdot 10 = 10\),\(v_\pi(s_1) = 0 + 0.9 \cdot 10 = 9\)。这与教材 p. 23 的结果完全一致。<em>注意</em>:"贝尔曼方程"虽然写成一行公式,实际是 4 条联立 —— 求解过程是<strong>一组耦合方程的代数运算</strong>,不是单条递推。</p>
+
+  <p><strong>2×2 例 2(教材图 2.5,随机策略)。</strong>这次 \(s_1\) 上策略变成 \(\pi(a_2 \mid s_1) = 0.5\)、\(\pi(a_3 \mid s_1) = 0.5\)(右走撞 \(s_2\) forbidden、下走到 \(s_3\))。代入 (2.7) 得 \(v_\pi(s_1) = 0.5 \, [-1 + \gamma v_\pi(s_2)] + 0.5 \, [0 + \gamma v_\pi(s_3)] = -0.5 + 0.5 \gamma v_\pi(s_2) + 0.5 \gamma v_\pi(s_3)\)。其他三个状态 \(s_2, s_3, s_4\) 的方程不变,解得 \(v_\pi(s_4) = v_\pi(s_3) = v_\pi(s_2) = 10\),\(v_\pi(s_1) = -0.5 + 0.5 \cdot 9 + 0.5 \cdot 9 = -0.5 + 9 = 8.5\)。<strong>对比例 1 的 \(v_\pi(s_1) = 9\)</strong>:随机策略让 \(s_1\) 的 state value 跌了 0.5 —— 正是"50% 概率撞 forbidden 拿 \(-1\)"的折现期望损失,与直觉吻合。</p>
+
+  <!-- §5 常见误解 -->
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"\(v_\pi(s) = R_{t+1} + \gamma v_\pi(s&#39;)\) —— 直接把 \(\mathbb{E}\) 去掉就完事了。"<br>
+    <strong>实际上:</strong>这是<strong>整章最常见的写错</strong>。\(v_\pi\) 是<em>常数</em>、\(R_{t+1}\) 是 RV、\(s&#39;\) 是 RV 的取值 —— 类型根本对不上。必须保留 \(\mathbb{E}\),且把 \(\mathbb{E}[\cdot \mid S_t = s]\) 用 \(\sum_a \pi(a \mid s) \sum_{r,s&#39;} p(\cdot)\) 显式展开,才是 (2.7) 的正确形式。<br>
+    <strong>因为:</strong>没有 \(\mathbb{E}\) 的 \(v_\pi(s) = R_{t+1} + \gamma v_\pi(s&#39;)\) 是<strong>沿一条 trajectory 的"return 一步分解"</strong>,只在 trajectory 已经实现后成立 —— 不是关于 \(\{v_\pi(s)\}\) 的方程。期望算子是把 RV 等式升级为标量等式的<em>必要桥梁</em>。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"贝尔曼方程是<em>递推</em>:有了 \(v_\pi(s_3)\) 就能算 \(v_\pi(s_1)\),依次推下去。"<br>
+    <strong>实际上:</strong>它是<strong>联立线性方程组</strong>(\(|\mathcal{S}|\) 个未知数 \(v_\pi(s_1), \dots, v_\pi(s_n)\),\(|\mathcal{S}|\) 条等式)。"递推"那种感觉只在 trajectory 是无环 DAG 时才成立(比如本节例 1,target 自环 + 单向链);一旦有环(L1 §2.2 那个 4 状态循环),就没有"先后顺序",必须联立解。<br>
+    <strong>因为:</strong>未知量 \(v_\pi(s)\) 同时出现在等式两边(\(v_\pi(s) = \dots + \gamma v_\pi(s&#39;)\),且 \(s&#39;\) 可以指回 \(s\) 自己),这是<em>方程</em>而不是<em>递推式</em>。L4 会把这件事写成 \(v_\pi = R_\pi + \gamma P_\pi v_\pi\),并用 \((I - \gamma P_\pi)^{-1}\) 一锤求解。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"Step 3 的 Markov 性化简是数学技巧,如果不懂可以先跳过。"<br>
+    <strong>实际上:</strong>这一步是 Bellman 方程能<strong>存在</strong>的根本原因。如果没有 Markov 性,\(\mathbb{E}[G_{t+1} \mid S_t = s, S_{t+1} = s&#39;]\) <em>仍然依赖 \(S_t = s\) 这个历史</em>,就<strong>不等于</strong> \(v_\pi(s&#39;)\) —— Bellman 方程根本写不出来。<br>
+    <strong>因为:</strong>所有 RL 算法(策略评估、价值迭代、Q-learning、TD)都站在 Bellman 方程上,而 Bellman 方程站在 Markov 性上。Ch.1 L2 Q3 的"扩状态"修复正是在补这条性质 —— 一旦补不回来,RL 整套理论就垮了。
+  </div>
+
+  <!-- §6 自检 + 视频 + teaser -->
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> 在公式 (2.7) 的推导里,Step 1 的"\(G_t = R_{t+1} + \gamma G_{t+1}\)"对任意 trajectory 都成立、不需要 Markov 性。但 Step 3 的 \(\mathbb{E}[G_{t+1} \mid S_t = s, S_{t+1} = s&#39;] = v_\pi(s&#39;)\) 必须 Markov 性。为什么差别这么大?</summary>
+    <p><strong>A.</strong> Step 1 是 RV 之间的代数恒等式(把 \(\sum_{k=0}^\infty \gamma^k r_{t+k+1}\) 重新排列),跟概率结构无关。Step 3 是<strong>条件分布</strong>的化简:它说"给定 \(S_{t+1} = s&#39;\),再多知道 \(S_t = s\) 不会改变 \(G_{t+1}\) 的分布"——这正是 Markov 性的定义。如果 \(R_{t+2}, R_{t+3}, \dots\) 还依赖 \(S_t\) 这个历史,这个化简就不成立,\(v_\pi(s&#39;)\) 跟出发的 \(s\) 有关,Bellman 方程的"\(v_\pi(s) = \dots + \gamma v_\pi(s&#39;)\)"那部分会变成 "\(\dots + \gamma v_\pi(s&#39; \mid s)\)" —— 多了个条件,方程组就不再封闭。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> 把 §4 的 2×2 例 2 中 \(s_1\) 的随机策略改成 \(\pi(a_2 \mid s_1) = 1\)(确定性向右,撞 \(s_2\)),其他不变。\(v_\pi(s_1)\) 是多少?</summary>
+    <p><strong>A.</strong> 代入 (2.7):\(v_\pi(s_1) = 1 \cdot [-1 + \gamma v_\pi(s_2)] = -1 + 0.9 \cdot 10 = 8\)。比 0.5/0.5 随机策略下的 \(v_\pi(s_1) = 8.5\) 还低 —— 这与"100% 撞 forbidden 比 50% 更亏"的直觉一致。<em>教学点</em>:同一个 (2.7) 公式,只要换 \(\pi(a \mid s_1)\),就直接得到不同的 \(v_\pi(s_1)\),无需重新推导 —— 这就是 Bellman 方程作为<em>策略评估工具</em>的力量。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> 对一个有 \(|\mathcal{S}| = 25\) 状态的 grid-world,公式 (2.7) 对应多少条联立方程?多少个未知数?线性还是非线性?</summary>
+    <p><strong>A.</strong> 25 条方程、25 个未知数(\(v_\pi(s_1), \dots, v_\pi(s_{25})\))、<strong>线性</strong>。这是因为 \(\pi(a \mid s)\) 和 \(p(\cdot \mid s, a)\) 都是<em>给定常数</em>,等式中 \(v_\pi\) 的系数全是常数,左右两边对 \(v_\pi\) 都是一次。这正是 L4 能直接写成矩阵 \(v_\pi = R_\pi + \gamma P_\pi v_\pi\) 并闭式求解的原因 —— 如果对 \(\pi\) 也求 max(下章 BOE)就变非线性了。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <p style="font-size:0.85rem;color:var(--color-muted);">视频:首选 Bilibili 直播(下方 iframe);若 iframe 不显示,用 YouTube 链接打开。BVID 当前是占位,实际 BVID 等首次部署时填。</p>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=6&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=6" target="_blank"><strong>▶ YouTube 备链(建议优先点这个)</strong></a></p>
+
+  <h3>下一节预告</h3>
+  <p>这一节我们得到了贝尔曼方程的<strong>逐元素形式</strong>(elementwise form)—— \(|\mathcal{S}|\) 条联立方程。但 \(|\mathcal{S}| = 25\) 一个一个写已经很烦,真实问题里 \(|\mathcal{S}|\) 可达成千上万。下一节(L4,Book §2.6-2.7)就把这堆方程<strong>打包成矩阵</strong>:定义向量 \(v_\pi \in \mathbb{R}^{|\mathcal{S}|}\)、\(R_\pi \in \mathbb{R}^{|\mathcal{S}|}\) 和矩阵 \(P_\pi \in \mathbb{R}^{|\mathcal{S}| \times |\mathcal{S}|}\),把 (2.7) 写成 \(v_\pi = R_\pi + \gamma P_\pi v_\pi\),从而闭式解 \(v_\pi = (I - \gamma P_\pi)^{-1} R_\pi\)。这是 RL 第一次出现"线性代数"工具,也是后面 VI/PI/TD 都站在的地基。</p>
+
+  <!-- Bottom nav -->
+  <nav class="lesson-nav">
+    <a href="lesson-02.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-04.html">Next →</a>
+  </nav>
+</div>
+
+<!-- Components -->
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>

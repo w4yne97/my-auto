@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <!-- {{LESSON_ID}} = e.g. ch01-l01 ; {{TITLE_ZH}} = lesson 中文标题 -->
+  <title>{{TITLE_ZH}} — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="{{LESSON_ID}}" data-est-minutes="{{EST_MINUTES}}">
+<div class="container">
+
+  <!-- Top nav -->
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.{{CH_NUMBER}} / Lesson {{LESSON_NUMBER}}</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <!-- Header -->
+  <!-- kicker 用 # 号(playlist position),与作者 lecture 内的 P1/P2 区分 -->
+  <p class="kicker">Bilibili #{{BILIBILI_P}} · YouTube #{{YOUTUBE_INDEX}} · Book §{{BOOK_SECTION}} pp. {{BOOK_PAGES}}</p>
+  <h1>L{{CH_NUMBER}}: {{TITLE_EN}}<small style="color:var(--color-muted); font-weight:400;">  ({{TITLE_ZH}})</small></h1>
+
+  <!-- §1 Why this lesson -->
+  <h2>§1 Why this lesson</h2>
+  <p><!-- 上一节遗留了什么问题 → 这一节登场。1-2 段。 --></p>
+
+  <!-- §2 核心定义 -->
+  <h2>§2 核心定义</h2>
+  <ul>
+    <!-- 每条:term + 一句话直觉。第一次出现的英文术语用 双标:中文 (English)。 -->
+    <li><strong>状态 (state)</strong>:agent 当前所处的情景描述。</li>
+  </ul>
+
+  <!--
+    Per-chapter symbol family cheatsheet (extend conventions from Plan 1):
+    Ch.2 Bellman:    v_π(s)=state value, q_π(s,a)=action value, P_π=策略下的状态转移矩阵,
+                     R_π=策略下的 reward 向量。矩阵-向量形式 v_π = R_π + γ P_π v_π。
+    Ch.3 BOE:        v*=最优 state value, q*=最优 action value, π*=最优策略;
+                     T 算子 (Tv)(s) = max_a (R(s,a) + γ Σ p(s'|s,a) v(s'));
+                     Banach contraction(γ-Lipschitz)是收敛性证明核心。
+    Ch.4 VI/PI:      v_k(s)=第 k 次迭代的 value;π_k=对应策略;
+                     不变式:v_{k+1} = T v_k;策略评估再策略改进交替。
+    Ch.5 MC:         G_t^{(i)}=第 i 条 episode 第 t 步起的 return;
+                     hat{v}_π(s) = (1/N) Σ G_t^{(i)};first-visit / every-visit;
+                     ε-greedy 用 distribution-bar 画 π(·|s)。
+    Ch.6 RM/SGD:     w_k=第 k 步参数;α_k=步长;Robbins-Monro 步长条件
+                     Σα_k=∞ AND Σα_k²<∞;θ-bounded noise / unbiased estimator。
+    Ch.7 TD:         δ_t = r_{t+1} + γ V(s_{t+1}) - V(s_t);
+                     Q-learning (off-policy) vs SARSA (on-policy);
+                     收敛比较图(MC variance vs TD bias-variance)。
+    Ch.8 Function Approx: w=权重向量(线性 FA)/ θ=NN 参数;hat{v}(s; w)= φ(s)^T w;
+                     loss = E[(目标 - hat{v}(s; w))²];target network for DQN(用 Mermaid
+                     画 Q-network 架构,不要新增组件);experience replay 用 callout 描述。
+    Ch.9 PG:         J(θ)=策略目标函数;∇θ J(θ) = E_π[∇θ log π_θ(a|s) · q_π(s,a)];
+                     log-derivative trick;REINFORCE / baseline 减方差。
+    Ch.10 AC:        actor=π_θ,critic=hat{q}_w;同时优化;
+                     advantage A(s,a)=q(s,a)-v(s);A2C / A3C 简介。
+    LaTeX HTML-entity 重申:π / γ / α 等希腊字母可直接用 utf-8;但凡 \\pi, \\gamma 出现在 data-config
+    属性内,反斜杠仍要双写;凡 ' (prime) 出现仍要写 &#39;。
+  -->
+  <!-- §3 关键公式 + 推导 -->
+  <!--
+    LaTeX 引号注意:data-config='...' 用单引号包裹,任何字面单引号 ' (如 LaTeX prime: s', v_π(s'))
+    必须写成 HTML 实体 &#39;,否则 KaTeX 会渲染成 double prime ″。
+    例:"\\sum_{s&#39;,r} p(s&#39;,r|s,a)[r + \\gamma v_\\pi(s&#39;)]"
+    LaTeX 反斜杠在 JSON 里要写两个 \\
+  -->
+  <h2>§3 关键公式 + 推导</h2>
+  <p>本节核心公式:</p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "<LATEX_EQUATION>",
+    "annotations": [
+      {"key": "<key>", "label": "<label>", "description": "<中文解释>"}
+    ]
+  }'></div>
+  <p>推导步骤:</p>
+  <div class="callout">
+    <strong>Step 1.</strong> <em>为什么这一步:</em>...
+  </div>
+
+  <!-- §4 Grid-world 例子 -->
+  <!--
+    Grid-world 一致性约定(贯穿所有 50 节):
+    - 5×5 网格;target=(3,2);forbidden={(1,1),(2,1),(2,2),(1,3),(3,3)}
+    - policy 矩阵在 forbidden 和 target 格上用 "" 抑制箭头(默认,Ch.1-Ch.2 为状态值评估场景);
+      Ch.3+ 讨论"最优策略 π*"时,因 BOE 在全状态空间定义动作(含 forbidden),
+      可保留 forbidden 格的箭头,只要 §4 narrative 体现该意图(本约定 Ch.3 audit 后弹性化)
+    - trajectory 必须真正与 policy 一致:trajectory 第 k 步 = (s_k 处 policy 给的方向)
+    - "stay" 动作要画在格里时用 "·";不要把 → 等指向 forbidden 格(除非该课就在讲 forbidden 是"可达的负 reward")
+    - **policy 矩阵每格的值必须是字符串** "↓"/"↑"/"←"/"→"/"·"/""(原 ASCII arrow → unicode arrow);
+      不要写成 `{"a":"down"}` 这种对象格式 —— gridworld.js 期望字符串,对象会渲染成空格(L7 audit 栽过此坑)
+    - 几何不可压缩:4-action grid 上从 (r1,c1) 到 (r2,c2) 的最短步数 = |r1-r2|+|c1-c2|(Manhattan 距离),
+      不能少。任何"短路径"必须通过踩 forbidden 拿负 reward 来换取(且步数不变),
+      不能通过"对角"动作(grid 没有对角)。L2 §4 audit 就栽过这个坑。
+    - 如果某节用 grid 对比"安全长路 vs 罚分短路"产生 γ flip,关键不在罚分次数,
+      而在于"到达 target 时刻不同" —— 前者让 G_0 主项的 γ 幂次不同,γ 一旋才会真翻
+    - Heatmap 与 displayed policy 必须自洽 OR 显式声明 schematic:
+      若给 5×5 网格画 v_π 热图,数值要么严格按 displayed policy 解贝尔曼方程
+      (forbidden 反射时把 -1 罚分纳入),要么在该节加 callout 说明
+      "本图为 schematic,数值按'忽略 forbidden 反射的 Manhattan 最短路径'估算,
+      严格 v_π 在 2×2 子例 / Ch.3 BOE 算法下逐格给出"。Ch.2 L2 §4 audit 栽过此坑。
+  -->
+  <h2>§4 Grid-world 例子</h2>
+  <p>用作者的 5×5 grid-world 来直观看:</p>
+  <div data-component="gridworld" id="gw-{{LESSON_ID}}" data-config='{
+    "rows": 5, "cols": 5,
+    "target": [3, 2],
+    "forbidden": [[1,1],[2,1],[2,2],[1,3],[3,3]]
+  }'></div>
+  <!-- Optional: iteration-stepper to drive the gridworld -->
+
+  <!-- §5 常见误解 -->
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong> ... <br>
+    <strong>实际上:</strong> ... <br>
+    <strong>因为:</strong> ...
+  </div>
+
+  <!-- §6 自检 + 视频 + teaser -->
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> 一道自检题</summary>
+    <p><strong>A.</strong> 答案。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <iframe src="//player.bilibili.com/player.html?bvid=<BVID>&p={{BILIBILI_P}}&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index={{YOUTUBE_INDEX}}" target="_blank">YouTube 备链</a></p>
+
+  <h3>下一节预告</h3>
+  <p>下一节我们将用刚刚学到的 X 来解决 Y 的问题。</p>
+
+  <!-- Bottom nav -->
+  <nav class="lesson-nav">
+    <a href="lesson-{{PREV_LESSON}}.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-{{NEXT_LESSON}}.html">Next →</a>
+  </nav>
+</div>
+
+<!-- Components -->
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>

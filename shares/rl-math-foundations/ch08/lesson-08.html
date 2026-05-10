@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>值函数近似(P8):DQN 实现 + Ch.8 总结 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch08-l08" data-est-minutes="30">
+<div class="container">
+
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.8 / Lesson 8</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <p class="kicker">Bilibili #44 · YouTube #44 · Book §8.4.2-8.6 pp. 184-190</p>
+  <h1>L8: DQN Implementation + Chapter 8 Summary<small style="color:var(--color-muted); font-weight:400;">  (DQN 完整实现示例 + 全章总结 + Ch.9 桥)</small></h1>
+
+  <h2>§1 Why this lesson</h2>
+  <p>L6-L7 给出 DQN 的<em>核心组件</em>(目标函数、target network、experience replay)。本节(教材 §8.4.2-8.6, pp. 184-190)做<strong>三件事</strong>:<em>(a)</em> 把所有组件<em>组装</em> 成完整 DQN(Algorithm 8.3),在 5×5 grid 上跑实验(教材 Fig. 8.11),展示<em>"<em>1 局 1000 步均匀 behavior + 1000 iter</em>" 学出最优策略</em>;<em>(b)</em> 做<em>少样本 ablation</em>(Fig. 8.12,buffer 100 步)展示 DQN 的<em>"<em>NN 拟合 ≠ 策略最优</em>" 区别</em>;<em>(c)</em> 总结 Ch.8 的<strong>3-4 个 key takeaway</strong>,并<em>桥到 Ch.9</em>。</p>
+  <p>核心 takeaway:<strong>(a)</strong> Algorithm 8.3 完整流程:behavior policy \(\pi_b\) 写 buffer \(\mathcal B\) → 均匀抽 mini-batch → 算 \(y_T\)(用 target net) → MSE loss + Adam → 每 \(C\) iter 同步 \(w_T \leftarrow w\)。教材 grid 实验:1 隐藏层 100 神经元、behavior 完全均匀、batch 100、buffer 1000、1000 iter ⇒ loss + value error <em>都</em> 收敛到 0,greedy 策略<em>全状态最优</em>。<strong>(b)</strong> 高效率(Fig. 8.11):1000 步交互即学到最优,vs Ch.7 tabular Q-learning 需 \(10^5\) 步(Fig. 7.4)⇒ NN 泛化能力 + replay 重抽样让 deep RL 在样本量上<em>~100× 优于 tabular</em>。<strong>(c)</strong> Fig. 8.12 ablation:buffer 100 步 ⇒ loss 仍降到 0(NN 拟合<em>这 100 条</em> 样本),但 value error <em>不降</em>(数据不足以恢复 \(q^*\))⇒ "<em>NN 训得动 ≠ 策略最优</em>";<strong>(d)</strong> 全章 takeaway:<em>(i)</em> FA 让大状态空间可学(Ch.7 表式不够);<em>(ii)</em> DQN = TD + FA + NN + 两大 trick;<em>(iii)</em> deadly triad 警告 + 工程缓解;<em>(iv)</em> 策略仍是<em>表</em> 形式(\(\pi(a|s)\) 显式枚举),max 限制<em>discrete actions</em> ⇒ Ch.9 把<em>策略</em> 也参数化,打开 continuous actions。</p>
+
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>Algorithm 8.3 完整 DQN(off-policy 版)</strong>:<em>(1)</em> behavior policy \(\pi_b\) 在环境中采 transition 写 \(\mathcal B\);<em>(2)</em> 每 iteration 从 \(\mathcal B\) 均匀抽 \(B\) 条样本;<em>(3)</em> 对每条算 \(y_T = r + \gamma \max_{a&#39;}\hat q(s&#39;, a&#39;; w_T)\);<em>(4)</em> loss \(= \frac{1}{B}\sum (y_T - \hat q(s, a; w))^2\);<em>(5)</em> backward + Adam update \(w\);<em>(6)</em> 每 \(C\) iter 同步 \(w_T \leftarrow w\)。</li>
+    <li><strong>教材 grid 实验设置(§8.4.2,Fig. 8.11)</strong>:5×5 grid,target=(4,3),forbidden 5 格;\(\gamma=0.9\),\(r_{\text{boundary}} = r_{\text{forbidden}} = -10\),\(r_{\text{target}} = 1\);behavior \(\pi_b\) <em>完全均匀</em>(每动作 0.2);1 episode 1000 步;buffer \(N=1000\)(=1 episode);batch \(B=100\);1 隐藏层 100 神经元 + ReLU;3 输入(row, col, action_idx,归一化 [0,1])+ 1 输出。</li>
+    <li><strong>"<em>loss 收敛 vs value error 收敛</em>"</strong>:loss = mini-batch MSE(网络拟合 buffer 数据的好坏),value error = \(\sqrt{\mathbb E_s[(\hat q(s, a^*) - q^*(s, a^*))^2]}\)(网络<em>真实</em> 离 \(q^*\) 多远)。两者<em>不一定同步</em>:数据足时一起降,数据不足时 loss 降但 value error 不降(Fig. 8.12)。</li>
+    <li><strong>"<em>策略仍是表式</em>" 的<em>限制</em></strong>:Algorithm 8.2/8.3 的 \(\pi_t(a | s)\) 仍显式枚举所有动作(ε-greedy)。这要求<em>(i)</em> 动作集 \(\mathcal A\) <em>有限离散</em>;<em>(ii)</em> 算 \(\max_a \hat q(s, a)\) 需对所有 \(a\) <em>各一次</em> 前向。连续动作(机器人控制、连续力)无 max 可言 ⇒ DQN 失效。</li>
+    <li><strong>Generalization 优势</strong>:tabular update 一格只影响一格,FA update 一格影响<em>所有</em> \(\phi(s, a)\) 与之相关的 \((s, a)\)。教材 §8.6 Q&A:<em>"<em>updating one state value would not change the other state values</em>" (tabular) vs "<em>updating the function parameter affects the values of many states</em>" (FA)</em>。这是 deep RL 在<em>样本</em> 维度比 tabular 高效的<em>根</em>。</li>
+    <li><strong>Stationary distribution \(d_\pi\) 的<em>章际地位</em></strong>:Ch.8 引入 \(d_\pi\) 用于定义 (8.13)/(8.37) 的 \(\mathbb E\) 加权,L4 证 \(A \succ 0\) 用 \(d_\pi^\top P_\pi = d_\pi\)。Ch.9 PG 也用 \(d_\pi\)(策略目标 \(J = \mathbb E_{s \sim d_\pi}[v_\pi(s)]\))。这是 \(d_\pi\) <em>跨章工具</em>。</li>
+    <li><strong>Q&A(教材 §8.6)的<em>核心问题</em></strong>:tabular vs FA 的 retrieve / update 差异;FA 的存储 + 泛化优势;为什么 DQN 需要 replay(uniform 假设);为什么 DQN 需要 two networks(梯度可算 + 截断反馈);NN 训练用框架(不直接写 (8.38))。这些问答<em>串</em> 起 Ch.8 的所有<em>核心 trade-off</em>。</li>
+  </ul>
+
+  <h2>§3 完整 DQN 算法 + 数值收敛</h2>
+  <p>本节核心是<strong>(a) Algorithm 8.3 的<em>完整</em> 公式与数据流</strong>,以及<strong>(b) Fig. 8.11/8.12 的<em>实验数据</em></strong>。</p>
+
+  <p><strong>Algorithm 8.3(教材 §8.4.1)</strong>:</p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "y_T = r + \\gamma \\max_{a&#39;\\in\\mathcal A(s&#39;)} \\hat q(s&#39;, a&#39;; w_T),\\quad L(w) = \\frac{1}{B}\\sum_{i\\in\\text{batch}}(y_{T,i} - \\hat q(s_i, a_i; w))^2,\\quad w \\leftarrow w - \\alpha \\nabla_w L,\\quad w_T \\leftarrow w \\text{ every } C",
+    "annotations": [
+      {"key": "behavior_collect", "label": "1. Behavior policy 采样写 buffer", "description": "π_b 在环境中采 transition (s, a, r, s&#39;) 存入 𝓑(FIFO,容量 N)。π_b 任意(可均匀、可 ε-greedy)。教材 grid 实验用完全均匀 ⇒ 1 episode 1000 步几乎覆盖全 (s, a)。"},
+      {"key": "uniform_batch", "label": "2. 均匀抽 mini-batch", "description": "从 𝓑 均匀抽 B 条样本。这是 (8.37) E[(S,A)~Uniform] 的样本估,也是 deadly triad 中 off-policy 加权失配的工程缓解。"},
+      {"key": "td_target", "label": "3. 算 TD target y_T", "description": "对每条样本算 y_T = r + γ max_{a&#39;} q̂(s&#39;, a&#39;; w_T)。注意:用 target 网络 w_T,不是主网络 w(截断 bootstrap 反馈)。"},
+      {"key": "mse_loss_step", "label": "4. MSE loss + autograd + Adam", "description": "L = mean of (y_T - q̂(s, a; w))²,backward 给 ∇_w L,Adam optimizer step。这是&#39;监督学习风格&#39; 的 NN 训练,把 RL 化简成 SL。"},
+      {"key": "sync", "label": "5. 每 C iter 同步 target", "description": "w_T ← w。C ∈ [10^3, 10^4](Atari)或 ~100(grid)。这是 target net 周期&#39;追新&#39;,既保短期固定又保长期跟进。"}
+    ]
+  }'></div>
+
+  <p><strong>实验数据(教材 §8.4.2 Fig. 8.11,buffer 1000 步,batch 100)</strong>:</p>
+  <div data-component="convergence-plot" data-config='{
+    "title": "DQN grid 实验:loss + value error vs iter(Fig. 8.11d, e)",
+    "xlabel": "iteration",
+    "ylabel": "loss / RMSE",
+    "series": [
+      {"name": "TD loss", "data": [[0,4.2],[100,2.5],[200,1.5],[400,0.6],[600,0.3],[800,0.15],[1000,0.08]]},
+      {"name": "value error (RMSE)", "data": [[0,9.5],[100,5.5],[300,2.2],[500,1.0],[700,0.4],[900,0.15],[1000,0.10]]}
+    ]
+  }'></div>
+
+  <p style="font-size:0.85rem; color:var(--color-muted);">两条线<em>同步</em> 下降 ⇒ 数据足、网络拟合 + \(\hat q \to q^*\) 同步发生 ⇒ 提取 greedy 即得最优策略(Fig. 8.11c)。<em>核心数字</em>:1 episode 1000 步交互 ⇒ 学到全状态最优策略;Ch.7 tabular Q-learning 需 \(10^5\) 步(Fig. 7.4),效率<em>~100× 提升</em>。</p>
+
+  <p><strong>Fig. 8.12 ablation(buffer 100 步)</strong>:</p>
+  <div data-component="convergence-plot" data-config='{
+    "title": "DQN ablation: 少样本 buffer = 100(Fig. 8.12d, e)",
+    "xlabel": "iteration",
+    "ylabel": "loss / RMSE",
+    "series": [
+      {"name": "TD loss (拟合 100 条样本)", "data": [[0,4.5],[100,2.0],[200,1.0],[400,0.4],[600,0.2],[800,0.1],[1000,0.05]]},
+      {"name": "value error (不降)", "data": [[0,9.5],[100,7.0],[200,6.5],[400,5.5],[600,5.2],[800,5.0],[1000,5.0]]}
+    ]
+  }'></div>
+
+  <p style="font-size:0.85rem; color:var(--color-muted);">读法:loss <em>仍</em> 降到 0(NN 把<em>这 100 条</em> 样本拟合干净),但 value error <em>停</em> 在 5 附近(NN 学到的 \(\hat q\) <em>对 buffer 准</em>,对全状态空间偏)。这是<em>"<em>NN 拟合 ≠ 真值最优</em>" 的实证</em>:网络可能过拟 buffer,数据不足时<em>策略不最优</em>(Fig. 8.12c 显示部分格策略仍随机)。<em>启示</em>:DQN 需<em>"<em>足够 buffer + 足够探索</em>"</em>,光靠"<em>loss 降到 0</em>" 不能保证策略最优。</p>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>"<em>loss 降 vs value error 降</em>" 的<em>语义差</em></em>。Loss 是<em>"<em>NN 拟合<em>给定 buffer</em> 的好坏</em>"</em>(buffer 内样本的 SL 误差);value error 是<em>"<em>NN 学到的 \(\hat q\) 与<em>真值</em> \(q^*\) 的距离</em>"</em>(全状态 RMSE)。两者<em>耦合但不同步</em>:loss 降说明<em>网络容量足、训练成功</em>;value error 降说明<em>数据足、buffer 充分代表全状态</em>。Fig. 8.12 把两者<em>分离</em>:数据不足时,网络<em>仍能</em> 拟合(loss 0),但 \(\hat q\) <em>偏</em> \(q^*\)(value error 不降)。这是 deep RL 调试时的<em>核心工具</em>:看 loss 判断网络问题,看 value error 判断数据问题。
+  </div>
+
+  <div class="callout">
+    <strong>Step 2.</strong> <em>"<em>1000 步 vs \(10^5\) 步</em>" 的<em>效率提升</em> 来自三条</em>。Ch.7 tabular Q-learning 在同 grid 上需 \(10^5\) 步(Fig. 7.4)收敛;Ch.8 DQN 只需 \(10^3\) 步(1 episode)。提升<em>~100×</em> 来自:<em>(i) 泛化</em>:tabular 学一格只影响一格,DQN 学一格影响所有 \(\phi\) 相关的 \((s, a)\) ⇒ 25 格状态<em>互相</em> 教学;<em>(ii) replay 重抽样</em>:每条 transition 平均用 100 次,样本利用率 100×;<em>(iii) 平滑梯度</em>:mini-batch + Adam 让<em>每次 update 更准</em>,无需 RM 步长慢慢衰减。三条乘起来给 ~100× 提升。这是 deep RL 在<em>样本量</em> 维度的<em>真实优势</em>(Atari 6×10^7 步学最优 vs tabular 不可能学动 Atari)。
+  </div>
+
+  <div class="callout">
+    <strong>Step 3.</strong> <em>策略仍是表式 ⇒ <em>discrete actions only</em></em>。Algorithm 8.2/8.3 的 \(\pi_t(a | s)\) <em>显式</em> 列出每动作概率(ε-greedy 配 \(\arg\max_a\hat q\))。算 \(\max_a\hat q(s, a)\) 需对所有 \(a \in \mathcal A(s)\) <em>各一次</em> 前向 ⇒ \(|\mathcal A|\) 必须<em>有限</em>。连续动作(机器人力矩、转向角)无 max 可言 ⇒ DQN 失效。这是 Ch.8 的<em>关键限制</em>,也是 Ch.9 的<em>动机</em>:把<em>策略</em> 自身参数化为 \(\pi(a | s; \theta)\),用<em>策略梯度</em> 直接优化 \(\theta\),无需 max ⇒ 连续动作直接可解。
+  </div>
+
+  <h2>§4 5×5 grid:DQN 学到的最终策略</h2>
+  <p>教材 Fig. 8.11(c)展示 1000 iter 后<em>greedy from \(\hat q\)</em> 在每格的箭头:</p>
+
+  <div data-component="gridworld" id="gw-ch08-l08" data-config='{
+    "rows": 5, "cols": 5,
+    "target": [3, 2],
+    "forbidden": [[1,1],[2,1],[2,2],[1,3],[3,3]],
+    "policy": [
+      ["→","→","→","→","↓"],
+      ["↑","·","→","→","↓"],
+      ["↑","·","·","→","↓"],
+      ["↑","↑","·","←","←"],
+      ["↑","↑","↑","↑","↑"]
+    ]
+  }'></div>
+
+  <p style="font-size:0.85rem; color:var(--color-muted);">所有非 forbidden 格箭头<em>指向</em> target(<em>4,3</em>),策略<em>全状态最优</em>(任意起点 1000 步内可达 target)。这是 Algorithm 8.3 + 均匀 behavior + 充分 buffer 的<em>合力</em>:NN 泛化 + replay 数据混合 + target net 稳定 ⇒ 1 episode 1000 步即学到 \(q^*\)。对比 Algorithm 8.2 Sarsa-FA(L5 §4 图)只学固定起点的 good path,差别<em>不在算法</em> 而在<em>采样设计</em>(均匀 behavior vs 当前 ε-greedy)。</p>
+
+  <h2>§5 Chapter 8 全章<em>4 个 takeaway</em></h2>
+
+  <div class="callout">
+    <strong>Takeaway 1: FA 让大状态空间可学</strong>。tabular(Ch.4-Ch.7)需<em>每格存储 + 每格 update</em>,\(|\mathcal S|\) 大到 \(10^4\) 就不可行(Atari 84×84×3 = 21168 维像素,组合状态 \(\sim 256^{21168}\))。FA 用<em>共享参数</em> \(w\)(\(|w| \ll |\mathcal S|\))表达 \(\hat v\) 或 \(\hat q\),存储 + 泛化两件事一起做。<em>代价</em>:逼近误差 + 收敛保证削弱(L2 三目标 + L4 误差界 (8.32))。
+  </div>
+
+  <div class="callout">
+    <strong>Takeaway 2: DQN = TD + FA + NN + 两大 trick</strong>。L1-L4 给 TD-FA(线性版),L5 推到动作值,L6 把线性换 NN,L7 加 target net + replay。<em>少任一</em> 件 DQN 不是 DQN:<em>无 NN</em> 退线性 FA(Atari 跑不动);<em>无 target net</em> 追自己影子致发散;<em>无 replay</em> 时间相关 + off-policy 失配训不动。这<em>四件</em> 缺一不可,合起来才是"<em>实操可跑的 deep RL</em>"。
+  </div>
+
+  <div class="callout">
+    <strong>Takeaway 3: Deadly triad 警告 + 工程缓解</strong>。L4 给的<em>结构警告</em>:FA + bootstrap + off-policy 三联齐 ⇒ 可发散(Baird 反例)。<em>缓解三策</em>:<em>(i)</em> target net 削 bootstrap 反馈;<em>(ii)</em> replay 削 off-policy 加权失配 + 时间相关;<em>(iii)</em> 小 lr + 大 batch 削 FA 共享 \(w\) 的放大。三策合力 ⇒ 实操稳。<em>但 deadly triad 不<em>消除</em></em>,只<em>缓解</em>;DQN 仍可能在<em>极端任务</em>(稀疏 reward + 长 horizon + 大动作空间)发散。
+  </div>
+
+  <div class="callout">
+    <strong>Takeaway 4: 策略仍是<em>表</em> ⇒ <em>discrete actions only</em>(桥到 Ch.9)</strong>。Algorithm 8.2/8.3 的 \(\pi(a|s)\) 显式枚举,\(\max_a\hat q\) 要求 \(|\mathcal A|\) 有限。连续动作(机器人控制、自动驾驶转向)无 max ⇒ DQN <em>不可</em> 直接用。Ch.9 的<em>动机</em>:不再先学 \(\hat q\) 再 max,而<em>直接</em> 把<em>策略</em> 参数化 \(\pi(a|s; \theta)\),用<em>策略梯度</em> \(\nabla_\theta J(\theta)\) 优化 \(\theta\),无 max ⇒ 连续动作直接可解。Ch.10 把 Ch.8 的"<em>critic \(\hat q\)</em>" 与 Ch.9 的"<em>actor \(\pi\)</em>" <em>合</em> 成 actor-critic 框架,把两者优势合并。
+  </div>
+
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> 写出 Algorithm 8.3 的<em>5 步流程</em>,并指出每步用主网络还是 target 网络。</summary>
+    <p><strong>A.</strong> <em>(1)</em> behavior policy 采 transition 写 buffer(<em>不</em> 用网络);<em>(2)</em> 从 buffer 均匀抽 \(B\) 条样本(无网络);<em>(3)</em> 算 \(y_T = r + \gamma \max_{a&#39;}\hat q(s&#39;, a&#39;; w_T)\) — 用<em>target 网络</em>;<em>(4)</em> 算 \(\hat q(s, a; w)\) + loss + backward + Adam — 用<em>主网络</em>(梯度只对 \(w\) 传);<em>(5)</em> 每 \(C\) iter 同步 \(w_T \leftarrow w\) — 主网络<em>覆盖</em> target 网络。<em>关键</em>:y_T 用 target 网络是<em>截断 bootstrap 反馈</em> 的核心,主网络只对自己 \(w\) 求导。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> 教材 Fig. 8.12(buffer 100)中 loss 降到 0 但 value error 不降,这<em>说明什么</em>?</summary>
+    <p><strong>A.</strong> 说明<em>"<em>NN 拟合 ≠ 策略最优</em>"</em>。Loss = NN 拟合<em>buffer 内 100 条样本</em> 的 MSE,降到 0 说明网络容量足、训练收敛。Value error = NN 估 \(\hat q\) 离<em>真值</em> \(q^*\) 的距离,不降说明<em>buffer 100 条样本不足以代表全状态空间</em>,NN 学到的 \(\hat q\) 对<em>buffer 内</em> 准、对<em>buffer 外</em> 偏 ⇒ 提取的 greedy 策略不全状态最优。<em>启示</em>:DQN 需<em>足够 buffer + 足够探索</em>;光"<em>loss 降到 0</em>" 不能保证策略最优。这是 deep RL 调试的<em>核心 lens</em>:loss 看网络,value error 看数据。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> Ch.8 的 DQN 为什么<em>不能</em> 直接处理连续动作?Ch.9 怎么解决?</summary>
+    <p><strong>A.</strong> DQN 的核心 update 含 \(\max_{a&#39;}\hat q(s&#39;, a&#39;; w_T)\),要求<em>枚举所有 \(a&#39;\)</em>。连续动作(\(a \in \mathbb R^d\))<em>无</em> 枚举,max 无法直接算(数值优化每步贵)。Ch.9 PG <em>不</em> 算 max,而<em>直接</em> 参数化策略 \(\pi(a|s; \theta)\)(可输出连续动作的均值 + 方差),用<em>策略梯度</em> \(\nabla_\theta J = \mathbb E[\nabla_\theta \log \pi_\theta(a|s) \cdot q_\pi(s, a)]\) 优化 \(\theta\)。这跳过 max,连续动作直接可解。代价:策略梯度<em>方差大</em>,Ch.10 actor-critic 用 \(\hat q\) 当 critic 减方差,合 Ch.8 + Ch.9 优势。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=44&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=44" target="_blank">YouTube 备链</a></p>
+
+  <h3>下一章预告:Ch.9 Policy Gradient</h3>
+  <p>Ch.8 用<em>"<em>先学 \(\hat q\) 再 max</em>"</em> 路径学最优策略,FA 给了<em>大状态空间</em> 能力,但 \(\max_a\) 把我们<em>钉</em> 在<em>discrete actions</em>。<strong>Ch.9</strong> 走<em>另一</em> 主线:不学 \(\hat q\),<em>直接</em> 把<em>策略</em> 参数化 \(\pi(a|s; \theta)\),对<em>策略目标</em> \(J(\theta) = \mathbb E_{s \sim d_\pi}[v_\pi(s)]\) 做<em>梯度上升</em>。核心定理(<em>policy gradient theorem</em>):\(\nabla_\theta J(\theta) = \mathbb E_\pi[\nabla_\theta \log \pi_\theta(a|s) \cdot q_\pi(s, a)]\) — <em>log-derivative trick</em> 让我们能用<em>样本</em> 估梯度,不需对环境模型求导。Ch.9 L1-L5 把<em>basic idea / metric / theorem / REINFORCE / variance reduction</em> 摊开,Ch.10 再把 \(q_\pi\)(critic)与 \(\pi_\theta\)(actor)合成 actor-critic,把 Ch.8 与 Ch.9 的优势<em>整合</em>。</p>
+
+  <nav class="lesson-nav">
+    <a href="lesson-07.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="../ch09/index.html">Next →</a>
+  </nav>
+</div>
+
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>贝尔曼最优方程(P4):有趣的性质 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch03-l04" data-est-minutes="20">
+<div class="container">
+
+  <!-- Top nav -->
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.3 / Lesson 4</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <!-- Header -->
+  <p class="kicker">Bilibili #12 · YouTube #12 · Book §3.5-3.7 pp. 49-56</p>
+  <h1>L4: Bellman Optimality Equation (P4 - Interesting properties)<small style="color:var(--color-muted); font-weight:400;">  (贝尔曼最优方程(P4):有趣的性质)</small></h1>
+
+  <!-- §1 Why this lesson -->
+  <h2>§1 Why this lesson</h2>
+  <p>L1-L3 我们用一整章把 BOE 立了起来:定义 \(v^*\) / \(\pi^*\)、写出 BOE、用 Banach contraction 证存在唯一 + 迭代收敛。<em>但 BOE 立起来之后,马上有一组工程问题</em>:我把 \(\gamma\) 调小,\(\pi^*\) 会怎么变?reward 加一个常数,\(\pi^*\) 会变吗?reward 全部乘以 2,\(v^*\) 会怎么变?如果 reward 全是 0,会发生什么?这些不是花絮,是<strong>调参时不踩坑的基础</strong> —— 本节(教材 §3.5-3.7,pp. 49-56)系统回答它们。</p>
+  <p>核心结论有两条:<strong>(1) 调 \(\gamma\) 是<em>真换问题</em>,\(\pi^*\) 会变 —— 减小 \(\gamma\) 让最优策略变近视(short-sighted),敢冒险变成怕冒险</strong>;<strong>(2) reward 仿射变换 \(r \to \alpha r + \beta\)(\(\alpha > 0\))<em>不影响 \(\pi^*\)</em>,只让 \(v^*\) 按 \(\alpha v^* + \dfrac{\beta}{1-\gamma} \mathbf{1}\) 平移缩放(教材 Theorem 3.6)</strong>。这两条结论的<em>实操含义</em>:<em>(a) reward 加常数(shifting)是"无害" 的、reward 乘正数(scaling)也"无害",所以工程上常用 reward 归一化(避免梯度爆炸)而不必担心改变最优策略;(b) 一旦动 \(\gamma\),你换的是问题本身,所以模型选 \(\gamma\) 时要慎重</em>。本节的另一个有趣观察:<em>"agent 不会无意义绕路" 不是因为 reward 设负数惩罚多走步,而是 \(\gamma\) 折扣自动惩罚了延迟</em> —— 这把 RL 工程里"我应不应该给每步设 -1 reward 来鼓励快速到 target" 的问题彻底澄清(答案:不必,\(\gamma\) 已经在做这件事)。本节<em>不</em>引入 VI/PI 算法 —— 那些是 Ch.4 的主菜,本节只关心"BOE 解出来后的<em>性质</em>",并把 L3 的迭代法用一次,看不同 \(\gamma\) / reward 配置下 BOE 收敛到的 \(\pi^*\) 长什么样。</p>
+
+  <!-- §2 核心定义 -->
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>影响 \(v^*\) 与 \(\pi^*\) 的三个参数(教材 §3.5,p. 49)</strong>:观察 BOE \(v(s) = \max_\pi \sum_a \pi(a\mid s)[\sum_r p(r\mid s,a) r + \gamma \sum_{s&#39;} p(s&#39;\mid s,a) v(s&#39;)]\),只有 (a) <strong>reward \(r\)</strong>、(b) <strong>discount rate \(\gamma\)</strong>、(c) <strong>system model \(p(r\mid s,a), p(s&#39;\mid s,a)\)</strong> 三类参数能影响解。本节 §3.5 主要讨论调 \(r\) 与 \(\gamma\) 时 \(v^* / \pi^*\) 的变化;模型 \(p\) 是 MDP 的物理设定,通常不动。</li>
+    <li><strong>\(\gamma\) 调小 \(\Rightarrow\) \(\pi^*\) 变近视(教材 §3.5 "Impact of the discount rate" + Figure 3.4(b)(c))</strong>:把 baseline (\(\gamma = 0.9\)) 改成 \(\gamma = 0.5\),\(\pi^*\) 不再敢"穿 forbidden 走捷径",改走<em>绕外圈安全长路</em>;\(\gamma = 0\) 极限时,\(\pi^*\) 只看<strong>当前一步 reward</strong>,丧失"为远期 \(+1\) 而忍受当前 \(-1\)" 的远视能力,大多数格子的 \(v^* = 0\)、policy 完全乱 —— 这是<em>极端短视</em> 的反例。</li>
+    <li><strong>reward 仿射不变性 (Theorem 3.6,p. 51)</strong>:若每个 \(r \in \mathcal{R}\) 通过仿射变换变为 \(\alpha r + \beta\)(\(\alpha, \beta \in \mathbb{R}\),\(\alpha > 0\)),则新最优状态值 \(v'^* = \alpha v^* + \dfrac{\beta}{1-\gamma} \mathbf{1}\),且<strong>最优策略不变</strong>。<em>具体含义</em>:\(\beta = 0, \alpha > 0\) 是 scaling(rescale reward 不动 \(\pi^*\));\(\alpha = 1, \beta \ne 0\) 是 shifting(全局加常数也不动 \(\pi^*\),只是让 \(v^*\) 整体抬高 \(\beta/(1-\gamma)\))。<strong>这就是为什么工程上常 normalize reward 而无后顾之忧</strong>。</li>
+    <li><strong>"agent 不会无意义绕路"(教材 §3.5 "Avoiding meaningless detours")</strong>:\(r_\text{other} = 0\) 而非 \(-1\) 时,有人会担心"<em>反正多走几步也不扣分,agent 会不会闲逛?</em>"答案是:<strong>不会</strong>,因为<em>discount 已经隐式惩罚了延迟</em>。绕一步路 \(\Rightarrow\) target 到达时刻晚一步 \(\Rightarrow\) 折扣 \(\gamma\) 多乘一次 \(\Rightarrow\) return 减少 \(\gamma^k\) 系数 —— 这不是"扣分",但等效"少给分"。教材 Figure 3.5 给了 2×2 例:\(s_2\) 选 \(\downarrow\) 直接到 target,return = 10;\(s_2\) 选 \(\leftarrow\) 绕路 \(s_2 \to s_1 \to s_3 \to s_4\),return = 8.1(\(\gamma^2/(1-\gamma)\))—— 后者明显被折扣惩罚。</li>
+    <li><strong>关于"加 -1 step penalty"(教材 §3.5 末段)</strong>:有人想"<em>如果我在每步上加 -1 reward,会不会让 agent 更快冲向 target?</em>" 答:<strong>不会改变 \(\pi^*\)</strong>(因为 -1 是 affine shifting,Theorem 3.6 直接给出 \(\pi^*\) 不变);它只让 \(v^*\) 整体抬低 \(\dfrac{-1}{1-\gamma}\) —— 等于在所有状态上扣同一个常数,排序不变。所以"<em>per-step penalty 用来催 agent</em>" 是<strong>无效的工程偏方</strong> —— \(\gamma\) 才是真正催 agent 的东西。</li>
+    <li><strong>3 种参数变换的对比表</strong>:<em>γ rescaling</em> \(\gamma \to \gamma'\):换问题,\(\pi^*\) 一般会变,\(v^*\) 量级 \(R_\text{max}/(1-\gamma)\) 也变;<em>reward shifting</em> \(r \to r + \beta\):\(\pi^*\) 不变,\(v^* \to v^* + \beta/(1-\gamma)\);<em>reward scaling</em> \(r \to \alpha r\)(\(\alpha > 0\)):\(\pi^*\) 不变,\(v^* \to \alpha v^*\)。<strong>记忆口诀</strong>:<em>动 reward 是"等价变换",动 \(\gamma\) 是"换问题"</em>。</li>
+  </ul>
+
+  <!-- §3 关键公式 + 推导 -->
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节核心公式是 Theorem 3.6 的<strong>仿射不变性</strong>。证明思路简明:把 \(r \to \alpha r + \beta\) 代入 BOE,用 \(P_\pi \mathbf{1} = \mathbf{1}\) 把 \(\beta\) 项凑成"常数 \(c\) 加到所有 \(v\) 上不变" 的不动点条件 \(\beta + c\gamma - c = 0\),解出 \(c = \beta/(1-\gamma)\)。完整 4-step 推导在第二个 callout 里给。</p>
+
+  <p><strong>公式 1:仿射变换下的 \(v^*\) 变换(教材 §3.5 Theorem 3.6 公式 (3.8),p. 51)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "v&#39;^* = \\alpha \\, v^* + \\dfrac{\\beta}{1 - \\gamma} \\, \\mathbf{1}, \\quad \\text{当 reward 从 } r \\text{ 变成 } \\alpha r + \\beta\\ (\\alpha > 0)",
+    "annotations": [
+      {"key": "alpha_v", "label": "α · v*", "description": "scaling 部分:reward 乘 α,v* 也乘 α。直觉:目标 G_t = Σ γ^k r_{t+k+1} 关于 r 是一次齐次,r 乘 α、return 乘 α、v* 乘 α。"},
+      {"key": "beta_shift", "label": "β/(1−γ) · 1", "description": "shifting 部分:reward 加 β,v* 加 β·(1+γ+γ²+...) = β/(1−γ)(常数无穷折扣几何级数和)。注意是&#39;所有状态加同一个常数&#39;,所以是 1 向量。"},
+      {"key": "pi_invariant", "label": "π* 不变", "description": "Theorem 3.6 的核心:&#39;v* 整体仿射变换 ⇒ argmax_a q* 集合不变 ⇒ π* 不变&#39;。具体证明在 Step 4。"},
+      {"key": "alpha_gt_0", "label": "α > 0 必要", "description": "若 α < 0,&#39;reward 全部反号&#39;,argmax 变 argmin,π* 完全反向 —— 仿射不变性失效。所以 Theorem 3.6 严格要求 α > 0。"},
+      {"key": "beta_no_constraint", "label": "β 任意实数", "description": "shifting 量 β 可正可负、可大可小,只要 reward 加同一常数都行 —— 这就是为什么&#39;每步加 -1 step penalty&#39; 不改变 π*。"}
+    ]
+  }'></div>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>新 BOE 长什么样</em>。Reward 变 \(r \to \alpha r + \beta\) 后,新 \(r_\pi(s) = \sum_a \pi(a\mid s) \sum_r p(r\mid s,a)(\alpha r + \beta) = \alpha \sum_a \pi(a\mid s) \sum_r p(r\mid s,a) r + \beta = \alpha r_\pi^\text{old}(s) + \beta\)。即新 \(r_\pi = \alpha r_\pi^\text{old} + \beta \mathbf{1}\)。代入 BOE 得新 \(v' = \max_\pi (\alpha r_\pi + \beta \mathbf{1} + \gamma P_\pi v')\)(教材 (3.9))。
+  </div>
+
+  <div class="callout">
+    <strong>Step 2.</strong> <em>猜解 \(v' = \alpha v^* + c \mathbf{1}\) 形式</em>。Theorem 3.6 的 ansatz 是新 \(v'\) 仍是<em>原 \(v^*\) 的仿射变换</em>。代入新 BOE:\(\alpha v^* + c \mathbf{1} = \max_\pi [\alpha r_\pi + \beta \mathbf{1} + \gamma P_\pi (\alpha v^* + c\mathbf{1})] = \max_\pi [\alpha r_\pi + \alpha \gamma P_\pi v^*] + \beta \mathbf{1} + c \gamma \mathbf{1}\)(用 \(P_\pi \mathbf{1} = \mathbf{1}\))。注意 \(\max_\pi [\alpha r_\pi + \alpha \gamma P_\pi v^*] = \alpha \max_\pi [r_\pi + \gamma P_\pi v^*] = \alpha v^*\)(因 \(\alpha > 0\),\(\max\) 与正系数可交换;旧 \(v^*\) 是旧 BOE 的解)。
+  </div>
+
+  <div class="callout">
+    <strong>Step 3.</strong> <em>解出常数 \(c\)</em>。代回 Step 2 的等式:\(\alpha v^* + c \mathbf{1} = \alpha v^* + \beta \mathbf{1} + c \gamma \mathbf{1}\),化简得 \(c = \beta + c \gamma \Leftrightarrow c(1 - \gamma) = \beta \Leftrightarrow c = \dfrac{\beta}{1-\gamma}\)。这就是 Theorem 3.6 公式 (3.8) 中那个看似"<em>从天而降的 \(\beta/(1-\gamma)\)</em>"的来源 —— 它来自"常数 \(c\) 在折扣下被 \(\gamma c + \beta = c\) 这条不动点方程解出"。<em>直觉</em>:把 \(\beta\) 在每步上累加,折扣无穷级数 \(\sum_{k=0}^\infty \gamma^k \beta = \beta/(1-\gamma)\),正好就是常数 reward 在折扣下的 state value。
+  </div>
+
+  <div class="callout">
+    <strong>Step 4.</strong> <em>π* 不变的最后一步</em>。新最优策略 \(\pi'^* = \arg\max_\pi (\alpha r_\pi + \beta \mathbf{1} + \gamma P_\pi v') = \arg\max_\pi (\alpha r_\pi + \alpha \gamma P_\pi v^*)\)(\(\beta \mathbf{1} + \gamma P_\pi (c \mathbf{1}) = \beta \mathbf{1} + c\gamma \mathbf{1} = c\mathbf{1}\) 与 \(\pi\) 无关,可移出 \(\arg\max\))。又 \(\alpha > 0\),\(\arg\max_\pi \alpha [\cdot] = \arg\max_\pi [\cdot]\)。所以 \(\pi'^* = \arg\max_\pi (r_\pi + \gamma P_\pi v^*) = \pi^*\)(<em>原</em>最优策略)。<strong>所以仿射变换不动 \(\pi^*\)</strong>。<em>关键洞察</em>:仿射变换在所有动作上"<em>同等</em>地"调整数值,\(\arg\max\) 的<em>排序</em>不变。
+  </div>
+
+  <!-- §4 Grid-world 例子 -->
+  <h2>§4 Grid-world 实例化</h2>
+  <p>用 5×5 网格直观对比<strong>三种 \(\gamma\) 配置</strong>下的 \(\pi^*\) 与 \(v^*\)。target = \((3, 2)\),forbidden = \(\{(1,1),(2,1),(2,2),(1,3),(3,3)\}\),其他参数与 L2 §4 一致。下图是 \(\gamma = 0.5\) 时的最优策略与最优 \(v^*\)(教材 Figure 3.4(b)),agent 不再敢穿 forbidden,改沿绕外圈走 —— 短视化的代表。</p>
+
+  <div data-component="gridworld" id="gw-ch03-l04-gamma05" data-config='{
+    "rows": 5, "cols": 5,
+    "target": [3, 2],
+    "forbidden": [[1,1],[2,1],[2,2],[1,3],[3,3]],
+    "policy": [
+      ["↑","→","→","→","↓"],
+      ["↑","","→","→","↓"],
+      ["↑","←","","→","↓"],
+      ["↑","→","","←","↓"],
+      ["↑","→","↑","←","←"]
+    ],
+    "heatmap": [
+      [0,    0,    0,    0,    0  ],
+      [0,    0,    0,    0,    0.1],
+      [0,    0,    2.0,  0.1,  0.1],
+      [0,    2.0,  2.0,  2.0,  0.2],
+      [0,    1.0,  2.0,  1.0,  0.5]
+    ]
+  }'></div>
+
+  <p><strong>关键差异</strong>:与 L2 §4 baseline (\(\gamma = 0.9\)) 对比,\(\pi^*\) 在 \((1, 2)\) 上从 \(\downarrow\)(穿 forbidden)变成 \(\rightarrow\)(绕外圈);\(v^*((0, 0)) \approx 5.8\) 跌到 \(\approx 0\) —— 因为 \(\gamma = 0.5\) 下,从 \((0, 0)\) 走 6 步到 target,折扣 \(0.5^6 \approx 0.0156\),即便到 target 之后每步 \(+1\) 拿到的"未来" 也被压平了。<em>这正是教材 Figure 3.4(b) 给的现象</em>。</p>
+
+  <p><strong>γ rescaling 时收敛速率的对比图</strong>。同时跑 BOE 迭代 \(v_{k+1} = f(v_k)\),把<em>误差 \(\|v_k - v^*\|_\infty\) 对 k</em> 画 log-y。Banach 定理告诉我们斜率 = \(\log_{10} \gamma\),\(\gamma\) 越小越陡(收敛越快),\(\gamma\) 越接近 1 越平。注意这跟 L3 §4 用的是同一类图 —— 这次我们用它来强调"<em>调 \(\gamma\) 不只是改 \(\pi^*\),还显著改算法收敛速度</em>":</p>
+
+  <div data-component="convergence-plot" data-config='{
+    "x-label": "BOE 迭代次数 k",
+    "y-label": "‖v_k − v*‖_∞",
+    "log-y": true,
+    "series": [
+      {"name": "γ = 0.5 (近视, 收敛快)", "color": "#10b981", "points": [[0, 10], [5, 0.3125], [10, 0.00977], [15, 0.000305], [20, 0.0000095]]},
+      {"name": "γ = 0.9 (baseline)", "color": "#3b82f6", "points": [[0, 10], [10, 3.49], [20, 1.22], [40, 0.148], [60, 0.0181], [80, 0.00221]]},
+      {"name": "γ = 0.99 (远视, 收敛慢)", "color": "#ef4444", "points": [[0, 10], [50, 6.05], [100, 3.66], [200, 1.34], [400, 0.180], [800, 0.00324]]}
+    ]
+  }'></div>
+
+  <p><strong>验证 Theorem 3.6:reward shifting/scaling 的 \(v^*\) 数值实验</strong>。取 baseline 的 \(v^*\)(\((0, 0)\) 处 \(\approx 5.8\),L2 §4)。若把所有 reward<em>加 1</em> (\(\beta = 1\)),理论新 \(v'^*((0, 0)) = v^*((0, 0)) + 1/(1 - 0.9) = 5.8 + 10 = 15.8\)。若把所有 reward<em>乘 2</em> (\(\alpha = 2\)),新 \(v'^*((0, 0)) = 2 \cdot 5.8 = 11.6\)。重新跑 BOE 迭代验证(本节不画图,留作 Q1 数值习题),结果完全对得上。<strong>关键</strong>:这两种变换下的 \(\pi^*\) 跟 baseline 完全相同 —— "agent 在 \((1, 2)\) 上是不是穿 forbidden" 这件事跟 reward 是不是加常数无关,只跟"<em>当前 reward 与未来折扣 reward 的相对大小</em>" 有关,而仿射变换不动相对大小。</p>
+
+  <p><strong>"加 step penalty 不改变最优策略" 的具体证据</strong>。Baseline 中 \(r_\text{other} = 0\)(每步不扣分);若改成 \(r_\text{other} = -1\)(每步扣 1),由 Theorem 3.6(\(\alpha = 1, \beta = -1\)),理论新 \(v'^* = v^* - 10 \mathbf{1}\)、\(\pi^*\) 不变。<em>这反驳了"<strong>设负 step penalty 能逼 agent 加速到 target</strong>" 这个常见误解</em>:\(\pi^*\) 在 baseline 下已经是"最快可达 target" 的策略(\(\gamma\) 折扣自动惩罚延迟),再加 -1 只是把所有 \(v\) 整体往下挪 10 个单位、排序不变、\(\arg\max\) 不变、\(\pi^*\) 不变。</p>
+
+  <!-- §5 常见误解 -->
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"\(\gamma\) 是 hyperparameter,跟 reward 一样可调;调 \(\gamma\) 跟调 reward 应该等价。"<br>
+    <strong>实际上:</strong><strong>调 \(\gamma\) 是<em>真换问题</em>,调 reward(仿射变换)是<em>等价变换</em></strong>。具体:仿射变换 \(r \to \alpha r + \beta\)(\(\alpha > 0\))不动 \(\pi^*\)(Theorem 3.6);\(\gamma\) 改变会让 \(\pi^*\) 变(本节 Figure 3.4(b)、L4 §4 例)。两者数学结构不同 —— reward 是 BOE 中"\(r_\pi\)" 这一加性项的内容,而 \(\gamma\) 是"折扣因子",出现在<em>系数</em>位置(\(\gamma P_\pi v\)),且<em>影响压缩率</em>(L3 收敛速度也由 \(\gamma\) 决定)。<br>
+    <strong>因为:</strong>\(\gamma\) 编码"现在 vs 未来" 的<em>权衡比例</em>,reward 编码每个具体 \((s, a)\) 上的<em>奖惩绝对值</em>。比例改变会让"远期 +10 vs 当前 -1" 的 trade-off 翻转,绝对值改变只是"全场加常数"不会翻转 trade-off。这是 RL 调参里最容易混的两件事 —— 工程上 reward normalize 通常安全,\(\gamma\) 调整必须重做实验。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"既然 \(\gamma = 0.5\) 下 \(\pi^*\) 不敢穿 forbidden,说明 \(\gamma = 0.5\) 比 \(\gamma = 0.9\) "差"——它没找到全局最优策略。"<br>
+    <strong>实际上:</strong><strong>"全局最优" 是<em>相对当前 \(\gamma\) 而言</em> 的</strong>。\(\gamma = 0.5\) 下,Theorem 3.3 仍然保证 BOE 解 \(v^*_{0.5}\) 唯一存在,且 \(\pi^*_{0.5}\)(绕外圈)是 \(\gamma = 0.5\) 设定下的<em>真正最优</em> —— 没有别的策略能在 \(\gamma = 0.5\) 下给出更高的 \(v\)。说"它没找到全局最优" 是把 \(\gamma = 0.9\) 的最优 \(\pi^*_{0.9}\)(穿 forbidden)<em>当成</em>普世标准了 —— 但这不是同一个问题的解。\(\gamma = 0.5\) 下,\(\pi^*_{0.9}\) 给的 \(v\) 反而<em>低于</em> \(\pi^*_{0.5}\) 给的 \(v\)(因为 \(\gamma = 0.5\) 下"远期 +1" 被压得太狠,值不上踩 forbidden 的 -1 罚分)。<br>
+    <strong>因为:</strong>\(\gamma\) 是 MDP <em>定义</em> 的一部分,改它就改了优化目标;每个 \(\gamma\) 都有自己的 \((\pi^*, v^*)\) 对。Q-learning / VI 实现里"\(\gamma\) 是固定的环境配置",训练前敲定,训练中不变 —— 这反映了 \(\gamma\) 是"问题的一部分" 而不是"算法的一部分"。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"reward shifting 不动 \(\pi^*\) 这条性质,只在 \(r_\text{other} = 0\) 这种 baseline 下成立;若 reward 已经是负的(罚分),再加常数应该会动 \(\pi^*\)。"<br>
+    <strong>实际上:</strong><strong>Theorem 3.6 对<em>任何</em> baseline reward 都成立</strong>,加多少常数都不动 \(\pi^*\)。可以这样理解:仿射变换是<em>整体平移</em>,所有 \(q^*(s, a)\) 都加同一个常数 \(\beta/(1-\gamma)\),\(\arg\max_a q^*(s, a)\) 不变 —— 跟 baseline 是 \(0\) 还是 \(-100\) 都一样。具体例:把 baseline 的 reward 全加 \(-100\)(每步罚 100),\(\pi^*\) 仍是穿 forbidden 那条;\(v^*\) 整体挪 \(-1000\),变成大负数,但<strong>谁比谁大</strong>这件事不动。<br>
+    <strong>因为:</strong>\(\arg\max\) 只关心<em>相对大小</em>,加常数(or 乘正数)是 ranking-preserving 变换。这条性质在 RL 工程上极有用:你可以放心 normalize reward(zero-mean unit-var)而不担心 \(\pi^*\) 跑偏 —— 这条性质是<em>所有 PPO / DDPG / SAC 实现里 reward normalization tricks 的理论合法性</em>。
+  </div>
+
+  <!-- §6 自检 + 视频 + teaser -->
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> Baseline (\(\gamma = 0.9\),\(r_\text{target} = +1\),\(r_\text{forbidden} = r_\text{boundary} = -1\),\(r_\text{other} = 0\))给出 \(v^*((4, 4)) = 8.1\)。若把所有 reward 加 \(\beta = 5\),新 \(v'^*((4, 4))\) 是多少?\(\pi^*\) 会变吗?</summary>
+    <p><strong>A.</strong> 由 Theorem 3.6,\(v'^* = v^* + \beta/(1-\gamma) \cdot \mathbf{1} = v^* + 5/0.1 \cdot \mathbf{1} = v^* + 50 \mathbf{1}\)。所以 \(v'^*((4, 4)) = 8.1 + 50 = 58.1\)。\(\pi^*\) <strong>不变</strong> —— 仿射变换是 ranking-preserving 的,每个 \(q^*(s, a)\) 都加同一个 50,\(\arg\max\) 不动。直觉验证:加 5 等于"<em>没踩 target、没踩 forbidden、没撞墙</em>" 的步也每步多拿 5 分;这把全局 baseline 抬高,但"穿 forbidden 还是绕外圈" 的 trade-off 跟 baseline 一样(因为穿 forbidden 的<em>额外</em> -1 罚分跟 +5 全局奖励是<em>独立</em> 的)。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> 教材 §3.5 末段说"<em>per-step penalty 不能让 agent 更快到 target</em>"。但你常见的开源 RL 项目里(如 Atari games)reward 仍然有 -1 step penalty。这是<em>错的</em>吗?</summary>
+    <p><strong>A.</strong> <strong>不一定错,要看场景</strong>。两种情况:<em>(a) 纯 tabular MDP + γ < 1</em>:Theorem 3.6 严格成立,加 -1 step penalty 不影响 \(\pi^*\),只影响 \(v^*\) 数值大小 —— 在这种情形里,加 step penalty <em>确实是无效</em> 的偏方,教材是对的;<em>(b) 函数近似 (function approximation,Ch.8 起) + γ → 1 / 大状态空间</em>:Theorem 3.6 严格依赖 \(\gamma < 1\) 与"BOE 闭式解" 的存在性;一旦用神经网络近似 \(v^*\),仿射变换可能改变<em>梯度幅值</em>(影响 SGD 收敛性、影响 exploration noise 的相对大小)、shifting 可能改变<em>正负 reward 比例</em>(影响 entropy regularization)。在这些"<em>非理想</em>"场景里,reward shaping(包括 step penalty)<em>确实可能</em>影响实际算法性能 —— 但这是<em>算法层面</em>的影响,不是<em>问题层面</em>的最优 \(\pi^*\) 变化。教材立场是"<em>BOE 层面 \(\pi^*\) 不变</em>",工程立场是"<em>学习过程可能因 reward shape 变化而变快/慢</em>",两者不矛盾,只是讨论不同的层。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> 把 baseline 的 \(r_\text{forbidden}\) 从 -1 改成 -10,\(\pi^*\) 会变吗?这是 Theorem 3.6 的反例吗?</summary>
+    <p><strong>A.</strong> <strong>\(\pi^*\) 一般会变</strong>(教材 Figure 3.4(d) 直接画了:\(r_\text{forbidden} = -10\) 时 agent 不再敢穿 forbidden),但<strong>这不是 Theorem 3.6 的反例</strong>。原因:Theorem 3.6 要求<strong>所有</strong> reward 同步仿射变换 \(r \to \alpha r + \beta\);本题只动 \(r_\text{forbidden}\) 一种,其他 reward (\(r_\text{target}, r_\text{boundary}, r_\text{other}\)) 不变 —— 这<em>不是</em> 仿射变换,是"非均匀" 修改 reward,改变了不同 reward 之间的相对大小,自然改了 trade-off。<em>区别仿射变换 vs 非均匀修改</em> 是工程调参的关键:仿射(scale/shift)是无害的,非均匀(单独改某种 reward 的权重)是<strong>真改问题</strong>。这就是 reward shaping 在实践中需要小心的根本原因。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <p style="font-size:0.85rem;color:var(--color-muted);">视频:首选 Bilibili 直播(下方 iframe);若 iframe 不显示,用 YouTube 链接打开。BVID 当前是占位,实际 BVID 等首次部署时填。</p>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=12&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=12" target="_blank"><strong>▶ YouTube 备链(建议优先点这个)</strong></a></p>
+
+  <h3>下一章预告</h3>
+  <p>到这一节为止,Ch.3 的<strong>三件大事</strong>全部完成:(1) 用 \(v^* \ge v_\pi\) 定义最优,得 BOE \(v = \max_\pi (r_\pi + \gamma P_\pi v)\);(2) 用 Banach 压缩映射定理证 BOE 解唯一存在 + 迭代收敛;(3) 用 Theorem 3.6 把"reward 仿射 vs \(\gamma\) rescale" 两类参数变换的影响讲清。<em>但 Ch.3 一直在<strong>谈论</strong>"迭代算法 \(v_{k+1} = \max_\pi (r_\pi + \gamma P_\pi v_k)\) 会收敛",从没<strong>正面落地</strong>实现细节</em>。下一章(<strong>Ch.4 Value Iteration & Policy Iteration</strong>)就把 BOE 落地成<em>两个具体算法</em>:<strong>Value Iteration (VI)</strong> 直接迭代 \(v_{k+1} = \max_\pi (r_\pi + \gamma P_\pi v_k)\)(本节预告中的"迭代法" 就叫这个);<strong>Policy Iteration (PI)</strong> 把 L1 §4 的"算 \(q\) - \(\arg\max\) - 重算 \(q\)" 思路严格化,在<em>策略评估</em>(用 Ch.2 闭式解或迭代 \(v_\pi\))与<em>策略改进</em>(\(\arg\max_a q\))之间交替。再加上<em>truncated PI</em>(把策略评估也截断成几轮迭代)作为 VI / PI 的折中。这是<strong>"模型已知"</strong> 情形下 RL 的<em>最后</em>一站 —— 之后 Ch.5 起开始拆掉"已知模型" 这个假设,进入 Monte Carlo / TD 的世界。</p>
+
+  <!-- Bottom nav -->
+  <nav class="lesson-nav">
+    <a href="lesson-03.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="../ch04/index.html">Next →</a>
+  </nav>
+</div>
+
+<!-- Components -->
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>

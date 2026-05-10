@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>附录导读 — RL Math Foundations</title>
+<link rel="stylesheet" href="../_assets/css/style.css">
+<link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body>
+<div class="container">
+
+  <nav class="lesson-nav">
+    <a href="../index.html">← Master Index</a>
+    <span>Appendix · 数学预备</span>
+  </nav>
+
+  <p class="kicker">Appendix · Book pp. 237-272</p>
+  <h1>附录:数学预备 <small style="font-weight:400; color:var(--color-muted);">(Mathematical Preliminaries)</small></h1>
+
+  <div class="callout">
+    <strong>关于翻译策略:</strong>本系列正文使用中文 + 英文术语保留,但<strong>附录的数学预备(概率论 / 线性代数 / 凸优化基础)不在本系列翻译范围内</strong>——这些是工科常识,中文优秀教材已经很多。本页给出每个子主题的<strong>核心定理/不等式 一句话摘要 + 在哪节正文用到</strong>;需要详细推导时翻原 PDF。
+  </div>
+
+  <h2>附录子主题(原书 pp. 237-272)</h2>
+
+  <h3>§A.1 Probability theory basics(概率论基础)— pp. 237-244</h3>
+  <p><strong>覆盖:</strong>事件 / 条件概率 / 期望 / 方差 / 全期望公式 / 大数定律 (LLN) / 中心极限定理 (CLT)。</p>
+  <p><strong>核心摘要:</strong></p>
+  <ul>
+    <li><strong>全期望公式</strong>:\(\mathbb{E}[X] = \mathbb{E}[\mathbb{E}[X \mid Y]]\)。条件分层求期望永远等于直接求期望。</li>
+    <li><strong>对数导数恒等式</strong>:\(\nabla \log p(x; \theta) = \nabla p(x; \theta) / p(x; \theta)\)。导致策略梯度的"\(\nabla \log \pi\)"形式。</li>
+    <li><strong>LLN</strong>:独立同分布样本均值收敛到期望。这是 MC(Ch.5)与 RM(Ch.6)能"采样估期望"的根本保证。</li>
+    <li><strong>CLT</strong>:独立同分布样本均值的<strong>误差 ~ \(\mathcal{N}(0, \sigma^2/n)\)</strong>。给出 \(\mathcal{O}(1/\sqrt n)\) 收敛速率。</li>
+  </ul>
+  <p><strong>正文哪里用到:</strong>Ch.1 §1.7(MDP 期望定义)/ Ch.2 §2.3(\(v_\pi(s) = \mathbb{E}_\pi[G_t \mid S_t=s]\) 定义)/ Ch.3 L3(Bellman 推导第 2、3 步用全期望公式)/ Ch.5 全章(MC = LLN 的实操)/ Ch.9 L4(策略梯度定理用 log 导数恒等式 + 期望-导数交换)。</p>
+
+  <h3>§A.2 Stochastic processes(随机过程)— pp. 245-251</h3>
+  <p><strong>覆盖:</strong>Markov chain 基本性质 / 平稳分布 / 遍历性 (ergodicity) / 收敛速度。</p>
+  <p><strong>核心摘要:</strong></p>
+  <ul>
+    <li><strong>Markov 性质</strong>:\(\mathbb{P}(S_{t+1} \mid S_t, S_{t-1}, \dots) = \mathbb{P}(S_{t+1} \mid S_t)\)。未来只取决于当下,不取决于历史 —— 这是 Bellman 方程能 closed-form 写出的根本前提。</li>
+    <li><strong>平稳分布</strong> \(d_\pi\):满足 \(d_\pi^\top P_\pi = d_\pi^\top\) 的概率分布。Ergodic Markov chain 的状态访问频率<strong>长期收敛到 \(d_\pi\)</strong>(无论起点)。</li>
+    <li><strong>步长条件</strong>:Robbins-Monro 收敛要求 \(\sum_k \alpha_k = \infty \text{ AND } \sum_k \alpha_k^2 < \infty\)。前者保证不会"提前停",后者保证噪声会"消下去"。\(\alpha_k = 1/k\) 是<strong>同时</strong>满足的标准选择。</li>
+  </ul>
+  <p><strong>正文哪里用到:</strong>Ch.1 §1.7(Markov 性正面定义)/ Ch.2 L4(\(P_\pi\) 行随机矩阵性质)/ Ch.6 L3(RM 收敛证明用步长条件)/ Ch.9 §9.2(策略指标用 \(d_\pi\) 平稳分布)/ Ch.10 §10.3(off-policy IS 在 \(d_\pi\) vs \(d_\beta\) 上做修正)。</p>
+
+  <h3>§A.3 Linear algebra essentials(线性代数要点)— pp. 252-260</h3>
+  <p><strong>覆盖:</strong>矩阵特征值 / 谱半径 / 范数等价 / Gershgorin 圆盘定理 / Banach 不动点定理。</p>
+  <p><strong>核心定理 — Banach Fixed-Point Theorem(整本书最重要的引理):</strong></p>
+  <div class="callout">
+    在完备度量空间 \((X, d)\) 上,若映射 \(T: X \to X\) 是 \(\gamma\)-收缩(\(d(Tx, Ty) \le \gamma \cdot d(x, y),\ \gamma < 1\)),则 (a) <strong>存在</strong>唯一不动点 \(x^*\) 满足 \(T x^* = x^*\);(b) 任何初值的迭代序列 \(x_{k+1} = T x_k\) 都<strong>指数收敛</strong>到 \(x^*\),误差 \(\|x_k - x^*\| \le \gamma^k \|x_0 - x^*\|\)。
+  </div>
+  <p><strong>其他要点:</strong></p>
+  <ul>
+    <li><strong>谱半径 \(\rho(P)\) ≤ 行/列范数</strong>(Gershgorin)。行随机矩阵 \(P_\pi\) 的谱半径 \(\le 1\),从而 \(\gamma P_\pi\) 的谱半径 \(< 1\),\((I - \gamma P_\pi)\) 可逆。</li>
+    <li><strong>最大范数 \(\|\cdot\|_\infty\) 是 Bellman 算子的"天然范数"</strong>:\(\|P_\pi w\|_\infty \le \|w\|_\infty\) 对行随机矩阵成立(行和为 1 + 三角不等式),从而 BOE 是 \(\gamma\)-收缩。</li>
+  </ul>
+  <p><strong>正文哪里用到:</strong>Ch.2 L4(\((I - \gamma P_\pi)^{-1}\) 闭式解 + Gershgorin 论证)/ Ch.3 L3(BOE 是 \(\gamma\)-Lipschitz contraction → Banach 给存在/唯一/指数收敛)/ Ch.4 L1(VI 收敛速率 \(\gamma^k\))/ Ch.4 L2(PI 收敛性也借 Banach)。</p>
+
+  <h3>§A.4 Optimization preliminaries(优化基础)— pp. 261-268</h3>
+  <p><strong>覆盖:</strong>凸函数 / 一阶/二阶最优条件 / 梯度下降收敛性 / 链式法则。</p>
+  <p><strong>核心摘要:</strong></p>
+  <ul>
+    <li><strong>梯度下降</strong>:\(\theta_{k+1} = \theta_k - \alpha \nabla L(\theta_k)\)。 \(\alpha\) 不太大时,\(L\) 单调下降。</li>
+    <li><strong>SGD 收敛</strong>:用<strong>无偏</strong>梯度估计 \(\widetilde{\nabla L}\) 替代真梯度,在步长两条件下仍收敛(Robbins-Monro 框架,Ch.6)。</li>
+    <li><strong>链式法则</strong>:\(\nabla_\theta f(g(\theta)) = \nabla_g f \cdot \nabla_\theta g\)。深度学习的反向传播就是这条规则在计算图上的应用。</li>
+  </ul>
+  <p><strong>正文哪里用到:</strong>Ch.6 L4-L6(SGD 全套)/ Ch.8 L2-L3(VFM 用 SGD 优化 \((target - \hat v(s; w))^2\))/ Ch.8 L7(DQN 用 SGD-with-tricks 训练 NN)/ Ch.9 L4(策略梯度上升 \(\theta \leftarrow \theta + \alpha \nabla J\))/ Ch.10 L4(DPG 用 chain rule 推梯度通过 critic)。</p>
+
+  <h3>§A.5 Useful inequalities(常用不等式)— pp. 269-272</h3>
+  <p><strong>覆盖:</strong>Jensen / Hoeffding / Markov / Chebyshev / Cauchy-Schwarz。</p>
+  <p><strong>核心摘要:</strong></p>
+  <ul>
+    <li><strong>Jensen</strong>:\(f\) 凸 \(\Rightarrow \mathbb{E}[f(X)] \ge f(\mathbb{E}[X])\)。Q-learning 的 \(\mathbb{E}[\max_a \hat Q] \ge \max_a \mathbb{E}[\hat Q]\) maximization bias 就是 Jensen 的直接后果。</li>
+    <li><strong>Hoeffding</strong>:有界随机变量样本均值的<strong>指数集中</strong>:\(\mathbb{P}(|\bar X_n - \mu| > \epsilon) \le 2 \exp(-2 n \epsilon^2 / R^2)\)。给出 MC 估值的样本复杂度上界。</li>
+    <li><strong>Markov / Chebyshev</strong>:从一阶/二阶矩约束概率尾部。RM 收敛证明里多次用到。</li>
+  </ul>
+  <p><strong>正文哪里用到:</strong>Ch.5 L2(MC 收敛速率推导)/ Ch.6 L3(RM 收敛证明里 Dvoretzky 用 Chebyshev)/ Ch.7 L6(Q-learning maximization bias 用 Jensen)/ Ch.8 L4(theoretical analysis 用 Hoeffding 给样本复杂度)。</p>
+
+  <h2>建议的阅读顺序</h2>
+  <p><strong>选项 A(推荐):just-in-time 查阅。</strong>正文章节学到关键证明前,本页都标了"哪一节用到"指向附录;遇到再回来查对应小节即可。这是大多数 RL 学习者的最自然方式。</p>
+  <p><strong>选项 B:全本附录先读。</strong>如果你完全不熟悉概率论 / 线性代数,正文从 Ch.2 起会一直磕磕绊绊。建议:</p>
+  <ol>
+    <li>开 Ch.2 之前,扫一遍 §A.1(条件期望、全期望公式)+ §A.3(Banach 不动点)的核心定理。</li>
+    <li>开 Ch.6 之前,补 §A.2(平稳分布、步长条件)+ §A.4(SGD 框架)。</li>
+    <li>开 Ch.9 之前,确认 §A.1 的对数导数恒等式 + §A.4 的 chain rule 完全顺手。</li>
+    <li>读 Ch.7 / Ch.8 时遇到样本复杂度论证再翻 §A.5。</li>
+  </ol>
+  <p><strong>选项 C:跳过附录,直接刚正文。</strong>如果你已经在工作中用过 SGD、推过 Lagrangian、读过几个收敛证明,直接进 Ch.1 也能跟上。遇到不熟的引理再回查不迟。</p>
+
+  <div class="callout">
+    <strong>本页的写作意图:</strong>不是替代原书附录的完整证明,而是<em>把"附录里的哪个工具,在正文哪一节解决什么问题"这层映射写清楚</em>。读者用 1-2 小时通读本页,能在大脑里建一张"工具库 ↔ 正文场景"的索引表;后续需要详细推导时,直接翻原 PDF 对应小节即可。
+  </div>
+
+  <h2>原书附录的获取</h2>
+  <p>原书 PDF 路径(以本系列开发者的本地为参考):</p>
+  <pre><code>~/Documents/learn/强化学习的数学原理/Book-Mathematical-Foundation-of-Reinforcement-Learning/4 - Appendix.pdf</code></pre>
+  <p>Springer 版可在出版社购买:<a href="https://link.springer.com/book/9789819739431" target="_blank">Mathematical Foundations of Reinforcement Learning · Springer</a>。</p>
+
+  <nav class="lesson-nav">
+    <a href="../ch10/lesson-05.html">← Ch.10 L5(全书最后一节)</a>
+    <a href="../index.html">Master Index</a>
+    <span></span>
+  </nav>
+</div>
+
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+  });
+</script>
+</body>
+</html>

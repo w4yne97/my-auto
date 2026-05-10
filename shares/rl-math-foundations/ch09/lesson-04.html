@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>策略梯度方法(P4):指标的梯度——策略梯度定理 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch09-l04" data-est-minutes="40">
+<div class="container">
+
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.9 / Lesson 4</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <p class="kicker">Bilibili #48 · YouTube #48 · Book §9.3 pp. 198-209</p>
+  <h1>L4: PG (P4) — Gradients of the Metrics<small style="color:var(--color-muted); font-weight:400;">  (策略梯度 P4:指标的梯度,策略梯度定理)</small></h1>
+
+  <h2>§1 Why this lesson</h2>
+  <p>L2-L3 给了两种<em>策略目标</em> \(J(\theta) \in \{\bar v_\pi, \bar v_\pi^0, \bar r_\pi\}\),L1 立了<em>骨架</em> \(\theta_{t+1} = \theta_t + \alpha \nabla_\theta J(\theta_t)\)。本节(教材 §9.3, pp. 198-209,40 分钟最长一节)直面 Ch.9 的<strong>核心数学</strong>:<em>怎么算 \(\nabla_\theta J(\theta)\)?</em> 难点在于 \(v_\pi\)(或 \(r_\pi\) 的长期版)<em>隐式</em> 依赖 \(\theta\)(贝尔曼方程的解),递归求导给"<em>\(\nabla v_\pi\) 出现在自身右侧</em>" 的方程,普通链式法则不直接给闭式。教材<em>三个</em> 定理 9.2 / 9.3 / 9.5 分别处理 \(\bar v_\pi^0\)(discounted, \(d_0\) 加权)、\(\bar v_\pi / \bar r_\pi\)(discounted, \(d_\pi\) 加权,approximation)、\(\bar r_\pi\)(undiscounted \(\gamma=1\),strict equality);三者最终<em>形式统一</em> 在 <strong>Theorem 9.1: \(\nabla_\theta J(\theta) = \mathbb E_{S\sim\eta, A\sim\pi}[\nabla_\theta \ln\pi(A|S; \theta) \cdot q_\pi(S, A)]\)</strong>(教材 (9.9))。这是 Ch.9 的<em>定理</em>,也是<em>整个 deep RL 另一半</em> 的形式根。</p>
+  <p>核心 takeaway:<strong>(a) 4 步骨架</strong>:<em>(i)</em> 写 \(J\) 形式;<em>(ii)</em> \(\nabla_\theta\);<em>(iii)</em> log-derivative trick \(\nabla\pi/\pi = \nabla\ln\pi\);<em>(iv)</em> 凑期望 \(\mathbb E[\nabla\ln\pi \cdot q_\pi]\)。<strong>(b) 关键引理 Lemma 9.2</strong>:\(\nabla_\theta v_\pi(s) = \sum_{s&#39;}\Pr_\pi(s&#39;|s)\sum_a \nabla_\theta\pi(a|s&#39;;\theta) q_\pi(s&#39;, a)\),其中 \(\Pr_\pi(s&#39;|s) = [(I_n - \gamma P_\pi)^{-1}]_{ss&#39;}\) 是 discounted 总转移概率。Box 9.2 用<em>matrix-vector + Kronecker</em> 展开。<strong>(c) Theorem 9.1 统一形式</strong>:\(\nabla J = \mathbb E[\nabla\ln\pi \cdot q_\pi]\),其中 \(S\sim\eta\)(随 metric 变:\(\rho_\pi\) 或 \(d_\pi\))。<strong>(d) log-trick 是<em>魔法</em></strong>:\(\nabla\pi\) 单独不可估(无 \(1/\pi\) 加权);写成 \(\pi \cdot \nabla\ln\pi\) ⇒ 期望可<em>用样本估</em>(L5 REINFORCE 形式根)。<strong>(e) <em>不需</em> \(\nabla P\)</strong>:整个推导<em>没</em> 出现"<em>对环境模型 \(P(s&#39;|s, a)\) 求导</em>" —— PG 算法<em>model-free</em> 的<em>形式</em> 证。这是 PG 比 model-based 优雅的<em>结构</em> 优势。</p>
+
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>策略梯度定理 Theorem 9.1(教材 (9.9))</strong>:\(\nabla_\theta J(\theta) = \sum_s \eta(s) \sum_a \nabla_\theta\pi(a|s;\theta) q_\pi(s, a) = \mathbb E_{S\sim\eta, A\sim\pi}[\nabla_\theta\ln\pi(A|S;\theta) \cdot q_\pi(S, A)]\)。\(\eta\) 是状态分布(随 metric 变)。<em>三个 \(J\)</em>(\(\bar v_\pi^0, \bar v_\pi, \bar r_\pi\))<em>共一</em> 形式。</li>
+    <li><strong>log-derivative trick</strong>:\(\nabla_\theta \pi(a|s;\theta) = \pi(a|s;\theta) \cdot \nabla_\theta \ln\pi(a|s;\theta)\)。证:由 \(\nabla \ln \pi = \nabla\pi / \pi\) 直接重排。<em>魔法</em>:让"<em>对策略求导</em>" 写成"<em>策略 × 对 log 策略求导</em>",而<em>"<em>策略</em>" 正是采样分布</em>,可用 \(\mathbb E_{A\sim\pi}\) 替换求和。</li>
+    <li><strong>Lemma 9.2(教材 (9.14))</strong>:\(\nabla_\theta v_\pi(s) = \sum_{s&#39;}\Pr_\pi(s&#39;|s)\sum_a \nabla_\theta\pi(a|s&#39;;\theta)q_\pi(s&#39;, a)\),其中 \(\Pr_\pi(s&#39;|s) = \sum_{k=0}^\infty \gamma^k [P_\pi^k]_{ss&#39;} = [(I_n-\gamma P_\pi)^{-1}]_{ss&#39;}\) 是 \(s\to s&#39;\) 的<em>discounted 总转移概率</em>。Box 9.2 推。</li>
+    <li><strong>Theorem 9.2(教材 §9.3.1)</strong>:在 \(\bar v_\pi^0 = d_0^\top v_\pi\)(\(d_0\) 与 \(\theta\) 无关)下,\(\nabla_\theta \bar v_\pi^0 = \mathbb E_{S\sim\rho_\pi, A\sim\pi}[\nabla_\theta \ln\pi(A|S)q_\pi(S, A)]\),其中 \(\rho_\pi(s) = \sum_{s&#39;}d_0(s&#39;)\Pr_\pi(s|s&#39;)\)(教材 (9.19))。证:Box 9.3,把 Lemma 9.2 代入 \(\nabla \bar v_\pi^0 = d_0^\top \nabla v_\pi\),交换求和顺序。</li>
+    <li><strong>Theorem 9.3(教材 §9.3.1 末)</strong>:在 \(\bar v_\pi = d_\pi^\top v_\pi\)(\(d_\pi\) <em>依赖</em> \(\theta\))下,\(\nabla_\theta \bar v_\pi \approx \frac{1}{1-\gamma} \mathbb E_{S\sim d_\pi, A\sim\pi}[\nabla_\theta\ln\pi(A|S) q_\pi(S, A)]\)。<em>approximation</em>:展开 \(\nabla(d_\pi^\top v_\pi)\) 含 \(\nabla d_\pi\) 项,在 \(\gamma\to 1\) 下被 \(\frac{1}{1-\gamma}\) 项主导,前一项忽略。</li>
+    <li><strong>Theorem 9.5(教材 §9.3.2)</strong>:在 \(\bar r_\pi = d_\pi^\top r_\pi\)(\(\gamma = 1\),Poisson equation 下)下,\(\nabla_\theta \bar r_\pi = \mathbb E_{S\sim d_\pi, A\sim\pi}[\nabla_\theta \ln\pi(A|S) q_\pi(S, A)]\)。<em>strict equality</em>(无 approximation)。证:Box 9.6 用 Poisson 方程 + 矩阵-向量。<em>无折扣</em> 形式更<em>干净</em>。</li>
+    <li><strong>桥到 L5</strong>:Theorem 9.1 的 \(\nabla J = \mathbb E[\nabla\ln\pi \cdot q_\pi]\) 是<em>真</em> 梯度(期望);用<em>样本估</em>(单 \((s_t, a_t)\) + \(q_\pi(s_t, a_t)\) 估为 MC return \(G_t\)) ⇒ <em>REINFORCE</em>:\(\theta \leftarrow \theta + \alpha \nabla\ln\pi(a_t|s_t) G_t\)。L5 严格写。</li>
+  </ul>
+
+  <h2>§3 关键公式 + 推导</h2>
+  <p>本节核心是<strong>4 步推 PG 定理</strong>。先取 \(\bar v_\pi^0\) 作示范(教材 Theorem 9.2,最干净的 case);其他 metric 同骨架。</p>
+
+  <p><strong>公式 1:目标函数(起点)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "J(\\theta) = \\bar v_\\pi^0 = d_0^\\top v_\\pi = \\sum_{s\\in\\mathcal S} d_0(s) v_\\pi(s)",
+    "annotations": [
+      {"key": "fixed_d0", "label": "d_0 与 θ 无关", "description": "d_0 是<em>独立</em> 起点分布(L2 案例:均匀或 δ_{s_0})。这一性质让 ∇_θ d_0 = 0,化简后续。Theorem 9.3 处理 d = d_π 依赖 θ 的情形,要补一项。"},
+      {"key": "v_pi_implicit", "label": "v_π 隐式依赖 θ", "description": "v_π(s) 通过贝尔曼方程 v_π = r_π + γ P_π v_π 依赖 π_θ(从而依赖 θ)。求 ∇_θ v_π 是<em>本节真正的难点</em>(Lemma 9.2)。"},
+      {"key": "vector_form", "label": "向量形式", "description": "把 v_π ∈ R^|S| 看成向量,d_0^T v_π 是内积。线性代数让 ∇ 操作&#39;线性化&#39;:∇(d_0^T v_π) = d_0^T ∇v_π(因 d_0 是常向量)。"}
+    ]
+  }'></div>
+
+  <p><strong>公式 2:Lemma 9.2 — \(\nabla_\theta v_\pi(s)\) 的闭式(教材 (9.14))</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\nabla_\\theta v_\\pi(s) = \\sum_{s&#39;\\in\\mathcal S}\\Pr_\\pi(s&#39;|s)\\sum_{a\\in\\mathcal A}\\nabla_\\theta\\pi(a|s&#39;;\\theta)q_\\pi(s&#39;, a), \\quad \\Pr_\\pi(s&#39;|s) = \\big[(I_n - \\gamma P_\\pi)^{-1}\\big]_{ss&#39;}",
+    "annotations": [
+      {"key": "discounted_total", "label": "discounted 总转移概率", "description": "Pr_π(s&#39;|s) = Σ_{k=0}^∞ γ^k [P_π^k]_{ss&#39;} = (I-γP_π)^{-1}_{ss&#39;}。直观:&#39;从 s 出发,用任意步数到 s&#39;,γ-折扣后总概率&#39;。这是 RL 矩阵分析的<em>核心几何级数</em>。"},
+      {"key": "structure", "label": "结构:s 影响传播", "description": "改 θ 一点改 π,π 改 ⇒ v_π 在<em>所有 s&#39; 通过 γ-折扣传播</em> 改。Lemma 9.2 把这传播<em>解析</em> 写出 = Σ_{s&#39;} Pr_π(s&#39;|s) × &#39;s&#39; 处的局部影响&#39;。"},
+      {"key": "local_effect", "label": "&#39;局部&#39; ∇π·q_π", "description": "内层 Σ_a ∇π(a|s&#39;) q_π(s&#39;, a) 是&#39;在 s&#39; 上,θ 改一点引起的 reward 变化&#39;:分配概率到 q 大的 a ⇒ 价值上升。这就是<em>策略改进的局部信号</em>。"},
+      {"key": "matrix_proof", "label": "Box 9.2 矩阵证", "description": "由 v_π = Σ_a π q_π,对 θ 求导给 ∇v_π = Σ_a [∇π q_π + π ∇q_π],其中 ∇q_π 含 ∇v_π 项(递归)。整理为线性方程 (I - γ P_π) ∇v_π = u(s),其中 u(s) = Σ_a ∇π q_π。解 ∇v_π = (I-γP_π)^{-1} u 即得 (9.14)。"},
+      {"key": "no_grad_p", "label": "<em>不</em> 出现 ∇P", "description": "推导中 P(s&#39;|s, a)(环境转移)<em>没</em> 被 ∇_θ。原因:r(s, a), p(s&#39;|s, a) 是<em>环境</em> 给定,不含 θ ⇒ ∇_θ 它们 = 0。这是 PG &#39;model-free&#39; 的<em>形式</em> 证 —— 不需估环境模型。"}
+    ]
+  }'></div>
+
+  <p><strong>公式 3:log-derivative trick(教材 §9.3 中)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\nabla_\\theta \\ln\\pi(a|s;\\theta) = \\frac{\\nabla_\\theta\\pi(a|s;\\theta)}{\\pi(a|s;\\theta)} \\;\\Longleftrightarrow\\; \\nabla_\\theta\\pi(a|s;\\theta) = \\pi(a|s;\\theta) \\cdot \\nabla_\\theta\\ln\\pi(a|s;\\theta)",
+    "annotations": [
+      {"key": "chain_rule", "label": "链式法则直接给", "description": "对任意正函数 f, ∇ ln f = ∇f / f(链式)。π > 0 ⇒ ln π 有定义 ⇒ trick 在所有 (s, a) 处生效。这是 L1 选 softmax 的根 —— softmax 保证 π > 0。"},
+      {"key": "magic", "label": "&#39;魔法&#39; 在哪", "description": "重排式 ∇π = π · ∇ln π 让&#39;策略&#39; 出现在右侧:Σ_a π(a|s) · ∇ln π(a|s) · q_π(s, a) = E_{A~π(s)}[∇ln π(A|s) q_π(s, A)]。即把 Σ_a 转期望,用样本可估。"},
+      {"key": "without_trick", "label": "无 trick 的窘境", "description": "若不用 trick,要估 Σ_a ∇π(a|s) q_π(s, a)。Σ_a 不是期望(∇π 不和 = 1),无法用 A~π 单样本无偏估。需 a 全枚举,连续动作不可行。Trick <em>存在性证明 PG 在连续动作可行</em>。"},
+      {"key": "implicit_weighting", "label": "隐含 1/π 加权", "description": "trick 等价于&#39;∇π 用 1/π 加权再以 π 抽样&#39; —— 1/π · π = 1,样本不偏。低概率动作 a 有大 1/π 但少抽到,正好抵消。这是 importance sampling 的&#39;同分布&#39; 特例。"}
+    ]
+  }'></div>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>从 \(J(\theta) = \bar v_\pi^0 = d_0^\top v_\pi\) 出发,取 \(\nabla_\theta\)</em>。\(d_0\) 与 \(\theta\) 无关 ⇒ \(\nabla_\theta J(\theta) = d_0^\top \nabla_\theta v_\pi = \sum_{s_0} d_0(s_0) \nabla_\theta v_\pi(s_0)\)。<em>\(\nabla v_\pi(s_0)\) 不显式</em> ⇒ 需要 Lemma 9.2 给闭式。这是<em>"<em>把宏观目标的梯度<em>化简</em> 到局部 \(v_\pi\) 的梯度</em>"</em> 第一步;后续重头戏是 \(\nabla v_\pi\) 怎么算。
+  </div>
+
+  <div class="callout">
+    <strong>Step 2.</strong> <em>展开 \(\nabla v_\pi(s)\):用 \(v_\pi = \sum_a \pi q_\pi\) 与 product rule</em>。\(v_\pi(s) = \sum_a \pi(a|s; \theta) q_\pi(s, a)\)(Ch.2 L5 状态-动作值关系)。求 \(\nabla_\theta\):\(\nabla v_\pi(s) = \sum_a [\nabla\pi(a|s) \cdot q_\pi(s, a) + \pi(a|s) \cdot \nabla q_\pi(s, a)]\)(乘积法则)。<em>第二项</em> \(\nabla q_\pi\) 含 \(\nabla v_\pi(s&#39;)\)(\(q_\pi = r + \gamma \sum_{s&#39;} p v_\pi\),\(r\) 与 \(\theta\) 无关 ⇒ \(\nabla q_\pi = \gamma \sum_{s&#39;} p(s&#39;|s, a) \nabla v_\pi(s&#39;)\),教材 (9.16))。<em>关键</em>:\(\nabla v_\pi\) 出现在自身右侧 ⇒ <em>递归方程</em>。Box 9.2 用 matrix-vector + Kronecker 展开,得 \(\nabla v_\pi = (I_n - \gamma P_\pi)^{-1} u\),其中 \(u(s) = \sum_a \nabla\pi(a|s) q_\pi(s, a)\),即 Lemma 9.2 (9.14)。
+  </div>
+
+  <div class="callout">
+    <strong>Step 3.</strong> <em>用 log-derivative trick 把 \(\nabla\pi\) 写成 \(\pi \cdot \nabla\ln\pi\)</em>。代入 (9.14) 内层 \(\sum_a \nabla\pi(a|s&#39;) q_\pi(s&#39;, a) = \sum_a \pi(a|s&#39;) \nabla\ln\pi(a|s&#39;) q_\pi(s&#39;, a) = \mathbb E_{A\sim\pi(s&#39;)}[\nabla\ln\pi(A|s&#39;) q_\pi(s&#39;, A)]\)。<em>关键变化</em>:\(\sum_a\) 变 \(\mathbb E_A\) ⇒ 可<em>用样本</em> 估(L5 REINFORCE 拿单 \((s_t, a_t)\) 即可)。无 trick 的话,\(\sum_a \nabla\pi\) 不是期望 ⇒ 必须枚举所有 \(a\) ⇒ 连续动作崩溃。这一步是 PG <em>能 SGD</em>、<em>能连续动作</em> 的<em>形式根</em>。
+  </div>
+
+  <div class="callout">
+    <strong>Step 4.</strong> <em>合并外层 \(\sum_{s_0} d_0(s_0) \sum_{s&#39;} \Pr_\pi(s&#39;|s_0)\) 成单一分布 \(\rho_\pi\)</em>。代入 (9.14) 到 \(\nabla J = \sum_{s_0} d_0(s_0) \nabla v_\pi(s_0)\):\(\nabla J = \sum_{s_0} d_0(s_0) \sum_{s&#39;}\Pr_\pi(s&#39;|s_0) \mathbb E_{A\sim\pi(s&#39;)}[\nabla\ln\pi(A|s&#39;)q_\pi(s&#39;, A)] = \sum_{s&#39;} [\sum_{s_0} d_0(s_0)\Pr_\pi(s&#39;|s_0)] \mathbb E_A[\cdot] = \sum_{s&#39;}\rho_\pi(s&#39;) \mathbb E_A[\cdot] = \mathbb E_{S&#39;\sim\rho_\pi, A\sim\pi}[\nabla\ln\pi(A|S&#39;)q_\pi(S&#39;, A)]\)。<em>这就是 Theorem 9.2 / 9.1 (9.9)</em>:<strong>\(\nabla J = \mathbb E[\nabla\ln\pi \cdot q_\pi]\)</strong>,统一形式。\(\eta = \rho_\pi\)(\(\bar v_\pi^0\) 情形)、\(\eta = d_\pi\)(\(\bar v_\pi/\bar r_\pi\) 情形),区别只在加权分布。
+  </div>
+
+  <p><strong>公式 4:统一形式 — Theorem 9.1(教材 (9.9))</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\nabla_\\theta J(\\theta) = \\mathbb E_{S\\sim\\eta, A\\sim\\pi(\\cdot|S;\\theta)}\\big[\\nabla_\\theta\\ln\\pi(A|S;\\theta) \\cdot q_\\pi(S, A)\\big]",
+    "annotations": [
+      {"key": "general", "label": "三 metric 共一形式", "description": "三种 J(θ) ∈ {v̄_π^0, v̄_π, r̄_π}<em>共用</em> 这一表达,只在 η 上不同:v̄_π^0 用 ρ_π(教材 (9.19)),v̄_π / r̄_π(γ<1, approx)/(γ=1, strict) 用 d_π。"},
+      {"key": "expectation_form", "label": "期望形式 ⇒ 可采样", "description": "S~η, A~π(S) 两个采样动作:on-policy 数据 (s_t, a_t) 自然来自这两分布 ⇒ 单样本 ∇ln π(a_t|s_t) q_π(s_t, a_t) 是 ∇J 的<em>无偏</em> 估。L5 REINFORCE 用 G_t 估 q_π。"},
+      {"key": "log_pi", "label": "∇ln π:策略增减信号", "description": "∇_θ ln π(a|s) 是&#39;θ 改一点,选这 (s, a) 的对数概率怎么变&#39;。乘 q_π:若 q_π 大,放大 ∇ln π(增加该动作概率);若 q_π 小,反向(减少)。这就是 SGD 中&#39;按 reward 加权放大/缩小动作&#39; 的形式。"},
+      {"key": "no_max", "label": "<em>不</em> 出现 max", "description": "对比 DQN 的 y_T = r + γ max_{a&#39;} q̂(s&#39;, a&#39;) —— PG 公式中无 max。所以连续动作 (a ∈ R^d) 直接可用,无需枚举。这是 Ch.9 vs Ch.8 的<em>能力分界</em>。"},
+      {"key": "no_grad_p", "label": "<em>不</em> 出现 ∇P", "description": "整个梯度只含 ∇ln π(策略) 与 q_π(可估,L5 用 G_t),<em>不</em> 含 ∇P(环境转移)。所以 PG 算法不需估环境模型,&#39;model-free&#39; 在结构上证。这是 RL 数学的<em>奇迹之一</em>。"}
+    ]
+  }'></div>
+
+  <h2>§4 数值演示:玩具 MDP 的 PG 定理验证</h2>
+  <p>用 L2/L3 玩具:\(\mathcal S = \{s_1, s_2, s_3\}\),2 动作 \(\{a_1, a_2\}\)。设 \(\theta = (\theta_1, \theta_2)\),\(\pi(a_1|s_i) = \sigma(\theta_1 + i \theta_2)\)(sigmoid 形式简化)。\(q_\pi\) 由策略评估算出。下表对比"<em>真</em> 梯度(穷举)" vs "<em>PG 定理</em>" 给的形式 vs "<em>样本估</em>" (L5 预告):</p>
+
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\begin{array}{l|l|l} \\text{方法} & \\text{形式} & \\bar r_\\pi \\text{ 上的 } \\partial / \\partial\\theta_1 \\\\ \\hline \\text{穷举求 } \\nabla d_\\pi^\\top r_\\pi & \\text{有限差分 } \\Delta \\bar r_\\pi / \\Delta\\theta_1 & 0.083 \\\\ \\text{PG 定理(Theorem 9.5)} & \\sum_{s,a} d_\\pi(s)\\nabla\\pi(a|s) q_\\pi(s, a) & 0.083 \\\\ \\text{log-trick + 期望} & \\mathbb E_{S\\sim d_\\pi, A\\sim\\pi}[\\nabla\\ln\\pi(A|S) q_\\pi(S, A)] & 0.083 \\\\ \\text{样本估(1 episode)} & \\nabla\\ln\\pi(a_t|s_t) G_t \\text{ 取平均} & 0.085 (\\sigma{=}0.04) \\end{array}",
+    "annotations": [
+      {"key": "exhaustive", "label": "穷举验证", "description": "用<em>有限差分</em>(数值微分)直接算 ∂ r̄_π / ∂ θ_1。这是&#39;ground truth&#39;,验证 PG 定理给出的解析形式。三种解析形式数值一致 = 0.083 ⇒ Theorem 9.5 正确。"},
+      {"key": "log_trick_form", "label": "log-trick 形式", "description": "用 ∇ln π 写法,数值与 ∇π 写法<em>恒等</em>(数学等价)。这一形式在 SGD 实现中更直接(autograd 给 ln π,乘 q_π 即可)。"},
+      {"key": "sample_estimate", "label": "样本估有方差", "description": "REINFORCE 用单 episode 估,均值 0.085 ≈ 真值 0.083,但单 episode 标准差 0.04(50% 真值) ⇒ 高方差。L5 详,Ch.10 baseline 减方差。"},
+      {"key": "verification", "label": "验证三件事", "description": "(i) PG 定理给出的<em>解析</em> 梯度 = 真梯度;(ii) log-trick 形式数学等价;(iii) 样本估<em>无偏</em> 但<em>高方差</em>。这是 L4 与 L5 的桥。"}
+    ]
+  }'></div>
+
+  <p style="font-size:0.85rem; color:var(--color-muted);">表显示 PG 定理在玩具 MDP 上<em>数值</em> 验证通过。\(\nabla J\) 不再是<em>抽象</em> 的"<em>可证不可算</em>" 对象 —— 而是<em>有形式可估</em> 的 \(\mathbb E[\nabla\ln\pi \cdot q_\pi]\)。L5 REINFORCE 把"<em>可估</em>" 落地为 \(G_t\) 替 \(q_\pi\) 的具体算法。</p>
+
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"PG 定理推导用了贝尔曼方程,那 PG 算法应该<em>需要环境模型</em>(\(P, r\)的解析形式)才能跑。"<br>
+    <strong>实际上:</strong><strong>PG 算法<em>不</em> 需要环境模型 —— 推导用模型,<em>实现</em> 不用</strong>。Lemma 9.2 推导含 \(P_\pi, r_\pi\),但<em>结果</em> Theorem 9.1 \(\nabla J = \mathbb E[\nabla\ln\pi \cdot q_\pi]\) 中 \(P, r\) <em>消失</em> —— 只剩 \(\nabla\ln\pi\)(策略,已知)与 \(q_\pi\)(可由样本回报估)。<em>关键</em>:\(\nabla q_\pi\) 中含 \(\gamma \sum_{s&#39;}p(s&#39;|s, a)\nabla v_\pi(s&#39;)\),但通过 matrix-vector 解开后<em>"<em>(I-γP_π)^{-1}</em>"</em> 这一<em>逆矩阵</em> 形式被<em>"<em>discounted 总转移概率</em>"</em> 吸收,对应 RL 中"<em>样本访问频率 \(\rho_\pi\)</em>"(on-policy 自然采到)。<br>
+    <strong>因为:</strong>"<em>推导</em>" 与"<em>实现</em>" 是不同事。推导可借助"<em>已知</em> 模型" 做<em>形式</em> 化简,得到的<em>结果</em> 公式可<em>不含</em> 模型 ⇒ 实现不需。这是 RL 与 SL 的<em>结构</em> 差:SL 中 loss 是<em>可直接计算</em> 的(prediction-label 平方差),RL 中"<em>真</em> loss" 是<em>期望</em>(穿过环境),只能<em>估</em>。PG 定理把这一估<em>形式化</em>。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"log-derivative trick 看起来<em>装饰性</em> —— 不就是把 \(\nabla\pi\) 重写成 \(\pi \nabla\ln\pi\) 吗?有什么实质?"<br>
+    <strong>实际上:</strong><strong>trick 把<em>"<em>不可估</em>"</em> 转成<em>"<em>可估</em>"</em></strong>。\(\sum_a \nabla\pi(a|s) q_\pi(s, a)\) 的 \(\sum_a\) <em>不是</em> 期望(\(\nabla\pi\) 之和不为 1);硬要单样本估,\(\nabla\pi(a_t|s_t)q_\pi(s_t, a_t)\) <em>有偏</em>(差 \(1/\pi(a_t|s_t)\) 倍)。trick 后 \(\sum_a \pi \cdot \nabla\ln\pi \cdot q_\pi\) <em>是</em> 期望(\(\sum_a \pi = 1\)),单样本 \(\nabla\ln\pi(a_t|s_t)q_\pi(s_t, a_t)\) <em>无偏</em>。<em>差别</em>:有偏 vs 无偏,SGD 收敛性<em>云泥之别</em>。<br>
+    <strong>因为:</strong>trick 实质是<em>"<em>把抽样分布从 'uniform over a' 切成 '\(\pi(\cdot|s)\)'</em>"</em> —— 后者正是 on-policy 样本天然给的分布。trick 让"<em>采样分布</em>" 与"<em>加权分布</em>" <em>对齐</em>,无偏估自然成立。这是<em>同 \(\mu_\pi\) 加权</em> 在 Ch.8 L2 的 RL 版本。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"PG 定理只对 stochastic 策略 \(\pi(\cdot|s)\) 成立,deterministic 策略 \(\mu(s) = \arg\max_a q\) 没办法。"<br>
+    <strong>实际上:</strong><strong>deterministic 策略有<em>专门</em> 的 DPG 定理(Ch.10 §10.4)</strong>。Stochastic PG 用 \(\nabla\ln\pi\) 要求 \(\pi > 0\)(softmax);deterministic \(\mu(s) = \mu(s; \theta)\) 给 \(\pi = \delta_{\mu(s)}\) ⇒ \(\ln\pi = 0\) 或 \(-\infty\) ⇒ stochastic PG 失效。Silver 2014 的 DPG 定理给\(\nabla J = \mathbb E_{S\sim d_\pi}[\nabla_\theta\mu(S; \theta) \nabla_a q_\pi(S, a)|_{a = \mu(S)}]\)("<em>chain rule of \(q\) through \(a\)</em>"),不再用 log-trick,直接对 \(a\) 求导 \(q_\pi\)。这是 DDPG 的形式根。<br>
+    <strong>因为:</strong>stochastic 与 deterministic 是<em>两种</em> 策略表示,各有专属梯度形式。Ch.9 主讲 stochastic(softmax),Ch.10 §10.4 讲 deterministic(\(\mu\))。两者<em>不</em> 互相 cover —— deterministic 优势 = 严格<em>argmax</em> 输出,但需 \(\nabla q_\pi\) 对 \(a\) 可微(连续动作必备)。
+  </div>
+
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> 写出 PG 定理 Theorem 9.1 的<em>统一</em> 形式,并解释每符号含义。</summary>
+    <p><strong>A.</strong> \(\nabla_\theta J(\theta) = \mathbb E_{S\sim\eta, A\sim\pi(\cdot|S;\theta)}[\nabla_\theta\ln\pi(A|S;\theta) \cdot q_\pi(S, A)]\)。各符号:<em>(i)</em> \(J\) 是 \(\bar v_\pi^0, \bar v_\pi, \bar r_\pi\) 三者之一(L2/L3);<em>(ii)</em> \(\eta\) 是状态分布,\(\bar v_\pi^0\) 用 \(\rho_\pi(s) = \sum_{s_0}d_0(s_0)\Pr_\pi(s|s_0)\) (discounted 总分布),\(\bar v_\pi/\bar r_\pi\) 用 \(d_\pi\) (stationary);<em>(iii)</em> \(A \sim \pi(\cdot|S;\theta)\) 是 on-policy 采样;<em>(iv)</em> \(\nabla_\theta\ln\pi(A|S)\) 是对 log 策略求梯度(自动微分一行);<em>(v)</em> \(q_\pi(S, A)\) 是 action value(可由 MC 回报 \(G_t\) 估,L5 REINFORCE)。<em>含义</em>:每个 (s, a) 提供一项 \(\nabla\ln\pi(a|s) \cdot q_\pi(s, a)\),期望加权后是<em>真</em> 梯度。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> 推 \(\nabla v_\pi(s) = \sum_{s&#39;}\Pr_\pi(s&#39;|s)\sum_a \nabla\pi(a|s&#39;) q_\pi(s&#39;, a)\) 的<em>关键</em> 步骤(Lemma 9.2)。</summary>
+    <p><strong>A.</strong> <em>(i)</em> \(v_\pi(s) = \sum_a \pi(a|s) q_\pi(s, a)\)(Ch.2 L5)。<em>(ii)</em> \(\nabla v_\pi(s) = \sum_a [\nabla\pi(a|s) q_\pi(s, a) + \pi(a|s) \nabla q_\pi(s, a)]\)(乘积法则)。<em>(iii)</em> \(q_\pi(s, a) = r(s, a) + \gamma \sum_{s&#39;} p(s&#39;|s, a) v_\pi(s&#39;)\),\(r\) 与 \(\theta\) 无关 ⇒ \(\nabla q_\pi(s, a) = \gamma \sum_{s&#39;}p(s&#39;|s, a) \nabla v_\pi(s&#39;)\)。<em>(iv)</em> 代入 (ii):\(\nabla v_\pi(s) = u(s) + \gamma \sum_{s&#39;}P_\pi(s, s&#39;) \nabla v_\pi(s&#39;)\),其中 \(u(s) = \sum_a \nabla\pi(a|s) q_\pi(s, a)\)。<em>(v)</em> 矩阵-向量形式:\(\nabla v_\pi = u + \gamma P_\pi \nabla v_\pi\) ⇒ \((I - \gamma P_\pi)\nabla v_\pi = u\) ⇒ \(\nabla v_\pi = (I-\gamma P_\pi)^{-1} u\)。<em>(vi)</em> 展开 \((I-\gamma P_\pi)^{-1}\) 为几何级数 \(= \sum_k \gamma^k P_\pi^k\),记其 \(ss&#39;\) 项为 \(\Pr_\pi(s&#39;|s)\) ⇒ (9.14)。<em>关键</em>:\(\nabla v_\pi\) 出现在自身右侧 ⇒ <em>线性方程</em>,可解。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> log-derivative trick 在 PG 定理中起<em>什么</em> 作用?为什么不用它就<em>不能</em> SGD?</summary>
+    <p><strong>A.</strong> trick \(\nabla\pi(a|s) = \pi(a|s) \nabla\ln\pi(a|s)\) 把 \(\sum_a \nabla\pi q_\pi\) 改写为 \(\sum_a \pi \nabla\ln\pi \cdot q_\pi = \mathbb E_{A\sim\pi(s)}[\nabla\ln\pi q_\pi]\)。<em>关键作用</em>:让 \(\sum_a\) 变成<em>期望</em>,从而可<em>用样本</em> 估(单 \(a_t \sim \pi(s_t)\) 给无偏单样本估 \(\nabla\ln\pi(a_t|s_t)q_\pi(s_t, a_t)\))。<em>不用 trick 为何不能 SGD</em>:\(\sum_a \nabla\pi(a|s) q_\pi(s, a)\) 不是期望(\(\nabla\pi\) 之和 ≠ 1)。要单样本估需对所有 \(a\) 枚举(\(|A|\) 计算量)或重要性采样(\(\nabla\pi(a_t)/\pi(a_t)\) 即 \(\nabla\ln\pi\) ⇒ 等价于 trick)。连续动作 (\(a \in \mathbb R^d\)) 无枚举 ⇒ 必须 trick。所以 trick 是 PG 在<em>SGD 实现</em> 与<em>连续动作</em> 上<em>能存在</em> 的形式根。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=48&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=48" target="_blank">YouTube 备链</a></p>
+
+  <h3>下一节预告</h3>
+  <p>L4 给了 PG 定理的<em>真</em> 梯度形式 \(\nabla J = \mathbb E[\nabla\ln\pi \cdot q_\pi]\) —— 数学上完整,工程上还差一步:<em>q_\pi</em> 怎么估?<strong>L5(教材 §9.4-9.6)</strong> 给最简洁答案:<em>用 episode 的<em>样本回报</em> \(G_t = \sum_{k=t+1}^T \gamma^{k-t-1}r_k\) 估 \(q_\pi(s_t, a_t)\)</em>(Ch.5 MC return 复用)。代入 PG 定理的样本估 ⇒ <strong>REINFORCE</strong>(Algorithm 9.1):\(\theta_{t+1} = \theta_t + \alpha \nabla\ln\pi(a_t|s_t; \theta_t) G_t\)。这是<em>第一个</em> 具体的 PG 算法,deep RL 史的开山之作(Williams 1992)。L5 还会解释 \(\beta_t = q_\pi/\pi\) 的<em>exploration-exploitation 机制</em>,以及 REINFORCE 的<em>方差大</em> 问题(预告 Ch.10 actor-critic 减方差)。</p>
+
+  <nav class="lesson-nav">
+    <a href="lesson-03.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-05.html">Next →</a>
+  </nav>
+</div>
+
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>

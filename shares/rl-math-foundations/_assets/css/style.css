@@ -1,0 +1,173 @@
+/* RL Math Foundations — global styles. */
+
+:root {
+  --color-bg: #fafafa;
+  --color-fg: #1a1a1a;
+  --color-muted: #666;
+  --color-accent: #2563eb;
+  --color-success: #10b981;
+  --color-warn: #f59e0b;
+  --color-card-bg: #fff;
+  --color-card-border: #e5e7eb;
+  --color-callout-bg: #f3f4f6;
+  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+               "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --max-width: 920px;
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 1rem;
+  --space-lg: 2rem;
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.7;
+  color: var(--color-fg);
+  background: var(--color-bg);
+}
+
+.container {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: var(--space-lg) var(--space-md);
+}
+
+/* Headings */
+h1, h2, h3 { line-height: 1.3; margin-top: var(--space-lg); }
+h1 { font-size: 2rem; }
+h2 { font-size: 1.5rem; border-bottom: 1px solid var(--color-card-border); padding-bottom: var(--space-xs); }
+h3 { font-size: 1.2rem; }
+
+.kicker {
+  font-size: 0.85rem;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: var(--space-sm);
+}
+
+/* Callout boxes (used in §3 推导, §5 误解) */
+.callout {
+  background: var(--color-callout-bg);
+  border-left: 4px solid var(--color-accent);
+  padding: var(--space-md);
+  margin: var(--space-md) 0;
+  border-radius: 4px;
+}
+
+/* Top/bottom navigation bars */
+.lesson-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--color-card-bg);
+  border: 1px solid var(--color-card-border);
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+/* Components common shell */
+[data-component] {
+  margin: var(--space-md) 0;
+  border: 1px solid var(--color-card-border);
+  border-radius: 6px;
+  padding: var(--space-md);
+  background: var(--color-card-bg);
+}
+
+/* TODO: per-component-specific styles will be appended by Tasks 7~11 */
+
+/* gridworld.js */
+[data-component="gridworld"] svg { display: block; margin: 0 auto; }
+[data-component="gridworld"] svg .cell:hover { stroke: #2563eb; stroke-width: 2; }
+
+/* iteration-stepper.js */
+[data-component="iteration-stepper"] button {
+  padding: 0.4rem 0.8rem; border: 1px solid #d1d5db; border-radius: 4px;
+  background: #fff; cursor: pointer; font-family: inherit;
+}
+[data-component="iteration-stepper"] button:hover:not(:disabled) { background: #f3f4f6; }
+[data-component="iteration-stepper"] button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* equation-walkthrough.js */
+[data-component="equation-walkthrough"] .eq-display {
+  margin: 1rem 0;
+  font-size: 1.05rem;
+  overflow-x: auto;
+}
+[data-component="equation-walkthrough"] .eq-chips {
+  display: flex; flex-wrap: wrap; gap: 0.5rem;
+  margin: 0.75rem 0;
+}
+[data-component="equation-walkthrough"] .ann-chip {
+  padding: 0.25rem 0.7rem;
+  border: 1px solid #d1d5db;
+  border-radius: 999px;
+  background: #fff;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.9rem;
+}
+[data-component="equation-walkthrough"] .ann-chip:hover { background: #f3f4f6; }
+[data-component="equation-walkthrough"] .ann-chip.active {
+  background: var(--color-accent); color: #fff; border-color: var(--color-accent);
+}
+[data-component="equation-walkthrough"] .eq-desc {
+  margin-top: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: var(--color-callout-bg);
+  border-left: 3px solid var(--color-accent);
+  border-radius: 4px;
+  color: #333;
+  min-height: 2.5rem;
+}
+
+/* convergence-plot.js */
+[data-component="convergence-plot"] .cp-legend {
+  display: flex; flex-wrap: wrap; gap: 1rem; justify-content: center;
+  font-size: 0.85rem; margin-top: 0.5rem;
+}
+[data-component="convergence-plot"] .cp-legend i {
+  display: inline-block; width: 12px; height: 12px;
+  margin-right: 6px; vertical-align: middle; border-radius: 2px;
+}
+
+/* distribution-bar.js */
+[data-component="distribution-bar"] .dist-row {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  align-items: end;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+[data-component="distribution-bar"] .dist-label {
+  font-size: 0.85rem;
+  color: #444;
+  text-align: right;
+  padding-bottom: 1.5rem;
+}
+[data-component="distribution-bar"] .dist-bars {
+  display: flex; gap: 0.4rem; align-items: end;
+  border-bottom: 1px solid #d1d5db;
+  padding-bottom: 0.25rem;
+  height: 110px;
+}
+[data-component="distribution-bar"] .dist-cell {
+  flex: 1;
+  display: flex; flex-direction: column; align-items: center;
+}
+[data-component="distribution-bar"] .dist-bar {
+  width: 100%; max-width: 32px; min-height: 2px;
+  border-radius: 2px 2px 0 0;
+}
+[data-component="distribution-bar"] .dist-tag {
+  margin-top: 0.25rem; font-size: 0.85rem; color: #555;
+}

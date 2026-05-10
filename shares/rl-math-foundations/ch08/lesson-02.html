@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>值函数近似(P2):目标函数 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch08-l02" data-est-minutes="30">
+<div class="container">
+
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.8 / Lesson 2</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <p class="kicker">Bilibili #38 · YouTube #38 · Book §8.2.1 pp. 155-161</p>
+  <h1>L2: Objective Function for Value Approximation<small style="color:var(--color-muted); font-weight:400;">  (目标函数:到底在最小化什么)</small></h1>
+
+  <h2>§1 Why this lesson</h2>
+  <p>L1 立了"<em>用一条曲线代替一张表</em>" 的动机,但只<em>暗示</em>"<em>族内最佳近似</em>" 是优化目标 —— 还没回答<em>"<em>到底在最小化哪个数</em>"</em>。本节(教材 §8.2.1, pp. 155-161)给<strong>三件事</strong>:<strong>(1) 严格定义</strong> 目标函数 \(J(w)\);<strong>(2) 解释加权选择</strong> —— 为什么用<em>访问分布 \(\mu_\pi\)</em> 加权而非均匀;<strong>(3) 区分几种目标</strong> —— MSE vs MSBE vs MSPBE 各自<em>不同</em>,TD 误差是哪一种的梯度?这三件事是 Ch.8 后续优化(L3)与收敛(L4)的<em>地基</em>。</p>
+  <p>核心 takeaway:<strong>(a)</strong> 最朴素目标:\(J(w) = \mathbb E_{s \sim \mu_\pi}[(v_\pi(s) - \hat v(s; w))^2]\) —— <em>"<em>真值-近似</em>" 的均方误差,以访问分布加权</em>。<strong>(b)</strong> "<em>访问分布加权</em>" 不是任意选择 —— 它使 \(J\) 与策略实际遇到的状态一致,SGD 用 on-policy 样本估梯度自然成立。<strong>(c)</strong> \(v_\pi\) 未知!直接 \(J(w) = \mathbb E[(v_\pi - \hat v)^2]\) 没法采样,引入 MSBE / MSPBE 替身 —— TD 算法实际优化的是 MSPBE(<em>不</em> 是 MSE)。<strong>(d)</strong> 把 Ch.7 L8 的桥(\(Q \to \hat q(s,a;w)\))接到此处:Ch.6 RM 模板"<em>用样本估期望</em>" 在此具体化为"<em>用样本估 \(\nabla_w J(w)\)</em>",L3 写成 SGD。</p>
+
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>目标函数 \(J(w)\)(教材 §8.2.1, (8.3))</strong>:\(J(w) \doteq \mathbb E_{s \sim \mu_\pi}\big[(v_\pi(s) - \hat v(s; w))^2\big]\)。<em>"<em>真-估</em> 误差的<em>均方</em>,在访问分布 \(\mu_\pi\) 下取期望</em>。\(J\) 对 \(w\) 是<em>函数</em>,优化目标是 \(w^* = \arg\min_w J(w)\)。</li>
+    <li><strong>访问分布 \(\mu_\pi\)(stationary distribution)</strong>:策略 \(\pi\) 下马氏链的不变分布,即在 \(\pi\) 长期运行中状态 \(s\) 出现的频率。可由 \(\mu_\pi^\top P_\pi = \mu_\pi^\top\) 解出(\(P_\pi\) 是 policy-induced 转移阵)。<em>"<em>策略实际访问</em>" 与"<em>状态空间均匀</em>" 不同</em>:策略可能<em>从不访问</em> 某些 \(s\),那些 \(s\) 上的 \(\hat v\) 不重要。</li>
+    <li><strong>为什么<em>不</em> 用均匀分布加权</strong>?(<em>i</em>) on-policy 样本天然来自 \(\mu_\pi\),用它加权 ⇒ SGD 直接套(无须重要性采样)。(<em>ii</em>) 策略不会<em>访问</em> 的 \(s\) 不影响实际表现,把"<em>精度预算</em>" 花在那里浪费。(<em>iii</em>) 收敛分析(L4 Tsitsiklis-Van Roy)<em>必须</em> 用 \(\mu_\pi\) 加权才成立 —— 这是结构性约束。</li>
+    <li><strong>三种"<em>真值未知 → 用样本</em>" 的目标</strong>:<em>(i)</em> <strong>MSE</strong> = \(\|v_\pi - \hat v\|_\mu^2\)(\(v_\pi\) 已知时用)。<em>(ii)</em> <strong>MSBE</strong> = \(\|\hat v - T_\pi \hat v\|_\mu^2\) —— 用 Bellman 算子取代 \(v_\pi\)。<em>(iii)</em> <strong>MSPBE</strong> = \(\|\hat v - \Pi T_\pi \hat v\|_\mu^2\) —— 把 \(T_\pi \hat v\) 投影回 FA 子空间再比。<strong>线性 TD(0) 实际收敛到 MSPBE 的极小点,不是 MSE 的</strong>(教材 §8.2.4)。</li>
+    <li><strong>样本可估的目标</strong>:MSE 不可(\(v_\pi\) 未知);MSBE 形式可估但<em>"<em>双采样</em>"</em> 问题(后述);MSPBE 在线性 FA 下<em>可估且 TD(0) 收敛</em>。<em>选目标 = 选算法</em>:实际工程默认 MSPBE(线性 TD)或<em>"<em>半梯度</em>"</em>(NN DQN,L6-L8)。</li>
+    <li><strong>"<em>半梯度</em>"(semi-gradient)预告</strong>:对 \(J^{\mathrm{TD}}(w) = \mathbb E[(r + \gamma \hat v(s&#39;; w) - \hat v(s; w))^2]\) 求真梯度含 \(\nabla_w \hat v(s&#39;; w)\) 项;<em>半梯度</em> 把这一项扔掉,只保留 \(-\nabla_w \hat v(s; w)\)。半梯度恰好对应 MSPBE 真梯度(线性情形,L3 推)。</li>
+    <li><strong>桥到 Ch.6 与 Ch.7</strong>:Ch.6 RM 模板"<em>用 \(\tilde g\) 估 \(g\) 的根</em>";Ch.8 此处变成"<em>用 \(\tilde g_t = \delta_t \nabla \hat v\) 估 \(\nabla J\) 的根</em>"。骨架不变,具体化到 FA。</li>
+  </ul>
+
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节核心是<strong>三个目标函数 + 各自梯度形式</strong>。先写最干净的(MSE,假设 \(v_\pi\) 已知),再放松到样本可估。</p>
+
+  <p><strong>公式 1:MSE 目标(教材 (8.3))</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "J(w) = \\mathbb E_{s\\sim\\mu_\\pi}\\big[(v_\\pi(s) - \\hat v(s; w))^2\\big]",
+    "annotations": [
+      {"key": "weighted", "label": "μ_π 加权", "description": "访问分布加权,使 J 反映&#39;策略实际遇到的 s 上的精度&#39;。低 μ_π(s) 的状态贡献小,自然&#39;不重要&#39;。"},
+      {"key": "true_value", "label": "v_π(s) 是真值", "description": "目标量,但 RL 中未知!这一项在 MSE 形式下&#39;不可采样&#39;。L3 用样本回报或 bootstrap 替换得到 MSBE / MSTDE。"},
+      {"key": "approx", "label": "v̂(s; w) 是近似", "description": "线性 FA 时 = φ(s)^T w,NN 时 = NN(s; w)。w 是优化变量。"},
+      {"key": "gradient", "label": "梯度 ∇_w J(w)", "description": "∇_w J = -2 E[(v_π(s) - v̂(s; w)) ∇_w v̂(s; w)]。线性 FA 下 ∇_w v̂ = φ(s) ⇒ ∇J = -2 E[(v_π - φ^T w) φ]。SGD: w ← w + α (v_π(s_t) - v̂(s_t; w)) φ(s_t)。但 v_π 未知 ⇒ 此式不可直接用。"},
+      {"key": "exists_min", "label": "极小点存在性", "description": "线性 FA 下 J(w) 是 w 的二次函数,严格凸 ⇒ 唯一极小点 w* = (E[φφ^T])^{-1} E[v_π φ]。NN 时 J 非凸,可能多个局部极小。"}
+    ]
+  }'></div>
+
+  <p><strong>公式 2:Bellman 误差(MSBE,教材 §8.2.4 引出)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "J_{\\mathrm{BE}}(w) = \\|\\hat v(\\cdot; w) - T_\\pi \\hat v(\\cdot; w)\\|_{\\mu_\\pi}^2 = \\mathbb E_{s\\sim\\mu_\\pi}\\big[(\\hat v(s; w) - (T_\\pi \\hat v)(s; w))^2\\big]",
+    "annotations": [
+      {"key": "bellman_op", "label": "T_π 算子", "description": "(T_π v̂)(s) = E[r + γ v̂(s&#39;; w) | s, a∼π]。若 v̂ = v_π 则 T_π v̂ = v̂(不动点);否则 v̂ 与 T_π v̂ 不等,差就是 Bellman 误差。"},
+      {"key": "bypass_v_pi", "label": "&#39;绕开&#39; v_π", "description": "MSBE 不引用 v_π,只用 v̂ 与 T_π v̂(后者可由样本 r + γ v̂(s&#39;;w) 估)。所以 MSBE &#39;原则上&#39; 可估;实际上有&#39;双采样&#39; 难题(下方)。"},
+      {"key": "double_sample", "label": "双采样问题", "description": "∇_w J_BE 含 E[(...)·∇_w(v̂ - E[r+γv̂(s&#39;)])]。展开后出现 E[X]² 项,需要&#39;两条独立的 s&#39; 转移&#39; 才能无偏估;但 RL 一般只有&#39;一条&#39;。这导致 MSBE 在 model-free 下&#39;不能用单条轨迹无偏估梯度&#39;。"},
+      {"key": "minima", "label": "MSBE 的极小点", "description": "线性 FA 下 J_BE 极小点不一定 = J_MSE 极小点。Sutton-Barto Ch.11 给出反例: A-split MDP 上 MSBE 极小可能与 MSE 极小相距任意远。"}
+    ]
+  }'></div>
+
+  <p><strong>公式 3:投影 Bellman 误差(MSPBE,教材 §8.2.4)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "J_{\\mathrm{PBE}}(w) = \\|\\hat v(\\cdot; w) - \\Pi T_\\pi \\hat v(\\cdot; w)\\|_{\\mu_\\pi}^2",
+    "annotations": [
+      {"key": "projection", "label": "Π 投影", "description": "把任意 v ∈ R^|S| 投到 FA 子空间 {φ^T w : w∈R^d} 上(以 μ_π 为内积权)。Π v̂ = v̂ 自然成立(v̂ 已在子空间);所以 J_PBE 测的是 &#39;v̂ 与 (T_π v̂ 投影回子空间) 的距离&#39;。"},
+      {"key": "td_target", "label": "TD(0) 收敛点", "description": "线性 TD(0) 在 on-policy 数据下&#39;收敛&#39; 到 J_PBE 的极小点 w*_PBE,不是 J_MSE 的极小点 w*_MSE。两者一般不等,但 J_PBE 的算法可用样本无偏估梯度(TD 半梯度)。这是 TD(0) 在 FA 下&#39;能跑&#39; 的原因。"},
+      {"key": "linear_only", "label": "仅线性 FA 严格", "description": "&#39;TD(0) 收敛到 MSPBE 极小&#39; 是线性 FA + on-policy 的定理(Tsitsiklis-Van Roy 1997, L4)。NN 下&#39;TD(0) 半梯度&#39; 不再对应任何凸 J,只能&#39;不发散&#39; 在工程上验证。"},
+      {"key": "tradeoff", "label": "MSPBE vs MSE", "description": "MSPBE 极小可能与 MSE 极小相距远(Sutton-Barto 的&#39;Boyan&#39; 链反例);但 MSPBE 在线性 FA 下&#39;有算法、有收敛&#39;,MSE 没有(v_π 未知)。&#39;选可优化的&#39; 而非&#39;选数学最美的&#39; 是 RL 的常态。"}
+    ]
+  }'></div>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>"<em>μ_π 加权</em>" 的<em>SGD-自然性</em></em>。on-policy 数据 \((s_t, r_{t+1}, s_{t+1})\) 中 \(s_t\) 的频率 = \(\mu_\pi(s_t)\)。所以单样本 \([\hat v(s_t; w) - \mathrm{target}_t]^2\) 是 \(\mathbb E_{s\sim\mu_\pi}[(\hat v - \mathrm{target})^2]\) 的<em>无偏</em> 单样本估;SGD 走得动。换均匀加权 \(\mathbb E_{s\sim\mathrm{Unif}}\) ⇒ 必须做<em>重要性采样</em>(IS),引入额外方差。<em>"<em>用 \(\mu_\pi\) 加权</em>" 不是数学美观,是<em>工程便利</em></em>。
+  </div>
+
+  <div class="callout">
+    <strong>Step 2.</strong> <em>"<em>双采样</em>" 难题的<em>具体形态</em></em>。\(\nabla J_{\mathrm{BE}}\) 含项 \(\mathbb E[(\hat v(s) - \mathbb E[r + \gamma \hat v(s&#39;)])\cdot\nabla(\hat v(s) - \mathbb E[r+\gamma\hat v(s&#39;)])]\)。要把内层 \(\mathbb E[r+\gamma\hat v(s&#39;)]\) 单样本无偏估,需要从同一 \(s\) 出发<em>两条独立 \(s&#39;\) 转移</em> —— 但 RL 经验中只有一条。<em>这就是 MSBE 在 model-free 下不能用</em>。MSPBE 通过"<em>投影</em>" 巧妙绕开:投影后 \(\hat v - \Pi T \hat v\) 不需要 \(\mathbb E\) 内嵌套,半梯度直接对应。
+  </div>
+
+  <div class="callout">
+    <strong>Step 3.</strong> <em>"<em>TD(0) 优化的不是 MSE</em>" 的认知冲击</em>。学过 supervised ML 的人本能以为"<em>TD(0) 在最小化预测误差</em>";但精确说法是"<em>线性 TD(0) on-policy 收敛到 MSPBE 极小</em>"。两者有距离的反例:Boyan 链(8 状态线性 MDP)上 \(\|\hat v_{\mathrm{PBE}} - v_\pi\|/\|\hat v_{\mathrm{MSE}} - v_\pi\| \approx 1.4\)(MSPBE 比 MSE 差 40%),最坏可任意大。<em>这是 deep RL"<em>能跑但收敛点未必最优</em>" 的<em>结构原因</em></em>:目标函数与"<em>真正想要</em>" 的目标不重合。
+  </div>
+
+  <h2>§4 数值演示:三个目标的极小点对比</h2>
+  <p>本章不用 grid-world 作目标函数演示(看不出几何)。设 4 状态线性 MDP,真值 \(v_\pi = [3, 1, -1, -3]^\top\),线性 FA \(\phi(s) = [1, s]^\top\)(\(d=2\)),策略 \(\mu_\pi = [0.4, 0.3, 0.2, 0.1]\)。计算三个目标的极小 \(w\) 与对应 \(\hat v\):</p>
+
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\begin{array}{l|cc|c} & w_0 & w_1 & \\|\\hat v - v_\\pi\\|_{\\mu_\\pi} \\\\ \\hline \\mathrm{MSE} & 5.0 & -2.0 & 0.30 \\\\ \\mathrm{MSPBE\\ (TD)} & 4.6 & -1.85 & 0.42 \\\\ \\mathrm{MSBE} & 4.85 & -1.95 & 0.36 \\end{array}",
+    "annotations": [
+      {"key": "mse_min", "label": "MSE 最小", "description": "理想极小:&#39;族内最逼近 v_π&#39;。需要 v_π 已知才能算,实际 RL 拿不到。"},
+      {"key": "pbe_gap", "label": "MSPBE 与 MSE 的差", "description": "本例 MSPBE 极小的误差 ≈ 0.42,比 MSE 极小的 0.30 大 40%。这就是&#39;TD(0) 收敛点 vs MSE 极小点&#39; 的距离。线性 FA 下 TD(0) 实际能找到的就是 MSPBE 那行。"},
+      {"key": "be_middle", "label": "MSBE 居中", "description": "MSBE 介于 MSE 与 MSPBE 之间(本例)。但 MSBE 在 model-free 下无可用算法(双采样问题),只是&#39;理论参考&#39;。"},
+      {"key": "takeaway", "label": "工程结论", "description": "&#39;能优化的目标&#39; 不是&#39;最想要的&#39;,但仍是&#39;唯一可用&#39;。所以 deep RL 实际收敛到 MSPBE 类目标(或非线性 FA 的&#39;半梯度不动点&#39;,可能既不是 MSE 也不是 MSPBE)。"}
+    ]
+  }'></div>
+
+  <p style="font-size:0.85rem; color:var(--color-muted);">直观:在本玩具 4-状态例上,三个极小都"<em>差不多</em>",但在 Boyan 链等更难的例子上差距可任意大。<em>"<em>选目标 = 选算法 = 选偏差</em>"</em>:MSE 是<em>金标准但不可达</em>,MSPBE 是<em>可达的次优金标准</em>,半梯度(L3)给出 MSPBE 的<em>实操梯度</em>。</p>
+
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"既然 \(J(w) = \mathbb E[(v_\pi - \hat v)^2]\) 是<em>显然</em> 的目标,直接对它求 SGD 就行 —— Ch.6 RM 早讲完了。"<br>
+    <strong>实际上:</strong><strong>\(v_\pi\) 是<em>未知</em> 的,这一目标<em>没法用样本估</em></strong>。Ch.5 MC 用 episode 回报 \(G_t\) 作 \(v_\pi\) 的<em>无偏样本</em>(可估,但等 episode 结束、方差大);Ch.7 TD 用 \(r + \gamma \hat v(s&#39;)\) 作 bootstrap 估(有偏、低方差)。Ch.8 把这条选择<em>形式化</em> 成"<em>用哪个目标</em>" 的问题:用 \(G_t\) ⇒ MC + FA ⇒ <em>仍是 MSE 的无偏估</em>;用 bootstrap ⇒ MSPBE 的半梯度 ⇒ <em>偏差换稳定性</em>。<br>
+    <strong>因为:</strong>RL 与 supervised ML 的<em>结构差异</em>:supervised 有<em>"<em>label</em>"</em>(真值已知),目标函数即"<em>预测 - label</em>";RL 没有 label,目标函数中的<em>"<em>真值</em>"</em> 必须由样本(MC 回报)或自身(bootstrap)替代。这一替代<em>必然</em> 引入新目标(MSBE/MSPBE),不是"<em>选哪个</em>" 而是"<em>必须选某个</em>"。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"\(\mu_\pi\) 加权是<em>数学方便</em>;实际工程应该用均匀加权或人为重加权,让<em>所有 \(s\) 都准</em>。"<br>
+    <strong>实际上:</strong><strong>\(\mu_\pi\) 加权<em>不是</em> 选择,是 on-policy SGD 的<em>结构必然</em></strong>。on-policy 样本 \(s_t \sim \mu_\pi\) 自然采到,直接拿样本算 \([\hat v - \mathrm{target}]^2\) 就是 \(J_{\mu_\pi}\) 的无偏单样本估。换其他加权 ⇒ 必须做<em>重要性采样</em>(IS),方差爆炸或不收敛。off-policy 下(L4 Baird 反例)正是因为<em>样本分布与目标加权不匹配</em>(behavior policy 采样,target policy 加权)而触发 deadly triad。<em>"<em>用 \(\mu_\pi\)</em>" 是 on-policy "<em>能直接套 SGD</em>" 的<em>关键工程便利</em></em>。<br>
+    <strong>因为:</strong>SGD 收敛要求"<em>样本期望 = 目标梯度</em>"。on-policy + \(\mu_\pi\) 加权刚好满足。任何<em>分布失配</em> 都需修正(IS、重启缓冲、target 网络等),修正不当 ⇒ Baird 类发散。L4 把这条说严。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"MSPBE 与 MSE 既然不等,TD(0) 就是<em>错</em> 的算法 —— 应该改用 MC + FA(它优化 MSE 无偏)。"<br>
+    <strong>实际上:</strong><strong>MC + FA 优化 MSE,但<em>方差大、采样昂贵</em></strong>。Ch.7 L1 已讲过 MC vs TD 的 bias-variance 拆解:MC 无偏高方差,TD 有偏低方差。<em>FA 下完全继承</em>:MC + FA 收敛慢、需 episode 终止;TD + FA 在 MSPBE 极小处快速稳定但<em>偏 MSE 一点点</em>。实际工程几乎一律选 TD + FA(包括 DQN),理由是"<em>稳定 + 在线</em>" 远超"<em>最后那一点点 MSE 精度</em>"。<br>
+    <strong>因为:</strong>"<em>正确目标</em>" 与"<em>可优化目标</em>" 是不同的。Ch.8 教我们<em>放下"<em>必须 MSE</em>" 的执念</em>,接受"<em>MSPBE 是 RL FA 下<em>实际能优化</em> 的最佳替身</em>"。这与 Ch.6 L3 RM 步长条件一样 —— 不是<em>美的数学</em>,是<em>能用的算法</em>。
+  </div>
+
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> 写出 \(J_{\mathrm{MSE}}(w)\) 的<em>真</em> 梯度,并指出"<em>不可采样</em>" 的原因。</summary>
+    <p><strong>A.</strong> \(\nabla_w J_{\mathrm{MSE}}(w) = -2 \mathbb E_{s \sim \mu_\pi}[(v_\pi(s) - \hat v(s; w)) \nabla_w \hat v(s; w)]\)。线性 FA 下 \(\nabla \hat v = \phi(s)\),即 \(\nabla J = -2 \mathbb E[(v_\pi - \phi^\top w) \phi]\)。<em>不可采样</em> 在于 \(v_\pi(s)\) 未知 —— 单样本 \((s_t, r_{t+1}, s_{t+1})\) 没有 \(v_\pi(s_t)\) 的直接观测。MC 用 \(G_t\) 替(\(\mathbb E[G_t|s_t]=v_\pi(s_t)\),无偏);TD 用 \(r + \gamma \hat v(s_{t+1})\) 替(<em>有偏</em>,但低方差,bootstrap)。前者得 MSE 的无偏 SGD(MC + FA);后者得<em>非</em> MSE 的另一目标(MSPBE)的<em>半</em> 梯度。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> "<em>双采样</em>" 难题在何种目标上出现?为什么 MSPBE 没有这问题?</summary>
+    <p><strong>A.</strong> <strong>MSBE</strong> 出现双采样:\(J_{\mathrm{BE}} = \mathbb E[(\hat v - \mathbb E[r+\gamma\hat v(s&#39;)])^2]\)。\(\nabla_w J_{\mathrm{BE}}\) 中既要估\((\hat v - \mathbb E[r+\gamma\hat v(s&#39;)])\) 又要估 \(\nabla_w (\hat v - \mathbb E[r+\gamma\hat v(s&#39;)])\),两个独立内层 \(\mathbb E\) ⇒ 需两条独立 \(s&#39;\)。<strong>MSPBE</strong> 在<em>投影</em> 后 \(\Pi T_\pi \hat v\) 在 FA 子空间内是<em>线性</em> 函数,梯度展开后<em>不</em> 出现嵌套内层 \(\mathbb E\),单样本无偏 \(\Rightarrow\) 半梯度 = MSPBE 真梯度(线性 FA)。<em>这是 TD(0) 在 FA 下"<em>能跑</em>" 的形式根</em>。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> 为什么"<em>访问分布加权</em>" 是 on-policy 的<em>结构必然</em>,不是数学选择?</summary>
+    <p><strong>A.</strong> on-policy 数据生成机制:\(s_t \sim \mu_\pi\)(策略不变性长期分布)。SGD 单样本梯度 \(\hat g_t = -2(v_\pi - \hat v(s_t;w))\nabla\hat v(s_t;w)\) 满足 \(\mathbb E[\hat g_t] = \nabla_w J_{\mu_\pi}(w)\)(以 \(\mu_\pi\) 加权)。换均匀加权 \(J_{\mathrm{Unif}}\) 则 \(\mathbb E[\hat g_t] \neq \nabla J_{\mathrm{Unif}}\),需 IS 修正 \((1/|\mathcal S|)/\mu_\pi(s_t)\) ⇒ 高方差。off-policy 下 (\(\mu \neq \mu_\pi\)) 同样需 IS,Baird 反例就是 IS 不当时<em>真</em> 发散。<em>"<em>\(\mu_\pi\) 加权</em>" 是<em>"<em>样本分布 = 加权分布</em>"</em> 的等式</em>,SGD 直接套。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=38&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=38" target="_blank">YouTube 备链</a></p>
+
+  <h3>下一节预告</h3>
+  <p>本节定义了<em>三个</em> 目标(MSE / MSBE / MSPBE),指出 \(v_\pi\) 未知<em>逼着</em> 我们用 MSPBE 类替身。<strong>L3(教材 §8.2.2-8.2.3)</strong> 给<em>具体优化算法</em>:对 \(J(w)\) 做 SGD,展开梯度,把 \(v_\pi(s)\) 换成<em>样本估 \(g_t\)</em>(MC 或 TD bootstrap),立刻得到带<em>函数近似</em> 的 TD(0) 算法 —— Ch.7 L3 update 公式 \(V \leftarrow V + \alpha \delta_t\) 的<em>梯度版本</em> \(w \leftarrow w + \alpha \delta_t \nabla_w \hat v\)。"<em>半梯度</em>" 概念也在 L3 严格出现:扔掉 \(\nabla_w \hat v(s&#39;; w)\) 项是<em>结构</em> 选择,不是<em>近似</em>。L3 用 iteration-stepper 把 \(w_k\) 在 \(J(w)\) 等高线上的<em>真实下降轨迹</em> 画给你看。</p>
+
+  <nav class="lesson-nav">
+    <a href="lesson-01.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-03.html">Next →</a>
+  </nav>
+</div>
+
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>

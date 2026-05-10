@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>值迭代与策略迭代(P1):值迭代 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch04-l01" data-est-minutes="20">
+<div class="container">
+
+  <!-- Top nav -->
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.4 / Lesson 1</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <!-- Header -->
+  <p class="kicker">Bilibili #13 · YouTube #13 · Book §4.1 pp. 57-62</p>
+  <h1>L1: Value Iteration<small style="color:var(--color-muted); font-weight:400;">  (值迭代)</small></h1>
+
+  <!-- §1 Why this lesson -->
+  <h2>§1 Why this lesson</h2>
+  <p>Ch.3 末尾我们立起了一个抽象结构:BOE \(v = \max_\pi (r_\pi + \gamma P_\pi v)\) 的右端是 \(\gamma\)-压缩映射,Banach 不动点定理保证它有<strong>唯一不动点</strong> \(v^*\),并保证<em>从任意 \(v_0\) 出发迭代</em> \(v_{k+1} = T v_k\) <strong>几何收敛</strong>到 \(v^*\)。Ch.3 L4 又把"调 \(\gamma\) / reward 仿射"这两类参数变换的影响讲清。<em>但 Ch.3 一直停留在<strong>谈论</strong> "迭代会收敛" 的层面,从没<strong>正面落地</strong></em>:具体到一个 grid-world,我每一轮干什么?q-table 怎么算?policy 怎么更新?</p>
+  <p>本节(教材 §4.1,pp. 57-62)就是<strong>把 BOE 落地成<em>第一个</em>具体算法</strong> —— Value Iteration (VI)。它直接照抄 Banach 给的迭代规则 \(v_{k+1} = \max_\pi (r_\pi + \gamma P_\pi v_k)\),不引入新数学,只把它"<em>展开成实现细节</em>"。<em>跟 Ch.2 L4 的迭代法对比</em>:Ch.2 L4 的迭代是 \(v_{k+1} = R_\pi + \gamma P_\pi v_k\)(<em>固定 \(\pi\)</em>,做<strong>策略评估</strong>);VI 多了一个 \(\max_\pi\),每轮 <em>同时更新</em> 策略 —— <em>值更新与策略更新交织</em>。每轮两步:<strong>(1) policy update</strong> \(\pi_{k+1} = \arg\max_\pi (r_\pi + \gamma P_\pi v_k)\);<strong>(2) value update</strong> \(v_{k+1} = r_{\pi_{k+1}} + \gamma P_{\pi_{k+1}} v_k\)。代入后 \(v_{k+1}(s) = \max_a q_k(s,a)\)。本节<strong>核心信息</strong>:VI 不<em>评估任何具体策略</em>;\(v_k\) 只是 BOE 的<em>中间迭代量</em>,既不是某个 \(\pi\) 的 \(v_\pi\),也不是 \(v^*\),要等 \(k \to \infty\) 才有 \(v_k \to v^*\)。这一"\(v_k\) 不是 state value" 的观察,在 L2 PI 对比下尤其重要。</p>
+
+  <!-- §2 核心定义 -->
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>值迭代算法 (value iteration,VI;教材 §4.1 公式 (4.1) 上方)</strong>:\(v_{k+1} = \max_{\pi \in \Pi} (r_\pi + \gamma P_\pi v_k), k = 0, 1, 2, \dots\),从任意 \(v_0\) 出发。<em>这正是 Ch.3 Banach contraction 给的迭代规则</em>,只是从"抽象映射"变成"<em>每轮显式展开两步</em>"。</li>
+    <li><strong>第一步:policy update (PU)</strong> \(\pi_{k+1} = \arg\max_\pi (r_\pi + \gamma P_\pi v_k)\)。<em>翻译</em>:把当前 \(v_k\) 当作"未来的承诺",在每个状态上贪心选<em>一步即时 reward + 折扣未来 \(v_k\)</em> 最大的动作。元素形式 \(\pi_{k+1}(a\mid s) = \mathbb{1}[a = a_k^*(s)]\),其中 \(a_k^*(s) = \arg\max_a q_k(s, a)\)。</li>
+    <li><strong>第二步:value update (VU,教材 (4.1))</strong> \(v_{k+1} = r_{\pi_{k+1}} + \gamma P_{\pi_{k+1}} v_k\)。代入 \(\pi_{k+1}\) 后元素形式坍缩成 \(v_{k+1}(s) = \max_a q_k(s, a)\) —— <em>每个状态取该状态下 q-table 行的最大值</em>。这一行是 VI 的实操灵魂。</li>
+    <li><strong>q-table 中间量 \(q_k(s,a)\)</strong>:\(q_k(s,a) \doteq \sum_r p(r\mid s,a) r + \gamma \sum_{s&#39;} p(s&#39;\mid s,a) v_k(s&#39;)\)。注意它<em>不是真正的 action value</em> \(q_\pi(s,a)\) —— 因为 \(v_k\) 不是任何 \(\pi\) 的 state value,所以 \(q_k\) 也不是任何 \(\pi\) 的 q-value,只是<em>中间计算变量</em>。这点在 §5 会详谈。</li>
+    <li><strong>VI 算法骨架 (Algorithm 4.1)</strong>:Initialize \(v_0\);while \(\|v_k - v_{k-1}\| > \epsilon\): for 每个 \(s\): for 每个 \(a\): 算 \(q_k(s,a)\);\(a_k^*(s) = \arg\max_a q_k(s,a)\);\(\pi_{k+1}(a\mid s) = \mathbb{1}[a = a_k^*(s)]\);\(v_{k+1}(s) = \max_a q_k(s,a)\)。<em>停机条件</em>:相邻两轮 \(v\) 差小于阈值。</li>
+    <li><strong>"\(v_k\) 不是 state value"(教材 §4.1.1 末段)</strong>:VI 中的 \(v_k\) 既不满足 \(v = r_{\pi_k} + \gamma P_{\pi_k} v\) 也不满足 \(v = r_{\pi_{k+1}} + \gamma P_{\pi_{k+1}} v\),只是 BOE 算子的迭代点列。它<em>会</em>收敛到 \(v^*\),但<em>路上每一帧都不是 v_π 的快照</em>。这跟 Ch.2 L4 的迭代法<em>本质不同</em>:那里 \(v_k\) 沿途都在逼近<strong>同一个</strong> \(v_\pi\),这里 \(v_k\) 是逼近"一个被同时优化的目标 \(v^*\)"。</li>
+    <li><strong>VI vs Ch.2 L4 迭代法的一行差别</strong>:Ch.2 L4: \(v_{k+1} = r_\pi + \gamma P_\pi v_k\)(\(\pi\) 固定,evaluate);本节 VI: \(v_{k+1} = \max_\pi (r_\pi + \gamma P_\pi v_k)\)(\(\pi\) 每轮重选,solve BOE)。<strong>差一个 \(\max_\pi\)</strong>,但物理意义跨越:从"评估"到"求解最优"。</li>
+  </ul>
+
+  <!-- §3 关键公式 + 推导 -->
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节核心是把 BOE 的"一行抽象" \(v_{k+1} = T v_k = \max_\pi (r_\pi + \gamma P_\pi v_k)\) <strong>展开成两步实现细节</strong>。展开后第二步会自动坍缩成 \(v_{k+1}(s) = \max_a q_k(s, a)\),这是 VI 算法的"灵魂一行"。</p>
+
+  <p><strong>公式 1:VI 的两步拆解(教材 §4.1 公式 (4.1) 与上下文)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\pi_{k+1} = \\arg\\max_\\pi (r_\\pi + \\gamma P_\\pi v_k); \\quad v_{k+1} = r_{\\pi_{k+1}} + \\gamma P_{\\pi_{k+1}} v_k",
+    "annotations": [
+      {"key": "PU", "label": "Step 1: PU", "description": "Policy update。把当前 v_k 当&#39;承诺&#39;,在每个状态上贪心选&#39;一步 r + γ v_k&#39; 最大的动作,得到 π_{k+1}。"},
+      {"key": "VU", "label": "Step 2: VU", "description": "Value update。把刚选出的 π_{k+1} 代回 Bellman 右端走一步,得到 v_{k+1}。注意只走&#39;一步&#39;不是解 v_{π_{k+1}}。"},
+      {"key": "max_a", "label": "v_{k+1}(s)=max_a q_k", "description": "把 π_{k+1}(a|s)=𝟙[a=a*_k(s)] 代入 VU 的元素形式 v_{k+1}(s)=Σ_a π_{k+1}(a|s)q_k(s,a),得 v_{k+1}(s)=max_a q_k(s,a) —— 实操灵魂一行。"},
+      {"key": "q_k", "label": "q_k(s,a) 中间量", "description": "q_k(s,a)=Σ_r p(r|s,a)r + γ Σ_{s&#39;} p(s&#39;|s,a)v_k(s&#39;)。注意 v_k 不是任何 π 的 state value,所以 q_k 不是 q_π,只是&#39;算 max 用的中间表&#39;。"},
+      {"key": "BOE_recovery", "label": "= BOE 一行", "description": "把两步合并:v_{k+1}=max_π(r_π+γP_π v_k),正是 Ch.3 BOE 算子 T 在 v_k 上一次作用 —— Banach 给的&#39;v_{k+1}=Tv_k&#39;。"}
+    ]
+  }'></div>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>从 BOE 算子到&#39;两步展开&#39;</em>。Ch.3 把 BOE 写成 \(v = T v\),其中 \((Tv)(s) = \max_a [\sum_r p(r\mid s,a)r + \gamma \sum_{s&#39;} p(s&#39;\mid s,a) v(s&#39;)]\)。Banach 告诉我们迭代 \(v_{k+1} = T v_k\) 收敛到 \(v^*\)。本节把这一行 \(T\) <em>展开成两个子步</em>:先从 \(v_k\) 算 q-table \(q_k(s,a)\),再对 \(a\) 取 max。这<strong>没引入新数学</strong>,只是把矢量化的 max 拆成"先列表再选行内最大值"的实现细节。
+  </div>
+
+  <div class="callout">
+    <strong>Step 2.</strong> <em>为什么 \(\arg\max_\pi\) 等价于 element-wise \(\arg\max_a\)</em>(Ch.3 §3.3 已证)。\(\sum_a \pi(a\mid s) q_k(s,a) \le \max_a q_k(s,a)\) 对任意分布 \(\pi(\cdot\mid s)\) 成立(凸组合 \(\le\) max);取等当且仅当 \(\pi\) 把全部权重压在 \(a_k^*(s) = \arg\max_a q_k(s,a)\) 上。所以 BOE 中"在 \(\pi\) 上 max"必然给出<strong>greedy 确定策略</strong>(不存在 ties 时唯一,有 ties 时任选)。这把 \(\arg\max_\pi\) 这个看似复杂的对象坍缩成"<em>每个状态独立做 \(\arg\max_a\)</em>"。
+  </div>
+
+  <div class="callout">
+    <strong>Step 3.</strong> <em>VU 自动坍缩成 \(\max_a q_k(s,a)\)</em>。代入 \(\pi_{k+1}(a\mid s) = \mathbb{1}[a = a_k^*(s)]\) 到 \(v_{k+1}(s) = \sum_a \pi_{k+1}(a\mid s) q_k(s,a)\):求和里只有一项非零(\(a = a_k^*(s)\)),所以 \(v_{k+1}(s) = q_k(s, a_k^*(s)) = \max_a q_k(s,a)\)。<em>关键</em>:VU 不需要"代入 \(\pi_{k+1}\) 后再算一遍 q-table" —— 它直接<em>读 PU 选出的那行最大值</em>。这就是 Algorithm 4.1 在每轮里只算一次 q-table 的原因。
+  </div>
+
+  <div class="callout">
+    <strong>Step 4.</strong> <em>收敛性免费继承</em>。VI 等价于 \(v_{k+1} = T v_k\),Ch.3 已证 \(T\) 是 \(\gamma\)-压缩映射,所以 \(\|v_k - v^*\|_\infty \le \gamma^k \|v_0 - v^*\|_\infty\) —— <strong>几何收敛,速率 = \(\gamma\)</strong>。\(\gamma = 0.9\) 时大约 65 轮能让误差 \(< 10^{-3}\)。Ch.3 L3 已把证明做完,这里只是给"算法收敛性"贴价签。
+  </div>
+
+  <!-- §4 Grid-world 例子 -->
+  <h2>§4 Grid-world 实例化</h2>
+  <p>用作者 5×5 grid 跑一遍 VI:target = \((3, 2)\),forbidden = \(\{(1,1),(2,1),(2,2),(1,3),(3,3)\}\),\(r_\text{target} = +1\)、\(r_\text{forbidden} = r_\text{boundary} = -1\)、\(r_\text{other} = 0\)、\(\gamma = 0.9\)。从 \(v_0 = 0\)(全零)起,看 \(v_k\) 的热图怎样从"target 一个 +1 像素"逐步扩散成完整 \(v^*\)。<em>这是本章 iteration-stepper 的<strong>第一次正面亮相</strong></em> —— Ch.2 L4 用过类似动画(那里是固定 \(\pi\) 的策略评估),本节给出"<strong>π 也在动</strong>"的版本:每按一次"下一步",grid 上的<em>箭头</em>(\(\pi_k\) 的贪心选择)与<em>颜色</em>(\(v_k\))<strong>同步</strong>更新。</p>
+
+  <div data-component="gridworld" id="gw-ch04-l01" data-config='{
+    "rows": 5, "cols": 5,
+    "target": [3, 2],
+    "forbidden": [[1,1],[2,1],[2,2],[1,3],[3,3]],
+    "policy": [
+      ["·","·","·","·","·"],
+      ["·","·","·","·","·"],
+      ["·","·","·","·","·"],
+      ["·","·","·","·","·"],
+      ["·","·","·","·","·"]
+    ],
+    "heatmap": [
+      [0,0,0,0,0],
+      [0,0,0,0,0],
+      [0,0,0,0,0],
+      [0,0,0,0,0],
+      [0,0,0,0,0]
+    ]
+  }'></div>
+
+  <div data-component="iteration-stepper" data-config='{
+    "linked-gridworld": "#gw-ch04-l01",
+    "steps": [
+      {
+        "label": "k=0  v_0 = 0,π_0 任意",
+        "patch": {
+          "policy": [
+            ["·","·","·","·","·"],
+            ["·","","·","","·"],
+            ["·","","","·","·"],
+            ["·","·","","·","·"],
+            ["·","·","·","·","·"]
+          ],
+          "heatmap": [
+            [0,0,0,0,0],
+            [0,0,0,0,0],
+            [0,0,0,0,0],
+            [0,0,0,0,0],
+            [0,0,0,0,0]
+          ]
+        },
+        "note": "起点:v_0(s)=0 ∀ s。Policy 还没定下来(标 · 表示&#39;待定&#39;)。第一轮才会从 q_0 选出 π_1。"
+      },
+      {
+        "label": "k=1  v_1 = max_a q_0",
+        "patch": {
+          "policy": [
+            ["·","·","·","·","·"],
+            ["·","","·","","·"],
+            ["·","","","↓","·"],
+            ["·","↓","·","↓","·"],
+            ["·","·","↑","·","·"]
+          ],
+          "heatmap": [
+            [0,0,0,0,0],
+            [0,0,0,0,0],
+            [0,0,0,0,0],
+            [0,0,1,0,0],
+            [0,0,0,0,0]
+          ]
+        },
+        "note": "v_1 = R_π = 即时 reward。只有能<em>一步进 target</em> 的格子(target 自身的&#39;stay&#39;) 拿到 +1;其他格子还看不到 target 因为 v_0=0 让 γv_0=0。π_1 在邻居上指向 target,但 (0,0) 这种远格子 q 全相等,arg max 任选(本图先标 ·)。"
+      },
+      {
+        "label": "k=2  扩散一格",
+        "patch": {
+          "policy": [
+            ["·","·","·","·","·"],
+            ["·","","·","","·"],
+            ["·","","","↓","↓"],
+            ["·","→","·","←","↓"],
+            ["·","·","↑","↑","·"]
+          ],
+          "heatmap": [
+            [0,0,0,0,0],
+            [0,0,0,0,0],
+            [0,0,0,0.9,0],
+            [0,0,1.9,0,0.9],
+            [0,0,0.9,0,0]
+          ]
+        },
+        "note": "信息从 target 向邻居扩散 1 格。target 自身累积 1+0.9·1=1.9;距离 1 格的邻居拿 0+0.9·1=0.9。π_2 在这些邻居上首次给出&#39;朝 target 走&#39; 的箭头。"
+      },
+      {
+        "label": "k=3  再扩一格",
+        "patch": {
+          "policy": [
+            ["·","·","·","·","·"],
+            ["·","","·","","↓"],
+            ["·","","","↓","↓"],
+            ["·","→","·","←","↓"],
+            ["·","→","↑","↑","←"]
+          ],
+          "heatmap": [
+            [0,0,0,0,0],
+            [0,0,0,0,0.81],
+            [0,0,0,1.71,0.81],
+            [0,0,2.71,0,1.71],
+            [0,0,1.71,0.81,0.81]
+          ]
+        },
+        "note": "target 升至 1+0.9·1.9=2.71;1-格邻居升至 0+0.9·1.9=1.71;2-格邻居拿到 0+0.9·0.9=0.81。π_3 进一步扩张&#39;朝 target&#39; 区域。"
+      },
+      {
+        "label": "k=10  接近收敛",
+        "patch": {
+          "policy": [
+            ["↓","↓","↓","↓","↓"],
+            ["↓","","→","","↓"],
+            ["↓","→","","↓","↓"],
+            ["→","→","·","←","←"],
+            ["→","→","↑","↑","←"]
+          ],
+          "heatmap": [
+            [3.20, 3.55, 3.95, 4.39, 4.78],
+            [3.55, 0,    4.39, 0,    5.31],
+            [3.95, 4.39, 0,    5.90, 5.90],
+            [4.39, 5.31, 7.29, 0,    5.31],
+            [4.78, 5.31, 5.90, 5.31, 4.78]
+          ]
+        },
+        "note": "k=10 已经接近 v*。误差量级 0.9^10·‖δ_0‖∞ ≈ 0.349·10 ≈ 3.5,真实较小因 v_0=0 与 v* 同号。π_10 全格已稳定。"
+      },
+      {
+        "label": "k→∞  v_k → v*,π_k → π*",
+        "patch": {
+          "policy": [
+            ["↓","↓","↓","↓","↓"],
+            ["↓","","↓","","↓"],
+            ["↓","→","","→","↓"],
+            ["→","→","·","←","←"],
+            ["→","→","↑","↑","←"]
+          ],
+          "heatmap": [
+            [4.78, 5.31, 5.90, 6.56, 7.29],
+            [5.31, 0,    6.56, 0,    8.10],
+            [5.90, 6.56, 0,    9.00, 9.00],
+            [6.56, 7.29, 10.0, 0,    8.10],
+            [7.29, 8.10, 9.00, 8.10, 7.29]
+          ]
+        },
+        "note": "收敛到 v*((0,0))≈4.78、v*(target)=10。π* 是 Ch.3 L1/L2 给的最优策略,与 baseline γ=0.9 一致。本图箭头在 forbidden 格上为空白(此例 §4 narrative 不强调 π* 在 forbidden 的动作);若关心可见 Ch.3 L4 §4。"
+      }
+    ]
+  }'></div>
+
+  <p><strong>怎么读这个动画?</strong>每按"下一步",信息<em>同时</em>更新两件事:(a) <em>颜色</em>(\(v_k\) 热图)从 target 一个像素扩散成完整曲面;(b) <em>箭头</em>(\(\pi_k\) 的贪心方向)从"零信息" 逐渐站定为 \(\pi^*\)。<strong>关键观察</strong>:\(\pi_k\) 在 \(k = 5\) 左右就基本稳定(箭头不再变),但 \(v_k\) 还在继续涨 —— 这是 VI 的一个经验现象:<em>"策略先收敛、值后收敛"</em>。L2 PI 会反过来:每轮内部把 \(v_{\pi_k}\) 算到位,所以<em>每轮外循环数值就变得很大</em>。</p>
+
+  <p><strong>VI 的收敛速率验证</strong>。Banach 给 \(\|v_k - v^*\|_\infty \le \gamma^k \|v_0 - v^*\|_\infty\),所以 log-y 上误差曲线斜率 = \(\log_{10} \gamma\)。下图把 \(\gamma = 0.9 / 0.99\) 跑出来对比,验证斜率随 \(\gamma\) 接近 1 而变平。\(\gamma = 0.9\) 时大约 65 轮误差降到 \(10^{-3}\),\(\gamma = 0.99\) 时约 685 轮 —— 差一个数量级。L2 PI 的对应曲线会<em>外循环步数明显少</em>(往往 < 10),但每步代价更高,这是 L3 truncated PI 要平衡的核心权衡。</p>
+
+  <div data-component="convergence-plot" data-config='{
+    "x-label": "VI 迭代次数 k",
+    "y-label": "‖v_k − v*‖_∞",
+    "log-y": true,
+    "series": [
+      {"name": "VI, γ = 0.9", "color": "#3b82f6", "points": [[0, 10], [10, 3.49], [20, 1.22], [40, 0.148], [60, 0.0181], [80, 0.00221], [100, 0.000266]]},
+      {"name": "VI, γ = 0.99", "color": "#ef4444", "points": [[0, 10], [50, 6.05], [100, 3.66], [200, 1.34], [400, 0.180], [600, 0.0241], [800, 0.00324]]}
+    ]
+  }'></div>
+
+  <!-- §5 常见误解 -->
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"VI 中间过程的 \(v_k\) 就是当前策略 \(\pi_k\) 的 state value。"<br>
+    <strong>实际上:</strong><strong>\(v_k\) 不是任何策略的 state value</strong>(教材 §4.1.1 末段)。具体:\(v_k\) 既不满足 \(v = r_{\pi_k} + \gamma P_{\pi_k} v\)(\(\pi_k\) 是上一轮选的、当时用的是 \(v_{k-1}\)),也不满足 \(v = r_{\pi_{k+1}} + \gamma P_{\pi_{k+1}} v\)(\(\pi_{k+1}\) 才刚选,\(v_k\) 是<em>选 \(\pi_{k+1}\) 之前</em>的值)。它只是 BOE 算子 \(T\) 的迭代点列,<em>朝</em> \(v^*\) 走但<em>路上每帧都不是 v_π</em>。<br>
+    <strong>因为:</strong>VI 的核心精神是"<em>值与策略<strong>同时</strong>逼近</em>",中途不强求 \(v\) 跟 \(\pi\) 自洽。这和 L2 的 PI 形成鲜明对比 —— PI 在每轮外循环里<em>把 \(v_{\pi_k}\) 算到位</em>(用 \(v_{\pi_k} = (I - \gamma P_{\pi_k})^{-1} r_{\pi_k}\) 或迭代),所以 PI 中途的 \(v_{\pi_k}\) <strong>是</strong>真正的 state value,可以拿出来作策略评估。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"既然 VI 每轮算一次 q-table,那它跟 Ch.2 L5 引入的 q_π 是同一个东西。"<br>
+    <strong>实际上:</strong>差一个微妙的"是不是 state value"。\(q_\pi(s, a)\) 严格定义是 "\(s\) 下强制 \(a\),之后按 \(\pi\) 走的折扣 return 期望",依赖一个<em>具体</em> \(\pi\)。VI 中的 \(q_k(s, a) = \sum_r p(r\mid s,a) r + \gamma \sum_{s&#39;} p(s&#39;\mid s,a) v_k(s&#39;)\) 把<em>未来值</em> 用 \(v_k\) 代,但 \(v_k\) 不是 state value,所以 \(q_k\) 也不是 q-value,只是<strong>计算用的中间表</strong>(教材在 (4.2) 下方明确说 "\(q_k\) is not an action value")。<br>
+    <strong>因为:</strong>RL 文献里"q" 这个符号被多处复用,\(q_\pi\)、\(q^*\)、VI 的中间 \(q_k\)、Q-learning 的估计 \(\hat Q\) 各有微妙差别。本节 \(q_k\) 是"<em>用 \(v_k\) 当承诺时,在 \((s, a)\) 上一步 lookahead 的值</em>",仅仅是 \(\arg\max\) 计算的便利量;只有 \(k \to \infty\) 时 \(q_k \to q^*\)、才能合法叫 action value。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"VI 收敛后的 \(\pi^*\) 是从 \(\pi_0\) 不断改进的结果,\(\pi_0\) 选好能省迭代。"<br>
+    <strong>实际上:</strong><strong>VI 不需要 \(\pi_0\)</strong> —— 它的初始化只有 \(v_0\)(典型 \(v_0 = 0\)),\(\pi_1\) 是从 \(v_0\) 现场 \(\arg\max\) 算出来的。这跟 L2 PI 形成对比:<em>PI 必须给 \(\pi_0\)</em>,因为要先 evaluate \(\pi_0\) 拿 \(v_{\pi_0}\) 再 improve。VI 输入 \(v_0\)、PI 输入 \(\pi_0\) —— L3 truncated PI 串起来时这个差别尤其重要。<br>
+    <strong>因为:</strong>VI 直接把 BOE 当不动点方程解,起点是<em>值空间的某个 \(v_0\)</em>;PI 是"<em>策略空间走梯度</em>",起点是<em>策略空间的某个 \(\pi_0\)</em> —— 设计哲学不同。
+  </div>
+
+  <!-- §6 自检 + 视频 + teaser -->
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> §4 的 5×5 grid 里,\(v_0 = 0\) 起步,VI 第 1 轮(\(k = 1\))之后 \(v_1\) 在哪些格子上非零?为什么?</summary>
+    <p><strong>A.</strong> 只有 target 自身 \((3, 2)\) 上 \(v_1 = +1\)(其&#39;stay-on-target&#39; 动作的 \(q_0 = 1 + 0.9 \cdot 0 = 1\)),其他格子 \(v_1 = 0\)。<em>因为</em>:\(q_0(s, a) = r(s, a) + 0.9 \cdot v_0(s&#39;) = r(s, a)\)(\(v_0 = 0\)),非 target / 非 boundary / 非 forbidden 转移的 \(r(s, a) = 0\),target 上&#39;stay&#39; 的 \(r = +1\),其他动作要么 \(r = 0\)(进 \(r_\text{other}\) 格) 要么 \(r = -1\)(撞 boundary / forbidden);\(\max_a q_0(s, a)\) 大多数格子上是 0,只有 target 上是 +1。这说明<strong>VI 第 1 轮信息只能"原地" 出现</strong>,要"扩散" 到邻居得等第 2 轮 γ·v_1 起作用 —— 这就是 §4 动画里"信息一格一格扩散" 的本质。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> 教材 §4.1.1 末段说"\(v_k\) <em>不是</em> state value"。如果 VI 在 \(k = 100\) 停机,我得到的 \(v_{100}\) 是<em>谁的</em> state value?\(\pi_{100}\) 的吗?</summary>
+    <p><strong>A.</strong> <strong>谁的也不是,严格来说;但近似是 \(\pi_{100}\) 的</strong>。具体:\(v_{100}\) 是 BOE 算子从 \(v_0\) 起跑 100 次的结果,理论上不满足任何 \(\pi\) 的 Bellman 方程。但 \(v_{100} \approx v^*\) (误差 \(\approx \gamma^{100} \cdot 10 \approx 2.6 \times 10^{-4}\),工程上可以忽略),\(\pi_{100}\) 是<em>\(v_{100}\) 的贪心策略</em>;在工程上常把 \(v_{100}\) 当作 \(v_{\pi_{100}}\) 的近似(也是 \(v^*\) 的近似)。<em>严格的 \(v_{\pi_{100}}\)</em> 需要再做<em>一次策略评估</em>(用 Ch.2 L4 闭式或迭代解 \(v = r_{\pi_{100}} + \gamma P_{\pi_{100}} v\))。这正是 L2 PI 在每轮外循环干的事 —— "<em>把 \(\pi_k\) 评估到位</em>",用<em>更精准</em> 的 \(v_{\pi_k}\) 做下一轮 \(\arg\max\)。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> 把 \(\gamma\) 从 0.9 改成 0.5,\(v_0 = 0\) 起,VI 大约多少轮能让 \(\|v_k - v^*\|_\infty < 10^{-3}\)?</summary>
+    <p><strong>A.</strong> Banach: \(\|v_k - v^*\|_\infty \le \gamma^k \|v_0 - v^*\|_\infty\)。\(\gamma = 0.5\) 时 \(v^*\) 量级也变小(因为 \(R_\text{max}/(1-\gamma) = 1/0.5 = 2\)),设 \(\|v_0 - v^*\|_\infty \approx 2\)。需 \(0.5^k \cdot 2 < 10^{-3}\) 即 \(0.5^k < 5 \times 10^{-4}\),\(k > \log_{0.5} (5 \times 10^{-4}) \approx 11\) 次。<strong>大约 11 轮</strong>(对比 \(\gamma = 0.9\) 需要 65 次)。<em>γ 越小、收敛越快</em>,但代价是 \(\pi^*\) 变&#39;近视&#39;(Ch.3 L4 §4 给的反例)。这是 RL 调参里"<em>γ 不只是 hyperparameter,是问题定义的一部分</em>" 的又一面体现。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <p style="font-size:0.85rem;color:var(--color-muted);">视频:首选 Bilibili 直播(下方 iframe);若 iframe 不显示,用 YouTube 链接打开。BVID 当前是占位,实际 BVID 等首次部署时填。</p>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=13&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=13" target="_blank"><strong>▶ YouTube 备链(建议优先点这个)</strong></a></p>
+
+  <h3>下一节预告</h3>
+  <p>本节 VI 的核心精神是"<em>值与策略<strong>同时</strong>逼近</em>",中途 \(v_k\) 不是任何 \(\pi\) 的 state value。下一节(L2,Book §4.2)介绍 <strong>Policy Iteration (PI)</strong>:走另一条路 —— "<em>值与策略<strong>交替</strong>逼近</em>",每一轮先把 \(\pi_k\) 评估到位(\(v_{\pi_k}\) <strong>是</strong> state value)、再用它 improve 出 \(\pi_{k+1}\)。<em>关键问题</em>:既然 PI 每轮要解一个完整 Bellman 方程(闭式 \(O(n^3)\) 或迭代 \(O(n^2)\) ⋅ many steps),为什么人们还用它?答:PI 的<strong>外循环步数极少</strong>(教材 5×5 例只要 10 步外循环就到 \(\pi^*\)),且每步保证<em>单调改进</em> \(v_{\pi_{k+1}}(s) \ge v_{\pi_k}(s) \forall s\)(Lemma 4.1)。所以 VI 与 PI 是<em>"多便宜外步" vs "少昂贵外步"</em> 的两端 —— L3 会把它们统一到 truncated PI。</p>
+
+  <!-- Bottom nav -->
+  <nav class="lesson-nav">
+    <a href="../ch03/lesson-04.html">← Prev (Ch.3)</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-02.html">Next →</a>
+  </nav>
+</div>
+
+<!-- Components -->
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>Actor-Critic 方法(P5):总结与再见 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch10-l05" data-est-minutes="20">
+<div class="container">
+
+  <!-- Top nav -->
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.10 / Lesson 5</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <!-- Header -->
+  <p class="kicker">Bilibili #54 · YouTube #54 · Book §10.5-10.6 pp. 235-236</p>
+  <h1>L5: Actor-Critic Methods (P5 — Summary and Goodbye!)<small style="color:var(--color-muted); font-weight:400;">  (Actor-Critic 方法(P5):总结与再见)</small></h1>
+
+  <!-- §1 Why this lesson -->
+  <h2>§1 Why this lesson</h2>
+  <p>本节是全书最后一节,把 Ch.1-10 的故事拧成一根绳。从 Ch.1 给状态、动作、策略下定义开始,经过 Ch.2-3 的贝尔曼方程与最优性理论,Ch.4 的值迭代/策略迭代算法,Ch.5 的蒙特卡洛方法,Ch.6 的随机近似与 SGD,Ch.7 的时序差分学习,Ch.8 的函数近似与 DQN,Ch.9 的策略梯度,再到本章 Ch.10 的 actor-critic——这是一条从"数学工具"到"工程算法"的完整逻辑链。</p>
+  <p>本节的任务有三:<em>(1)</em> 给出 AC 家族的完整谱系图,清晰展示每个算法修改了哪一块;<em>(2)</em> 指出本书覆盖范围之外的重要下一步——PPO、SAC、多智能体、模型基础 RL;<em>(3)</em> 向坚持读到这里的读者说一声真心话。如果你跟完了全书 54 节,你已经具备了阅读大多数深度 RL 论文所需的数学基础——这是值得庆祝的事。</p>
+
+  <!-- §2 核心定义 -->
+  <h2>§2 核心定义</h2>
+  <ul>
+    <li><strong>Actor-critic 的本质</strong>:任何同时维护<em>策略网络(actor)</em>和<em>值函数网络(critic)</em>,并用 TD 误差训练 critic、用 critic 指导 actor 的算法,都是 actor-critic 方法。教材的广义定义:actor-critic = policy gradient + TD value estimation。</li>
+    <li><strong>优势函数 \(A(s,a)\) 的统一地位</strong>:\(A(s,a) = q_\pi(s,a) - v_\pi(s)\) 是整个 AC 家族的核心量。QAC 用 \(q\),A2C 用 \(A \approx \delta_t\),off-policy AC 用 \(\rho \cdot \delta_t\),DPG 用 \(\nabla_a q|_{a=\mu}\)——都是围绕"如何估计 A(s,a)"的不同方案。</li>
+    <li><strong>policy-based + value-based 的婚姻</strong>:Ch.8 给了 critic 的理论(值函数近似 + DQN),Ch.9 给了 actor 的理论(策略梯度 + REINFORCE)。Ch.10 把两者合并。从这个视角看,AC 是全书逻辑的<em>必然归宿</em>,而非凭空出现的新算法族。</li>
+    <li><strong>深度 RL 的三大方向(书外)</strong>:<em>PPO/TRPO</em>(on-policy AC + IS clip,OpenAI/DeepMind 的工程主流);<em>SAC(Soft Actor-Critic)</em>(off-policy AC + 最大熵框架,连续控制最强基线);<em>IMPALA/APPO</em>(大规模分布式 AC,数百 worker 并行)。这三类算法都直接建立在本书 Ch.10 的理论基础上。</li>
+  </ul>
+
+  <!-- §3 关键公式 + 推导 -->
+  <h2>§3 关键公式 + 推导</h2>
+  <p>AC 家族谱系:从 REINFORCE 到 DDPG,每个算法在同一框架下只改了一个核心部件。</p>
+
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\theta_{t+1} = \\theta_t + \\alpha_\\theta \\cdot \\underbrace{\\rho_t}_{\\text{IS 权重}} \\cdot \\underbrace{\\nabla_\\theta \\ln\\pi(a_t|s_t;\\theta_t)}_{\\text{actor 梯度}} \\cdot \\underbrace{\\delta_t(s_t,a_t)}_{\\text{advantage 估计}}",
+    "annotations": [
+      {"key": "reinforce", "label": "REINFORCE: ρ=1, δ=Gₜ (MC)", "description": "最原始的 PG 算法(Ch.9)。ρ=1 表示 on-policy;δ=Gₜ 是 MC 回报,高方差无偏。actor 按 ∇ ln π · Gₜ 更新。"},
+      {"key": "qac", "label": "QAC: ρ=1, δ=q̂_w(s,a) (TD-q)", "description": "L1 的改进。把 Gₜ 换成 critic 的 q̂(s,a;w),用 TD 估 q_π,在线更新,方差降低。"},
+      {"key": "a2c", "label": "A2C: ρ=1, δ=rₜ₊₁+γv̂(sₜ₊₁)-v̂(sₜ) (TD-δ)", "description": "L2 的改进。advantage δₜ = q - v 替代 q̂,减去 baseline v̂(s)。一个网络 v̂_w 搞定。方差进一步降低。"},
+      {"key": "offpolicy_ac", "label": "Off-policy AC: ρ=π/β, δ=TD误差", "description": "L3 的改进。乘以 IS 权重 ρ=π/β,数据由 behavior policy β 采集,旧数据可复用。Off-policy。"},
+      {"key": "dpg", "label": "DPG/DDPG: 确定性策略,梯度=∇_θμ·∇_a q", "description": "L4 的改进。策略改为确定性 μ(s;θ),梯度由链式法则 ∂Q/∂θ = (∂Q/∂a)(∂a/∂θ) 给出。适合连续动作空间。"}
+    ]
+  }'></div>
+
+  <p>AC 家族每个算法都在修改同一个模板:\(\theta_{t+1} = \theta_t + \alpha_\theta \cdot [\text{IS修正}] \cdot [\text{策略梯度方向}] \cdot [\text{advantage估计}]\)。三个括号各自可以独立替换,产生不同算法组合。这正是 AC 框架<em>模块化</em>的魅力。</p>
+
+  <!-- §4 AC 家族知识地图 -->
+  <h2>§4 AC 家族知识地图</h2>
+  <p>下面是 AC 家族的文字谱系图,展示每个算法的前驱和它做出的关键改动:</p>
+
+  <div class="callout">
+    <strong>AC 家族完整谱系</strong>
+    <pre style="font-size:0.85em; line-height:1.6; margin-top:0.5em;">
+Ch.9 REINFORCE
+  │  问题:MC 回报 G_t 方差极大,需整条 episode
+  ▼
+Ch.10 §10.1 QAC (Q actor-critic)
+  │  改动:G_t → critic q̂(s,a;w),on-policy Sarsa 更新
+  │  获得:在线更新,低方差
+  ▼
+Ch.10 §10.2 A2C (Advantage actor-critic)
+  │  改动:q̂(s,a) → δ_t = TD误差 ≈ advantage A(s,a)
+  │  获得:只需一个 v̂(s;w),方差进一步降低
+  ▼
+Ch.10 §10.3 Off-policy AC
+  │  改动:乘以 IS 权重 ρ = π/β,behavior policy β 采样
+  │  获得:旧数据可复用,样本效率提升
+  ▼
+Ch.10 §10.4 DPG / DDPG
+     改动:随机策略 π → 确定性策略 μ(s;θ)
+          梯度 ∇ ln π · δ → ∇_θμ · ∇_a q(链式法则)
+          +target network + replay buffer(Ch.8技巧)
+     获得:适合连续动作空间,精确输出
+    </pre>
+  </div>
+
+  <div class="callout">
+    <strong>各章贡献的基础工具</strong>
+    <pre style="font-size:0.85em; line-height:1.6; margin-top:0.5em;">
+Ch.1 : 状态/动作/策略/MDP 的数学语言 —— AC 的舞台
+Ch.2 : 贝尔曼方程 —— v_π, q_π 的存在性和递推
+Ch.3 : BOE(贝尔曼最优方程) —— v*, q*, π* 的理论
+Ch.4 : 值迭代/策略迭代 —— 第一批求解算法
+Ch.5 : Monte Carlo —— 用轨迹样本估 v_π (G_t)
+Ch.6 : 随机近似/SGD —— 所有迭代算法的数学基础
+Ch.7 : TD 学习 —— Bootstrap,δ_t 误差,在线更新
+Ch.8 : 函数近似 + DQN —— critic 网络化,target net
+Ch.9 : 策略梯度 + REINFORCE —— actor 的数学工具
+Ch.10: Actor-Critic —— Ch.8 critic + Ch.9 actor 的融合
+    </pre>
+  </div>
+
+  <!-- §5 常见误解 -->
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>学完 DDPG 就掌握了当前工业界用的深度 RL 算法。<br>
+    <strong>实际上:</strong>DDPG 是 2015 年前后的算法,现代工业界主流已经进化到 PPO(2017)、SAC(2018)、TD3(2018,DDPG 的改进版)。这些算法在本书理论基础上各自添加了重要工程改进——PPO 的 IS clip 稳定训练、SAC 的最大熵框架鼓励探索、TD3 的双 critic 减少过估计。但<em>数学框架</em>都是本书已经建立的:policy gradient theorem + TD value estimation + function approximation。<br>
+    <strong>因为:</strong>工业界的进步往往是"在正确方向上精细化",而本书给的是"正确方向"本身。读懂了本书再去读这些论文,数学部分都会豁然开朗。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>Actor-critic 只是两个网络并行训练,结构很简单。<br>
+    <strong>实际上:</strong>AC 的<em>复杂性</em>不在结构而在<em>动态交互</em>:actor 在改变的策略下采样,critic 追踪不断变化的目标 q_π,两者互相影响形成<em>非平稳优化问题</em>。这也是为什么深度 RL 比监督学习难调参——没有固定的标签,标签(q_π)随策略(actor)一起移动。理解这个动态本质,才能有效诊断训练失败的原因。<br>
+    <strong>因为:</strong>RL 的样本来自当前策略,优化目标依赖当前策略,策略又在被优化——这种"自举循环"是 RL 区别于监督学习的根本特征,也是 RL 调参需要更多经验和耐心的原因。
+  </div>
+
+  <!-- §6 全书总结 + 书末寄语 -->
+  <h2>§6 全书总结 + 下一步</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> 用一句话描述 REINFORCE、A2C、off-policy AC、DPG 各自的核心改动。</summary>
+    <p><strong>A.</strong> <em>REINFORCE</em>:用 MC 回报 \(G_t\) 估 \(q_\pi\),策略梯度的起点(无偏高方差)。<em>A2C</em>:用 TD 误差 \(\delta_t \approx q-v\) 替代 \(G_t\),一个 critic 网络估 \(v\),方差大幅降低。<em>Off-policy AC</em>:乘以 IS 权重 \(\rho = \pi/\beta\),用旧数据的样本训练当前策略。<em>DPG/DDPG</em>:策略改为确定性 \(\mu(s;\theta)\),梯度通过链式法则 \(\nabla_\theta\mu \cdot \nabla_a q\) 计算,适合连续动作空间。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> 学完本书之后,想深入深度 RL 应该去看哪些方向?</summary>
+    <p><strong>A.</strong> <em>On-policy 方向</em>:PPO(Schulman 2017) — REINFORCE + IS clip + GAE,稳定高效;<em>Off-policy 连续控制</em>:SAC(Haarnoja 2018) — 最大熵 AC,探索性强;TD3(Fujimoto 2018) — DDPG + 双 critic,解决过估计。<em>大规模并行</em>:IMPALA(Espeholt 2018) — 分布式 off-policy AC,数百 worker。<em>多智能体</em>:MADDPG、MAPPO — AC 在多 agent 设定下的扩展。<em>模型基础</em>:Dreamer、MuZero — 用世界模型规划,sample efficiency 大幅提升。所有这些的数学根,都在本书 Ch.1-10 里。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> 从 Ch.1 的状态/动作/策略,到 Ch.10 的 DDPG,RL 的核心逻辑链是什么?</summary>
+    <p><strong>A.</strong> <em>一条主线</em>:定义问题(Ch.1:MDP)→ 给出最优解的性质(Ch.2-3:贝尔曼方程/BOE)→ 有模型时求解(Ch.4:VI/PI)→ 无模型时用数据估(Ch.5 MC + Ch.7 TD)→ 状态空间大时参数化(Ch.6 SGD + Ch.8 FA/DQN)→ 直接优化策略(Ch.9 PG)→ 同时优化策略和值函数(Ch.10 AC)。每一章都在解决前一章的局限:有模型→无模型→表格→参数化→值函数→策略→两者结合。这条逻辑链是本书的骨架。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=54&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=54" target="_blank">YouTube 备链</a></p>
+
+  <h3>全书结语</h3>
+  <p>回望 Ch.1:那时候我们刚刚认识"状态"和"动作"这两个词。Ch.1-L1 的第一段话是——"你应该玩过类似走迷宫的游戏……直觉只能让你说小人往右走是因为右边是终点,却没办法让一台机器自动学会这件事"。现在回看这句话,你已经知道怎么让机器学会了:用贝尔曼方程定义价值,用 TD 误差在线学习,用策略梯度直接优化决策,用 critic 精确估计每个动作的优势。</p>
+  <p>Ch.4 的值迭代给了第一个"有模型"的解法。Ch.7 的 TD 让学习从离线变成在线。Ch.8 的 DQN 让 Atari 游戏成为可能。Ch.9 的策略梯度打开了策略空间的大门。Ch.10 的 actor-critic 把 value-based 与 policy-based 合为一体——这是现代深度 RL 的心脏。</p>
+  <p><strong>下一步的三个方向</strong>:<em>(1) 深度 RL 实践</em>——PPO(最常用)、SAC(连续控制)、TD3(DDPG 改进版),代码实现从 stable-baselines3 或 CleanRL 开始;<em>(2) 多智能体 RL</em>——MADDPG、QMIX、MAPPO,多个 AC agent 同时学习,博弈论与 RL 的交汇;<em>(3) 模型基础 RL</em>——Dreamer(世界模型)、MuZero(无模型表示 + 规划),把环境模型与 AC 融合,样本效率大幅提升。这些都是本书逻辑链的自然延伸。</p>
+  <p style="margin-top: 2em; font-weight: bold; color: var(--color-primary);">感谢一路读到这里。从第一个状态到最后一个 actor-critic,你已经走完了强化学习的数学基础。这不是终点,而是一个扎实的起跑线。</p>
+
+  <!-- Bottom nav -->
+  <nav class="lesson-nav">
+    <a href="lesson-04.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="../appendix/index.html">Next → Appendix</a>
+  </nav>
+</div>
+
+<!-- Components -->
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>

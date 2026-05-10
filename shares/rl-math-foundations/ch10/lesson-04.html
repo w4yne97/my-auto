@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>Actor-Critic 方法(P4):确定性 Actor-Critic — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch10-l04" data-est-minutes="30">
+<div class="container">
+
+  <!-- Top nav -->
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.10 / Lesson 4</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <!-- Header -->
+  <p class="kicker">Bilibili #53 · YouTube #53 · Book §10.4 pp. 227-235</p>
+  <h1>L4: Actor-Critic Methods (P4 — Deterministic Actor-Critic)<small style="color:var(--color-muted); font-weight:400;">  (Actor-Critic 方法(P4):确定性 Actor-Critic)</small></h1>
+
+  <!-- §1 Why this lesson -->
+  <h2>§1 Why this lesson</h2>
+  <p>L1-L3 的 actor 都是<em>随机</em>策略 \(\pi(a|s;\theta)\)——输出的是动作的概率分布,每次执行会有随机性。对于离散动作空间(上下左右),这很自然。但在<em>连续动作空间</em>下——比如机器人关节的力矩(实数)、飞行器的油门(0到1之间的连续值)——随机策略有两个问题:<em>(1)</em> DQN 的 \(\arg\max_a Q(s,a)\) 在连续空间上没法直接算(无限个动作);<em>(2)</em> 随机策略引入的额外噪声在精细控制任务中会很有害。</p>
+  <p>本节(教材 §10.4,pp. 227-235)引入 <strong>确定性策略(deterministic policy)</strong> \(a = \mu(s;\theta)\):策略直接输出一个确定的动作值,是从状态空间 \(\mathcal{S}\) 到动作空间 \(\mathcal{A}\) 的映射。这催生了 <strong>DPG(Deterministic Policy Gradient)</strong> 算法——Silver 等 2014 年的工作。结合 Ch.8 的 target network 和 replay buffer 技巧,就得到 <strong>DDPG(Deep Deterministic Policy Gradient)</strong>,是连续控制领域的奠基算法。</p>
+  <p>理解 DPG 的关键是 Theorem 10.2:确定性策略的梯度公式与随机策略的 PG 定理形式不同——前者对动作求导,不涉及动作的随机性。这使得确定性策略梯度是 off-policy 的,可以配合任意 behavior policy 使用。</p>
+
+  <!-- §2 核心定义 -->
+  <h2>§2 核心定义</h2>
+  <ul>
+    <li><strong>确定性策略(deterministic policy)</strong>:\(a = \mu(s;\theta)\),其中 \(\mu: \mathcal{S} \to \mathcal{A}\)。给定状态 \(s\),输出唯一确定的动作 \(a\),而不是概率分布。可以用神经网络实现:输入状态 \(s\),输出连续动作向量。随机性完全来自 behavior policy(探索时加噪声)。</li>
+    <li><strong>DPG 定理(教材 Theorem 10.2)</strong>:确定性策略下,目标函数 \(J(\theta) = \mathbb{E}_{S\sim\eta}[v_\mu(S)]\) 的梯度为 \(\nabla_\theta J(\theta) = \mathbb{E}_{S\sim\eta}[\nabla_\theta\mu(S) \cdot (\nabla_a q_\mu(S,a))|_{a=\mu(S)}]\)。关键:梯度里没有对动作 \(A\) 的期望,因此不需要按某策略采样动作——天然 off-policy。</li>
+    <li><strong>\(\nabla_a q_\mu(s,a)|_{a=\mu(s)}\)(Q 对 a 的梯度)</strong>:这是"改变动作 \(a\) 的方向,使 \(q(s,a)\) 增大最快"的方向。把它与 \(\nabla_\theta\mu(s)\)(动作对参数的梯度)通过链式法则复合,就得到"改变 \(\theta\) 的方向,使 actor 输出的动作价值增大"的梯度。</li>
+    <li><strong>DDPG(Deep DPG)</strong>:DPG + 神经网络函数近似(Ch.8) + target network(Ch.8 DQN trick) + experience replay(Ch.8 DQN trick)。Target network 用来稳定 critic 的 TD 目标;\(\tilde\theta, \tilde w\) 是慢速更新的 target 参数(Polyak averaging:\(\tilde\theta \leftarrow \tau\theta + (1-\tau)\tilde\theta\))。</li>
+    <li><strong>探索策略</strong>:确定性策略本身不探索(每次给同一个动作)。DDPG 用 behavior policy \(\beta = \mu + \mathcal{N}\)(Ornstein-Uhlenbeck 噪声或高斯噪声)来探索。采样用 \(\beta\) 但目标 policy 是 \(\mu\),这是 DDPG off-policy 性质的来源。</li>
+  </ul>
+
+  <!-- §3 关键公式 + 推导 -->
+  <h2>§3 关键公式 + 推导</h2>
+
+  <p><strong>DPG 定理核心公式(教材 (10.14))</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\nabla_\\theta J(\\theta) = \\mathbb{E}_{S\\sim\\eta}\\!\\Big[\\nabla_\\theta\\mu(S;\\theta) \\cdot \\big(\\nabla_a q_\\mu(S,a)\\big)\\big|_{a=\\mu(S;\\theta)}\\Big]",
+    "annotations": [
+      {"key": "no_action_expectation", "label": "期望只对 S,不对 A — off-policy!", "description": "随机策略 PG 定理有 E_{S,A~π}[...],动作 A 按 π 采。确定性策略的 μ 直接给出 a = μ(s),不需要对 A 求期望,因此不需要 π 来采样 A——可以用任意 behavior policy。"},
+      {"key": "grad_mu", "label": "∇_θ μ(S;θ) — actor 对参数的 Jacobian", "description": "μ(s;θ) 是从 s 到 a 的映射,∇_θμ 是输出动作随参数 θ 变化的速率。NN 时就是反向传播到输入层前的梯度。"},
+      {"key": "grad_a_q", "label": "∇_a q(S,a)|_{a=μ(S)} — Q 对动作的梯度", "description": "q(s,a) 对连续动作 a 求偏导,然后在 a = μ(s) 处取值。这给出了'往哪个动作方向走能让 Q 增加'。链式法则把它和 ∇_θμ 复合,就得到'怎么改 θ 让 μ(s) 输出更好的动作'。"}
+    ]
+  }'></div>
+
+  <p><strong>DDPG Actor 更新(随机梯度版本)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\theta_{t+1} = \\theta_t + \\alpha_\\theta \\nabla_\\theta\\mu(s_t;\\theta_t) \\cdot \\big(\\nabla_a \\hat{q}(s_t,a;w_t)\\big)\\big|_{a=\\mu(s_t;\\theta_t)}",
+    "annotations": [
+      {"key": "critic_grad", "label": "∇_a q̂(s,a;w)|_{a=μ(s)} — critic 提供方向", "description": "Critic 网络 q̂(s,a;w) 对连续动作 a 求梯度,告诉 actor 当前动作该往哪个方向调整才能增加 Q 值。这是 DPG 和随机 PG 最大的结构差异。"},
+      {"key": "chain_rule", "label": "链式法则:∂Q/∂θ = (∂Q/∂a)(∂a/∂θ)", "description": "Q(s,μ(s;θ)) 对 θ 的梯度,通过链式法则分解为 Q 对 a 的梯度乘以 a 对 θ 的梯度(即 ∇_θμ)。这是 DDPG actor 更新的数学本质。"}
+    ]
+  }'></div>
+
+  <p>推导步骤:</p>
+  <div class="callout">
+    <strong>Step 1.</strong> <em>为什么连续动作不能用 argmax:</em>离散动作可以穷举 \(\arg\max_a Q(s,a)\);连续动作 \(\mathcal{A} = \mathbb{R}^d\) 穷举不可能。DPG 的思路:既然 actor \(\mu_\theta(s)\) 是参数化的,可以对 \(\theta\) 求梯度,用梯度上升让 \(Q(s,\mu_\theta(s))\) 增大——把离散的穷举换成连续的梯度优化。
+  </div>
+  <div class="callout">
+    <strong>Step 2.</strong> <em>Critic 为什么也需要对 a 可微:</em>\(\nabla_a q(s,a)|_{a=\mu(s)}\) 要求 critic 网络对<em>动作输入</em> 可微。在 DDPG 中,critic 接受 \((s, a)\) 两个输入,输出标量 \(Q(s,a)\)。反向传播时对 \(a\) 求梯度(不是对 \(w\)),这个梯度再传给 actor 更新 \(\theta\)。这是一个"actor-through-critic"的双重反向传播。
+  </div>
+  <div class="callout">
+    <strong>Step 3.</strong> <em>Target network 为什么必要:</em>DDPG 的 critic TD 目标 \(y_t = r_{t+1} + \gamma q(s_{t+1}, \mu(s_{t+1}); w)\) 中,\(q\) 是被更新的网络自身。若 \(w\) 每步都变,目标 \(y_t\) 每步也变,形成"追着移动的靶子"的不稳定性(Ch.8 DQN 问题)。Target network \(\tilde{w}\) 慢速更新(Polyak averaging),提供稳定的 TD 目标。
+  </div>
+
+  <!-- §4 iteration-stepper -->
+  <h2>§4 DDPG 算法步骤拆解</h2>
+  <p>用 iteration-stepper 展示 DDPG 一个更新循环的各步骤,理解 actor/critic/target-network 的协作关系:</p>
+
+  <div data-component="iteration-stepper" data-config='{
+    "steps": [
+      {
+        "title": "Step 0: 初始化四个网络",
+        "description": "Actor μ(s;θ) 和 Critic q(s,a;w) 各有一个主网络和一个 target 网络。Target 参数初始化为 θ̃ = θ, w̃ = w。Reply buffer B 初始化为空。",
+        "formula": "\\theta, w, \\tilde\\theta = \\theta, \\tilde w = w, \\quad B = \\emptyset"
+      },
+      {
+        "title": "Step 1: 用 Behavior policy 采样",
+        "description": "Behavior policy = μ(s;θ) + 探索噪声 ε。执行 aₜ,观察 rₜ₊₁, sₜ₊₁,存入 replay buffer B。噪声使 μ 探索周围动作空间,不局限在确定性输出。",
+        "formula": "a_t = \\mu(s_t;\\theta) + \\varepsilon_t,\\quad B \\leftarrow B \\cup \\{(s_t, a_t, r_{t+1}, s_{t+1})\\}"
+      },
+      {
+        "title": "Step 2: 从 Buffer 采 mini-batch",
+        "description": "随机从 B 采一批 (s, a, r, s') 样本。Off-policy 特性:这些样本由各时期的 behavior policy 生成,不要求当前策略 μ 产生。",
+        "formula": "\\{(s_i, a_i, r_i, s_i&#39;)\\}_{i=1}^{N} \\sim B"
+      },
+      {
+        "title": "Step 3: 计算 Critic 的 TD 目标",
+        "description": "用 target network 计算稳定的 TD 目标。θ̃, w̃ 更新慢(Polyak),不随每步梯度大幅波动。这解决了'追移动靶'的不稳定性。",
+        "formula": "y_i = r_i + \\gamma \\hat{q}(s_i&#39;, \\mu(s_i&#39;;\\tilde\\theta); \\tilde w)"
+      },
+      {
+        "title": "Step 4: 更新 Critic(最小化 TD 误差)",
+        "description": "对 Critic 参数 w 做梯度下降,最小化 (y - q̂)²。此步骤与 DQN 的 critic 更新完全类似,区别是动作输入是连续的 a。",
+        "formula": "w \\leftarrow w - \\alpha_w \\nabla_w \\frac{1}{N}\\sum_i (y_i - \\hat{q}(s_i, a_i; w))^2"
+      },
+      {
+        "title": "Step 5: 更新 Actor(通过 Critic 梯度)",
+        "description": "链式法则:对 Actor 参数 θ 做梯度上升。梯度 = Q 对 a 的梯度(由 Critic 提供) × a 对 θ 的梯度(由 Actor 提供)。这是 DPG 的核心。",
+        "formula": "\\theta \\leftarrow \\theta + \\frac{\\alpha_\\theta}{N}\\sum_i \\nabla_\\theta\\mu(s_i;\\theta) \\cdot (\\nabla_a \\hat{q}(s_i,a;w))|_{a=\\mu(s_i;\\theta)}"
+      },
+      {
+        "title": "Step 6: 慢速更新 Target Networks",
+        "description": "Polyak averaging:θ̃ 和 w̃ 以很小的步长 τ(通常 0.005)向主网络靠近。慢速更新让 TD 目标稳定,是 DDPG 能收敛的关键工程技巧。",
+        "formula": "\\tilde\\theta \\leftarrow \\tau\\theta + (1-\\tau)\\tilde\\theta,\\quad \\tilde w \\leftarrow \\tau w + (1-\\tau)\\tilde w"
+      }
+    ]
+  }'></div>
+
+  <!-- §5 常见误解 -->
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>确定性策略因为"没有随机性"所以不能探索,必须一直用随机策略。<br>
+    <strong>实际上:</strong>确定性策略本身不探索,但探索由 <em>behavior policy</em> 负责(在 \(\mu(s;\theta)\) 上加噪声)。这样做的好处是:<em>目标策略</em> \(\mu\) 是确定性的(适合连续控制的精确输出),而<em>探索策略</em> \(\beta = \mu + \mathcal{N}\) 是随机的(用来发现更好的动作)。两者分离,互不干扰。<br>
+    <strong>因为:</strong>DPG 的梯度公式是 off-policy 的——\(\mathbb{E}_{S\sim\eta}[\nabla_\theta\mu \cdot \nabla_a q]|_{a=\mu}\) 不涉及动作采样分布,任何覆盖到 \((s,a)\) 空间的 behavior policy 都可以用。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>DDPG 只是在连续动作空间用了 DQN 的方法,本质是值函数方法。<br>
+    <strong>实际上:</strong>DDPG 本质是 <em>策略梯度方法</em>,只是策略是确定性的。Actor 的更新公式 \(\theta \leftarrow \theta + \alpha_\theta \nabla_\theta\mu \cdot \nabla_a q\) 是 DPG 定理(Theorem 10.2)的随机梯度版本——仍然是在最大化 \(J(\theta) = \mathbb{E}[v_\mu(S)]\)。借用了 DQN 的 target network 和 replay buffer 是<em>工程技巧</em>,不是算法的本质。<br>
+    <strong>因为:</strong>值函数方法(如 DQN)通过 \(\arg\max_a Q\) 隐式推导出贪心策略;DDPG 显式维护一个策略网络 \(\mu_\theta\) 并通过策略梯度优化它。这是 actor-critic 的特征:actor 和 critic 同时存在且各司其职。
+  </div>
+
+  <!-- §6 自检 + 视频 + teaser -->
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> 写出 DPG 定理的梯度公式,并解释它为什么是 off-policy 的。</summary>
+    <p><strong>A.</strong> \(\nabla_\theta J(\theta) = \mathbb{E}_{S\sim\eta}[\nabla_\theta\mu(S;\theta) \cdot (\nabla_a q_\mu(S,a))|_{a=\mu(S;\theta)}]\)。Off-policy 的原因:期望只对状态 \(S\) 求,不对动作 \(A\) 求。随机策略 PG 定理需要 \(A \sim \pi(\theta)\)(要求 behavior policy 就是 target policy,on-policy);确定性策略 \(\mu(s)\) 直接给出确定动作,不涉及动作采样分布,因此 behavior policy 可以是任意策略。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> DDPG 中 target network 的作用是什么?为什么用 Polyak averaging 而不是每隔 N 步硬拷贝?</summary>
+    <p><strong>A.</strong> Target network 提供稳定的 TD 目标:\(y = r + \gamma q(s', \mu(s';\tilde\theta); \tilde w)\)。若用主网络自身计算目标,每步 \(w\) 更新都改变目标,形成"追移动靶"的不稳定循环。<em>Polyak averaging</em>(\(\tilde w \leftarrow \tau w + (1-\tau)\tilde w\),\(\tau \approx 0.005\))比"硬拷贝每 N 步"平滑:硬拷贝时 target 会突然跳变,在跳变前后 TD 目标不一致;Polyak 方式每步微调,目标变化平稳,训练更稳定。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> 为什么 DPG 的 critic 网络必须对动作 \(a\) 可微?</summary>
+    <p><strong>A.</strong> Actor 更新公式 \(\nabla_\theta\mu \cdot (\nabla_a q)|_{a=\mu}\) 需要计算 critic \(\hat{q}(s,a;w)\) 对动作输入 \(a\) 的梯度——即 \(\partial \hat{q}/\partial a\)。若 critic 对 \(a\) 不可微(比如是离散查表形式),这个梯度就不存在,整个 DPG actor 更新就无法实现。因此 DDPG 中 critic 必须是以 \((s, a)\) 为输入的连续可微神经网络,且反向传播时需要一路传回到 \(a\) 的输入层。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=53&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=53" target="_blank">YouTube 备链</a></p>
+
+  <h3>下一节预告</h3>
+  <p>四节下来,我们走完了 AC 家族的全部成员:QAC → A2C → Off-policy AC → DPG/DDPG。最后一节(L5)是本书的总结篇——把 Ch.1 到 Ch.10 的故事串成一根完整的逻辑链,给出 AC 家族谱系图,指向 PPO、SAC、多智能体 RL 等下一步方向。全书的最后一课。</p>
+
+  <!-- Bottom nav -->
+  <nav class="lesson-nav">
+    <a href="lesson-03.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-05.html">Next →</a>
+  </nav>
+</div>
+
+<!-- Components -->
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>

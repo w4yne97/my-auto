@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>Ch.7 时序差分方法 — RL Math Foundations</title>
+<link rel="stylesheet" href="../_assets/css/style.css">
+</head>
+<body data-chapter-id="ch07">
+<div class="container">
+
+  <nav class="lesson-nav">
+    <a href="../index.html">← Master Index</a>
+    <span>Ch.7 of 10</span>
+  </nav>
+
+  <p class="kicker">Chapter 7</p>
+  <h1>Temporal-Difference Methods <small style="font-weight:400; color:var(--color-muted);">(时序差分方法)</small></h1>
+
+  <p>把第 6 章的 SA 工具应用在 Bellman 方程上,得到 TD、Sarsa、Q-learning 这一族算法。本章是经典 RL 的高峰,也是后续函数近似(第 8 章)的出发点。</p>
+
+  <h2>本章 lesson 列表</h2>
+  <ol id="lesson-list"></ol>
+
+  <nav class="lesson-nav">
+    <a href="../ch06/index.html">← Prev Chapter</a>
+    <a href="../index.html">Master Index</a>
+    <a href="../ch08/index.html">Next Chapter →</a>
+  </nav>
+</div>
+
+<script src="../_assets/js/progress.js"></script>
+<script>
+(async () => {
+  const r = await fetch('../_data/lessons.json');
+  const data = await r.json();
+  const ch = data.chapters.find(c => c.id === document.body.dataset.chapterId);
+  const list = document.getElementById('lesson-list');
+  ch.lessons.forEach(l => {
+    const li = document.createElement('li');
+    const a = document.createElement('a');
+    a.href = `lesson-${String(l.lesson_number).padStart(2,'0')}.html`;
+    a.textContent = `${l.title_zh} (${l.title_en})`;
+    li.appendChild(a);
+    if (Progress.isComplete(l.id)) {
+      const tag = document.createElement('span');
+      tag.textContent = ' ✓';
+      tag.style.color = 'var(--color-success)';
+      li.appendChild(tag);
+    }
+    const meta = document.createElement('div');
+    meta.style.fontSize = '0.85rem';
+    meta.style.color = '#666';
+    meta.textContent = `${l.teaser} · ${l.est_minutes} 分钟 · 书 §${l.book_section}`;
+    li.appendChild(meta);
+    list.appendChild(li);
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>时序差分(P7):Q-learning 伪代码与 off-policy 范例 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch07-l07" data-est-minutes="20">
+<div class="container">
+
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.7 / Lesson 7</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <p class="kicker">Bilibili #35 · YouTube #35 · Book §7.4.3-7.4.4 pp. 144-145</p>
+  <h1>L7: Q-learning Pseudocode &amp; Off-policy Demo<small style="color:var(--color-muted); font-weight:400;">  (20 行 + cliff-walking 经典)</small></h1>
+
+  <h2>§1 Why this lesson</h2>
+  <p>L6 给出 Q-learning 的<em>更新公式</em> 与<em>off-policy</em> 哲学。本节(教材 §7.4.3-7.4.4)<strong>落成 20 行伪代码</strong>:同时呈现"<em>on-policy 版</em>"(behavior = target = \(\epsilon\)-greedy(Q))与"<em>off-policy 版</em>"(behavior = 任意,target = greedy(Q));用<strong>cliff-walking</strong> 经典例展示<em>"<em>同一 behavior,Q-learning 与 Sarsa 学到不同 policy</em>"</em>。这是 on/off-policy 哲学差异在<em>具体 policy 形态上</em> 的最直观体现。</p>
+  <p>核心 takeaway:<strong>(a)</strong> Q-learning 的 \(\epsilon\)-greedy 版伪代码,与 Sarsa 只差<em>一行 \(\max\) 替换 sampled \(a_{t+1}\)</em>。<strong>(b)</strong> off-policy 完全形态:behavior 可<em>任意</em>(包括纯随机或 demonstrations),只要每 \((s,a)\) 无穷访问。<strong>(c)</strong> cliff-walking demo:Q-learning 学贴 cliff 短路、Sarsa 学绕 cliff 安全路 ⇒ <em>"<em>对当前 policy 评估</em> vs <em>对最优 policy 评估</em>"</em> 的<em>policy-level 后果</em>。</p>
+
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>Q-learning(\(\epsilon\)-greedy 版,教材 §7.4.3)</strong>:behavior = \(\epsilon\)-greedy(Q),target = greedy(Q)。两者共用同一 \(Q\),区别只在<em>"<em>采数据时按 \(\epsilon\)-greedy 选 \(a_t\)</em>" vs "<em>更新公式中 target 用 \(\max_a\)</em>"</em>。</li>
+    <li><strong>Q-learning(完全 off-policy 版,教材 §7.4.4)</strong>:behavior 可任意 \(b(\cdot|s)\),target 仍 greedy(Q)。允许从<em>历史 buffer</em>、<em>demonstrations</em>、<em>探索 policy</em> 学。每 \((s,a)\) 必须被 \(b\) 无穷访问。</li>
+    <li><strong>关键不变量</strong>:<em>无论 behavior 是什么</em>,Q-learning 更新公式都是 \(Q(s_t, a_t) \leftarrow Q(s_t, a_t) + \alpha[r_{t+1} + \gamma \max_a Q(s_{t+1}, a) - Q(s_t, a_t)]\)。"<em>max</em>" 让 target 不依赖 behavior ⇒ 同一更新公式覆盖两版。</li>
+    <li><strong>cliff-walking 设置(教材 Example 7.2)</strong>:5×5 grid,target 在右下,"<em>cliff</em>" 在底部一排(踩到 \(r=-100\) 重置)。\(\epsilon=0.1\)、\(\alpha=0.5\)、\(\gamma=1\)。</li>
+    <li><strong>Q-learning 学到的 policy</strong>:贴 cliff 顶最短路 —— target 是 greedy,假设之后总最优,不计 \(\epsilon\) 误踩 cliff 的代价 ⇒ 但<em>实际跑</em>(用 \(\epsilon\)-greedy)时可能掉 cliff,episode return 反而低。</li>
+    <li><strong>Sarsa 学到的 policy</strong>:绕开 cliff 顶,走中间安全路 —— target 是 sampled \(a_{t+1}\),包含 \(\epsilon\) 探索动作 ⇒ "<em>万一探索误入 cliff</em>" 的 \(-100\) 计入 \(Q\) ⇒ \(Q\) 把 cliff 顶状态值降低,policy 自动绕远。</li>
+  </ul>
+
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节核心是<strong>Q-learning 伪代码</strong>:把 L6 公式落成<em>每 episode 怎么循环</em>。</p>
+
+  <p><strong>公式:Q-learning(off-policy 版)伪代码骨架</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\textbf{Init: } Q(s,a)=0\\ \\forall s,a;\\ \\textbf{Repeat} \\textbf{ each episode: } s = s_0;\\ \\textbf{Repeat} \\textbf{ each step: } a \\sim b(\\cdot|s);\\ \\text{exec}\\ a;\\ \\text{obs}\\ r, s&#39;;\\ Q(s,a) \\leftarrow Q(s,a) + \\alpha[r + \\gamma \\max_{a&#39;} Q(s&#39;, a&#39;) - Q(s,a)];\\ s := s&#39;;\\ \\textbf{until terminal}",
+    "annotations": [
+      {"key": "init", "label": "初始化 Q", "description": "对所有 (s,a) 设 Q=0(或随机)。terminal 状态 Q ≡ 0(规约)。"},
+      {"key": "behavior", "label": "behavior policy b 采 a", "description": "a ∼ b(·|s)。b 可以是 ε-greedy(Q)(on/off 都可)或纯随机或 demonstrations。&#39;允许任意 b&#39; 是 off-policy 的核心自由度。"},
+      {"key": "step", "label": "环境一步", "description": "执行 a,环境返回 r 与 s&#39;。这是&#39;唯一&#39; 与真实世界交互的步骤。"},
+      {"key": "update", "label": "Q-learning 更新", "description": "δ = r + γ max_a&#39; Q(s&#39;, a&#39;) − Q(s,a);Q(s,a) ← Q(s,a) + αδ。&#39;max 而非 sampled&#39; 是与 Sarsa 的唯一区别。注意:此处不需要 a&#39;,所以伪代码比 Sarsa 短一行。"},
+      {"key": "advance", "label": "推进 s := s&#39;", "description": "Sarsa 还要 a := a&#39;;Q-learning 不需要,因下一步 a 重新由 b 采。&#39;不要 a&#39;&#39; 让 Q-learning 比 Sarsa 在数据格式上少一个槽。"},
+      {"key": "convergence_cond", "label": "收敛条件", "description": "α 步长两条件 + 每 (s,a) 被 b 无穷访问 + reward 有界 ⇒ Q → q* a.s.(Watkins-Dayan 1992)。&#39;b 必须充分探索&#39; 是必要条件。"}
+    ]
+  }'></div>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>Q-learning 伪代码与 Sarsa 的<em>对比 diff</em></em>:Sarsa 在每步开始时<em>需要</em> 提前选 \(a\);Q-learning 不需要(可以"<em>看到 \(s&#39;\) 后再决定下一动作</em>")。Sarsa update 用 \(Q(s&#39;, a&#39;_{\text{next}})\),需要预选;Q-learning update 用 \(\max_a Q(s&#39;, a)\),无需预选。<em>"<em>需不需要预选下一动作</em>"</em> 决定数据格式 4 元组(\((s,a,r,s&#39;)\),Q-learning)还是 5 元组(\((s,a,r,s&#39;,a&#39;)\),Sarsa),这<em>呼应 L4 命名溯源</em>。
+  </div>
+
+  <div class="callout">
+    <strong>Step 2.</strong> <em>off-policy 完全形态:behavior 可<em>任意</em></em>。最常见三种 behavior:<strong>(i)</strong> \(\epsilon\)-greedy(Q):与 target 共享 \(Q\),实操默认。<strong>(ii)</strong> 纯随机均匀策略:覆盖性最好,但样本效率最差。<strong>(iii)</strong> demonstration 数据 + 学习 policy 混合:用人类示范启动 + 自学。Ch.8 DQN 引入 replay buffer 让"<em>过去自己的 policy 当 behavior</em>"。
+  </div>
+
+  <div class="callout">
+    <strong>Step 3.</strong> <em>cliff-walking demo 的<em>"<em>评估的是哪个 policy</em>"</em> 解读</em>。Q-learning 收敛 \(Q \to q^*\),即<em>"<em>纯 greedy(Q*) 这一无探索 policy</em>" 的 \(q\)</em>。这条 policy 走最短路,贴 cliff 顶。但<em>实际运行</em> 时(\(\epsilon\)-greedy),会有 10% 的步是<em>随机</em>,可能掉 cliff —— 实际 episode return 比 \(q^*\) 估的低。Sarsa 收敛 \(Q \to q_\pi\),即<em>"<em>当前 \(\epsilon\)-greedy 这一带探索 policy</em>" 的 \(q\)</em>。这条 policy 把"<em>误入 cliff</em>" 计入,自动绕远 ⇒ 实际 episode return 高。<em>所以"<em>哪个更好</em>" 取决于"<em>评估值用在哪</em>"</em>:若实际部署用 greedy(Q)(无探索),Q-learning 优;若仍带探索,Sarsa 优。
+  </div>
+
+  <h2>§4 Grid-world: cliff-walking 经典对比</h2>
+  <p>5×5 grid,target=(3,2),"<em>cliff</em>" forbidden = {(1,1),(2,1),(2,2),(1,3),(3,3)}(踩到 \(r=-10\),回起点)。\(\epsilon=0.1\)。下图是 Sarsa 收敛后的<em>安全</em> policy:</p>
+  <div data-component="gridworld" id="gw-ch07-l07" data-config='{
+    "rows": 5, "cols": 5,
+    "target": [3, 2],
+    "forbidden": [[1,1],[2,1],[2,2],[1,3],[3,3]],
+    "policy": [
+      ["↓","↓","↓","←","←"],
+      ["↓","","↓","","←"],
+      ["↓","","","↓","←"],
+      ["→","→","","","←"],
+      ["↑","↑","↑","↑","↑"]
+    ],
+    "trajectory": [[0,0],[1,0],[2,0],[3,0],[3,1],[3,2]]
+  }'></div>
+
+  <p><strong>iteration-stepper:cliff-walking 训练动力学(简化)</strong></p>
+  <div data-component="iteration-stepper" data-config='{
+    "steps": [
+      {
+        "label": "Episode 1: behavior=ε-greedy(Q),Q 全 0,基本随机走",
+        "note": "agent 起步乱走;两算法收的样本类似:多次踩 cliff、几次到 target。但更新规则不同。"
+      },
+      {
+        "label": "Q-learning: 每步用 max_a Q(s&#39;,a) 当 target",
+        "note": "对(0,0)→(1,0) 这步,无论 behavior 怎么选 a,target 都用 max(假设之后 greedy)。所以 cliff 顶状态 Q 慢慢学到&#39;若 greedy 之后,值高&#39;。"
+      },
+      {
+        "label": "Sarsa: 每步用 Q(s&#39;,a&#39;_sampled) 当 target",
+        "note": "若 a&#39; 是 ε 探索导致的&#39;乱动&#39; 进 cliff,target 含 -10 reward ⇒ cliff 顶状态 Q 大幅下降。&#39;探索代价&#39; 被记账。"
+      },
+      {
+        "label": "Episode ~200: 两 Q 表分化",
+        "note": "Q-learning 表中 cliff 顶状态值高(假设 greedy 之后)。Sarsa 表中 cliff 顶值低(因 ε 探索经常掉 cliff)。"
+      },
+      {
+        "label": "推 greedy(Q):两条不同 policy",
+        "note": "Q-learning greedy(Q) 走 cliff 顶最短路。Sarsa greedy(Q) 绕远走中间路。&#39;同一 behavior 数据,两种 policy&#39;。"
+      },
+      {
+        "label": "实际跑(仍带 ε 探索)的 episode return",
+        "note": "Q-learning 走的最短路 + ε 偶尔掉 cliff ⇒ return 更低、波动更大。Sarsa 安全路 + ε 不易掉 ⇒ return 更高、稳定。&#39;若部署用纯 greedy(无 ε)&#39;,Q-learning 更优。"
+      }
+    ]
+  }'></div>
+
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"Q-learning 既然学 \(q^*\),实际跑起来一定胜过 Sarsa。"<br>
+    <strong>实际上:</strong><strong>取决于<em>"<em>实际 deploy 时是否仍带探索</em>"</em></strong>。Q-learning 学到的 \(q^*\) 假设 deploy 时<em>纯 greedy</em>。若 deploy 时仍 \(\epsilon\)-greedy(在线学习),"<em>cliff 顶最短路 + 偶尔掉</em>" 实际 return 比 Sarsa 低。Sarsa 学 \(q_\pi\) (含 \(\epsilon\) 的当前 policy),自动把"<em>探索代价</em>" 计入 ⇒ deploy 时仍 \(\epsilon\)-greedy 表现更好。<br>
+    <strong>因为:</strong>"<em>评估 \(\pi\) 的 \(q_\pi\)</em>" 与"<em>评估 \(\pi^*\) 的 \(q^*\)</em>" 各自匹配不同 deploy 场景。教科书"<em>Q-learning 学最优</em>" 说的是<em>渐近 + 纯 greedy deploy</em> 假设。在线学习场景下 Sarsa 的"<em>实事求是</em>" 反而更稳健 —— 这是 RL 工程实操常忽视的细节。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"Q-learning 完全 off-policy 版可以用<em>任意</em> behavior,所以可以随便采数据。"<br>
+    <strong>实际上:</strong><strong>必须保证<em>每 \((s,a)\) 被 behavior 无穷访问</em></strong>。若某 \((s,a)\) 永远不被 \(b\) 访问 ⇒ 该 \(Q\) 永远不更新 ⇒ \(q^*\) 估错。这要求 \(b\) <em>覆盖</em> 整个 \((s,a)\) 空间。纯随机 \(b\) 满足覆盖但样本效率低;\(\epsilon\)-greedy(Q) 满足覆盖且效率好。Ch.8 DQN 用 replay buffer 持续混合多种历史 behavior,自然覆盖。<br>
+    <strong>因为:</strong>"<em>off-policy</em>" 不等于"<em>免覆盖</em>"。RM 第二条件(每分量更新无穷次)在 RL 中等价于"<em>每 \((s,a)\) 被无穷采到</em>" —— 这是<em>结构</em> 要求,不是工程细节。L3 Theorem 7.1 与 L7 Watkins-Dayan 1992 都明确假设这点。
+  </div>
+
+  <h2>§6 自检 + 视频 + 下一节</h2>
+  <details>
+    <summary><strong>Q1.</strong> 写出 Q-learning 与 Sarsa 伪代码的<em>diff</em>:它们有几行不同?</summary>
+    <p><strong>A.</strong> 两行不同。<strong>(i)</strong> 数据格式:Sarsa 用 5 元组,每步开始要预选 \(a\)、收 \((s,a,r,s&#39;,a&#39;)\) 后才能更新;Q-learning 用 4 元组,看到 \(s&#39;\) 直接用 \(\max\)。<strong>(ii)</strong> update target:Sarsa 用 \(Q(s&#39;, a&#39;)\)(sampled);Q-learning 用 \(\max_a Q(s&#39;, a)\)。其余步骤(初始化、behavior 采样、环境一步、推进、终止判断)<em>完全相同</em>。这条 diff 隔开 on/off-policy 两条 RL 主线。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> cliff-walking 中,Q-learning 与 Sarsa 学到不同 policy 的根本原因是什么?</summary>
+    <p><strong>A.</strong> 学的<em>对象不同</em>。Q-learning 学 \(q^*\)(纯 greedy policy 的 \(q\)),不计 \(\epsilon\) 探索代价 ⇒ 推 greedy(Q) 走贴 cliff 短路。Sarsa 学 \(q_\pi\)(当前 \(\epsilon\)-greedy 的 \(q\)),把"<em>万一 \(\epsilon\) 误入 cliff</em>" 计入 ⇒ cliff 顶状态值降低 ⇒ greedy(Q) 绕远走安全路。<em>对应不同 Bellman 算子的固定点</em>:\(T^*\)(\(q^*\))vs \(T_\pi\)(\(q_\pi\))。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=35&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=35" target="_blank">YouTube 备链</a></p>
+
+  <h3>下一节预告</h3>
+  <p>L1-L7 把 Ch.7 的 4 个核心算法(TD(0)、Sarsa、Expected Sarsa / \(n\)-step、Q-learning)及其变种讲完。<strong>L8(教材 §7.5-7.7)</strong> 做<em>统一视角</em>:把所有算法塞进<em>一个表达式</em> \(Q(s,a) \leftarrow Q(s,a) + \alpha[\,\text{target} - Q(s,a)\,]\),其中"<em>target</em>" 是 \(\delta_t\) 中下一项的 4 种选择(sampled、expected、max、\(n\)-step)。最后铺垫 Ch.8:把 \(Q\) 表换成 \(\hat q(s,a; w)\) 函数近似 ⇒ deep Q-network ⇒ DQN。</p>
+
+  <nav class="lesson-nav">
+    <a href="lesson-06.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-08.html">Next →</a>
+  </nav>
+</div>
+
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>

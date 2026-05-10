@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>蒙特卡罗学习(P1):动机示例 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch05-l01" data-est-minutes="20">
+<div class="container">
+
+  <!-- Top nav -->
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.5 / Lesson 1</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <!-- Header -->
+  <p class="kicker">Bilibili #16 · YouTube #16 · Book §5.1 pp. 77-79</p>
+  <h1>L1: Mean Estimation as the Seed of MC<small style="color:var(--color-muted); font-weight:400;">  (蒙特卡罗动机:均值估计)</small></h1>
+
+  <!-- §1 Why this lesson -->
+  <h2>§1 Why this lesson</h2>
+  <p>Ch.4 L3 §6 已埋下伏笔:VI / PI / Truncated PI 三个算法都假设<strong>模型已知</strong> —— \(p(r\mid s, a),\ p(s&#39;\mid s, a)\) 显式给定。但真实 RL 问题里(Atari、机器人、推荐系统)模型几乎永远不可见。<em>没有 \(p\),\(\mathbb E_\pi[\cdot]\) 怎么算?</em>本节(教材 §5.1,pp. 77-79)从最朴素的<strong>均值估计</strong> 问题切入,给出整个 Ch.5 的灵魂答案 —— "<strong>采样多次取平均</strong>"。</p>
+  <p>关键洞察(教材 §5.1 + Box 5.1):<strong>(a) 哲学</strong>(p. 77 末段)"<em>If we do not have a model, we must have some data; if we do not have data, we must have a model</em>" —— RL 算法只可能在这两个端点之间;模型已知 → DP(Ch.4),数据已知 → MC(Ch.5)。<strong>(b) 两条估期望路线</strong>:<em>model-based</em> \(\mathbb E[X] = \sum_x p(x) x\) 用 PMF 闭式求;<em>model-free</em> \(\mathbb E[X] \approx \bar x = \frac{1}{n}\sum x_j\) 用样本均值。<strong>(c) 大数定律 (Box 5.1,p. 80)</strong>:i.i.d. 样本均值是<em>无偏</em> \(\mathbb E[\bar x] = \mathbb E[X]\),方差 \(\text{var}(\bar x) = \text{var}(X) / n\) 随 \(n\) 减到零。<strong>(d) 关键纽带</strong>:state value 与 action value <em>本身就是 return 的期望</em>(\(v_\pi(s) = \mathbb E[G_t \mid S_t = s]\)),所以"估值" = "估期望" = "采样均值"。这把 Ch.4 的"<em>规划</em>" 切到 Ch.5 的"<em>学习</em>",model-free RL 由此诞生。</p>
+
+  <!-- §2 核心定义 -->
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>蒙特卡罗 (Monte Carlo, MC)</strong>:用<em>随机采样</em> 解<em>估计问题</em> 的一大类技术。RL 里特指"<em>用采样到的 episode 估计 \(v_\pi, q_\pi\)</em>"。命名源自摩纳哥蒙特卡罗赌场(随机性的代名词)。</li>
+    <li><strong>Episode (轨迹)</strong>:agent 跟着策略 \(\pi\) 与环境交互产生的有限序列 \((s_0, a_0, r_1, s_1, a_1, r_2, \dots, s_T)\)。MC 要求 episode <em>跑到终止</em>,这样才能算出完整 return \(G_t = r_{t+1} + \gamma r_{t+2} + \dots\)。</li>
+    <li><strong>Sample mean (样本均值)</strong>:\(\bar x = \frac{1}{n}\sum_{j=1}^n x_j\)。用来近似 \(\mathbb E[X]\) 的最朴素估计。</li>
+    <li><strong>大数定律 (Law of large numbers,Box 5.1,p. 80)</strong>:i.i.d. 时 \(\mathbb E[\bar x] = \mathbb E[X]\)(无偏),\(\text{var}(\bar x) = \text{var}(X)/n\)(方差随 \(n\) 衰减为零)。这是 MC 收敛的数学根。</li>
+    <li><strong>i.i.d. (独立同分布)</strong>:样本之间不能相关(<em>独立</em>),也必须来自<em>同一个分布</em>。教材末段警告 —— 如果样本相关,样本均值可能<em>永远</em> 估不准(极端例子:全部 \(x_j\) 都等于第一个)。这是 MC 实操里 episode 之间要重新采样的根本原因。</li>
+    <li><strong>Model-based vs model-free</strong>:前者依赖 \(p(\cdot)\) 解析求期望(Ch.4);后者只看 \(\{x_1, \dots, x_n\}\) 这一坨样本,什么 PMF 都不知道(Ch.5 起)。<em>核心切换</em>:planning → learning。</li>
+    <li><strong>"为什么 RL 关心 mean estimation"(教材 §5.1 第二段)</strong>:state/action value 本质就是<em>return 的期望</em>,\(v_\pi(s) = \mathbb E[G_t \mid S_t = s]\)。估值 = 估期望 = MC 估计。所以本节看似在讲投硬币,其实是把 RL 的核心算子("\(\mathbb E\)")交给样本。</li>
+  </ul>
+
+  <!-- §3 关键公式 + 推导 -->
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节的两条公式分别给出"<em>怎么估</em>" 和"<em>为什么能估准</em>"。</p>
+
+  <p><strong>公式 1:样本均值近似期望(教材 (5.1) 上下方)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\mathbb E[X] = \\sum_{x \\in \\mathcal X} p(x) x \\approx \\bar x = \\frac{1}{n} \\sum_{j=1}^n x_j",
+    "annotations": [
+      {"key": "model_based", "label": "左:model-based", "description": "Σ p(x)x 是 model-based 闭式定义:把 PMF 与取值加权求和。Ch.4 VI/PI 全靠这条路求 v_π。"},
+      {"key": "model_free", "label": "右:model-free", "description": "(1/n)Σx_j 是 model-free 估计:只看样本数据。n 越大越准。这是 Ch.5-Ch.10 整个 RL 学习侧的根。"},
+      {"key": "approx_arrow", "label": "≈ 不是 = ", "description": "n 有限时仅是&#39;近似&#39; 而非&#39;等于&#39;。但大数定律保证 n→∞ 时 \\bar x → E[X],严格收敛。"},
+      {"key": "iid_required", "label": "样本必须 i.i.d.", "description": "若样本相关(如全部相同),样本均值可能永远 = 第一个样本,与 E[X] 相差任意大。MC 实操里 episode 间要独立重新采样,就是为了维持这一点。"}
+    ]
+  }'></div>
+
+  <p><strong>公式 2:大数定律两条等式(Box 5.1,p. 80)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\mathbb E[\\bar x] = \\mathbb E[X], \\quad \\text{var}[\\bar x] = \\frac{\\text{var}[X]}{n}",
+    "annotations": [
+      {"key": "unbiased", "label": "无偏 (左式)", "description": "样本均值的期望恰好等于真期望。证明:E[\\bar x] = E[Σx_j/n] = Σ E[x_j]/n = n·E[X]/n = E[X]。&#39;identically distributed&#39; 让 E[x_j] = E[X]。"},
+      {"key": "var_decay", "label": "方差衰减 (右式)", "description": "样本均值的方差是 X 方差的 1/n。证明:var(\\bar x) = var(Σx_j)/n² = n·var[X]/n² = var[X]/n。&#39;independent&#39; 让方差可加。"},
+      {"key": "convergence", "label": "n → ∞ 收敛", "description": "方差 → 0 + 期望对齐 ⇒ \\bar x 几乎必然收敛到 E[X]。这是 MC Basic 在 Ch.5 L2 下个 §3 公式 (5.2) 用到的关键定理。"},
+      {"key": "ch6_preview", "label": "Ch.6 RM 视角", "description": "&#39;1/n&#39; 这个步长其实是 Robbins-Monro 算法的特例。Ch.6 会把&#39;为什么 (1/n) 这个权重&#39; 推广成一般 stochastic approximation 框架。"}
+    ]
+  }'></div>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>抛硬币例子(教材 p. 79)</em>。\(X = +1\)(正面)、\(X = -1\)(反面),\(p(+1) = p(-1) = 0.5\)。<em>Model-based</em>:\(\mathbb E[X] = 0.5 \cdot 1 + 0.5 \cdot (-1) = 0\)。<em>Model-free</em>:抛 \(n\) 次,记下 \(\{x_1, \dots, x_n\}\),算 \(\bar x\)。教材 Figure 5.2:\(n = 5\) 时 \(\bar x\) 还在 ±0.4 抖,\(n = 200\) 时已经几乎贴在 0 上。这就是大数定律的可视化。
+  </div>
+
+  <div class="callout">
+    <strong>Step 2.</strong> <em>"为什么 RL 关心这个" 的桥接</em>。回忆 \(v_\pi(s) = \mathbb E[G_t \mid S_t = s]\)、\(q_\pi(s, a) = \mathbb E[G_t \mid S_t = s, A_t = a]\)。两者都是<em>return 的期望</em>。如果我们能<em>采样</em> \(n\) 条 episode 拿到 \(n\) 个 \(G_t^{(i)}\),那么 \(\bar G = \frac{1}{n}\sum G_t^{(i)} \approx v_\pi(s)\)。"估期望" 就是"估值"。这把 mean estimation 直接搬进 RL —— Ch.5 L2 的 MC Basic 公式 (5.2) 就是这一搬。
+  </div>
+
+  <div class="callout">
+    <strong>Step 3.</strong> <em>i.i.d. 的实操含义</em>。教材末段:若样本不独立,样本均值可能永远偏。RL 里 episode 内部的 \((s_t, a_t)\) 是<em>有相关性</em> 的(同一条 trajectory 上 \(s_{t+1}\) 由 \(s_t\) 决定)。所以 MC 用"<em>多条</em> 独立 episode 的 return" 而不是"<em>一条</em> episode 内部多次抽样" 当作 i.i.d. 样本。这一点在 L4 Exploring Starts 与 L5 ε-greedy 里会重新遇到 —— "<em>怎么让 (s, a) 都被独立访问</em>" 是整章后半的主线。
+  </div>
+
+  <!-- §4 Grid-world 例子 -->
+  <h2>§4 Grid-world:同一策略下的多条采样轨迹</h2>
+  <p>本节没有"已知最优策略 π* 然后画箭头" 的需求 —— 关键直觉是"<em>同一策略,跑两次会得到不同轨迹</em>",这是采样的本质。我们用一个简单初始策略 \(\pi_0\)(部分箭头,未优化),展示<em>三条</em> 不同的采样轨迹。注意三条 trajectory 都不同 —— 这正是"<em>样本</em>" 的味道。</p>
+
+  <div data-component="gridworld" id="gw-ch05-l01-traj1" data-config='{
+    "rows": 5, "cols": 5,
+    "target": [3, 2],
+    "forbidden": [[1,1],[2,1],[2,2],[1,3],[3,3]],
+    "trajectory": [[0,0],[1,0],[2,0],[3,0],[3,1],[3,2]]
+  }'></div>
+  <p style="font-size:0.85rem; color:var(--color-muted);"><em>Episode 1</em>:从 (0,0) 起,沿左侧绕一圈到 target (3,2)。\(G_0\) = 0 + 0γ + 0γ² + 0γ³ + 0γ⁴ + 1·γ⁵ = γ⁵ ≈ 0.59(γ=0.9)。</p>
+
+  <div data-component="gridworld" id="gw-ch05-l01-traj2" data-config='{
+    "rows": 5, "cols": 5,
+    "target": [3, 2],
+    "forbidden": [[1,1],[2,1],[2,2],[1,3],[3,3]],
+    "trajectory": [[0,0],[0,1],[0,2],[0,3],[0,4],[1,4],[2,4],[3,4],[3,3],[3,2]]
+  }'></div>
+  <p style="font-size:0.85rem; color:var(--color-muted);"><em>Episode 2</em>:从 (0,0) 起,沿顶部和右侧绕,在 (3,3) forbidden 上踩了一脚 \(r = -10\),再到 target。\(G_0\) ≈ -10·γ⁸ + 1·γ⁹ ≈ -3.87。可以看出: 同一起点、同一策略族,两条 trajectory 给出<em>差异巨大</em> 的 \(G_0\)。这就是"<em>方差</em>" 的来源。</p>
+
+  <div data-component="gridworld" id="gw-ch05-l01-traj3" data-config='{
+    "rows": 5, "cols": 5,
+    "target": [3, 2],
+    "forbidden": [[1,1],[2,1],[2,2],[1,3],[3,3]],
+    "trajectory": [[0,0],[1,0],[2,0],[3,0],[4,0],[4,1],[4,2],[3,2]]
+  }'></div>
+  <p style="font-size:0.85rem; color:var(--color-muted);"><em>Episode 3</em>:从 (0,0) 起,沿左侧+底部绕到 target。\(G_0 = γ^7 ≈ 0.48\)。</p>
+
+  <p><strong>样本均值估计 \(v_\pi(s_0)\)</strong>:三条 trajectory 给 \(G_0 \in \{0.59, -3.87, 0.48\}\)。\(\bar G = -0.93\)。<em>三条样本</em> 显然不够 —— 真正的 \(v_\pi(s_0)\) 需要把 forbidden 踩入概率、随机性都吃透,通常需要几百到几千条。但这就是"<strong>用样本估期望</strong>" 的雏形。下面给出 \(\bar G\) 在 \(n\) 上的演化(示意),与教材 Figure 5.2 同款"<em>抖→稳</em>" 形态。</p>
+
+  <p><strong>样本数 \(n\) 与估计精度的分布对比</strong>。下面用 distribution-bar 比较"<em>n=3 的</em> \(\bar G\) 分布(广,方差大)"vs"<em>n=100 的</em> \(\bar G\) 分布(窄,方差小)" 的概念草图(数值用了两个分布的离散桶,展示"<em>样本越多分布越集中到真值</em>" 的形态):</p>
+  <div data-component="distribution-bar" data-config='{
+    "title": "样本均值 \\bar G 的分布:n 越大越集中",
+    "distributions": [
+      {"name": "n=3 (粗估)", "items": [{"label":"-3","value":0.20},{"label":"-1","value":0.18},{"label":"0","value":0.15},{"label":"+0.5","value":0.22},{"label":"+1","value":0.15},{"label":"+2","value":0.10}]},
+      {"name": "n=100 (细估)", "items": [{"label":"-3","value":0.01},{"label":"-1","value":0.05},{"label":"0","value":0.20},{"label":"+0.5","value":0.55},{"label":"+1","value":0.15},{"label":"+2","value":0.04}]}
+    ]
+  }'></div>
+
+  <!-- §5 常见误解 -->
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"既然样本均值收敛到期望,那 MC 算 \(v_\pi\) 是<em>免费</em> 的 —— 跑几条 episode 取平均就好。"<br>
+    <strong>实际上:</strong><strong>i.i.d. 假设有强约束</strong>,而且<em>方差</em> 衰减只有 \(O(1/\sqrt n)\)(标准误)。要把 \(\hat v\) 误差从 0.1 降到 0.01,样本数要乘 100。<em>且</em> "<em>跑一条 episode</em>" ≠ "<em>n 个独立样本</em>" —— episode 内部 \((s_t, a_t)\) 序列高度相关。MC 实操里要么"<em>多条独立 episode</em>",要么"<em>一条很长的 episode + soft 策略</em>"(L5 ε-greedy)。<br>
+    <strong>因为:</strong>大数定律的细则被 RL 实践严格要求。Ch.6 RM/SGD 会把"<em>(1/n) 这个权</em>" 推广为一般步长 \(\alpha_k\),并给出收敛条件 \(\sum \alpha_k = \infty,\ \sum \alpha_k^2 < \infty\)。这是 MC 与 TD 收敛证明的共同根。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"MC 完全抛弃了 \(p(s&#39;\mid s, a)\),所以 MC 比 DP <em>普适</em>。"<br>
+    <strong>实际上:</strong><strong>MC 仍然要求<em>能采样</em></strong>,即环境<em>本身</em> 必须可交互(simulator 或真实环境)。否则连 \(\{x_1, \dots, x_n\}\) 都拿不到。"<em>Data 没有,model 没有</em>" 的极端情况谁也救不了。教材 p. 77 末段直说:"<em>If we have neither, then we are not able to find optimal policies</em>"。<br>
+    <strong>因为:</strong>"model-based" 与 "model-free" 不是优劣对比,而是两条<em>互补</em> 的信息来源。Ch.5-Ch.10 开始基本走 model-free 路线,但 Ch.10 末尾会回到"<em>能不能学一个模型再用</em>"(model-based RL 系列,本书未深入,但是研究热点)。
+  </div>
+
+  <!-- §6 自检 + 视频 + teaser -->
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> 公式 \(\mathbb E[X] \approx \bar x = \frac{1}{n}\sum x_j\) 中,如果样本不是 i.i.d.,会有什么后果?用一个极端例子说明。</summary>
+    <p><strong>A.</strong> 教材末段直接给:若所有样本<em>完全相关</em>(例如硬币每次都抛出和第一次一模一样的结果),那么 \(\bar x\) 永远 = 第一个样本,与 \(\mathbb E[X]\) 可以相差任意大(若第一次抛到 +1,\(\bar x = 1 \ne 0\))。这告诉我们:"<em>样本数多</em>" 不等价于"<em>信息多</em>",只有"<em>独立样本数多</em>" 才有大数定律保证。RL 实操含义:同一条 episode 内部相邻 step 高度相关,所以 MC 偏好"<em>多条独立 episode</em>";一条超长 episode 也能用,但要靠"<em>策略 soft 让其自相关弱</em>"(L5 ε-greedy)。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> 大数定律里 \(\text{var}[\bar x] = \text{var}[X]/n\)。这告诉我们 \(\bar x\) 的<em>标准误</em>(标准差)是 \(\sigma / \sqrt n\)。要把估计精度从 0.1 提到 0.01,需要把 \(n\) 乘多少倍?</summary>
+    <p><strong>A.</strong> <strong>100 倍</strong>。标准误 \(\sigma / \sqrt n\) 缩 10 倍 ⇒ \(\sqrt n\) 涨 10 倍 ⇒ \(n\) 涨 100 倍。这就是 MC 在 RL 里"<em>方差大、收敛慢</em>" 的根 —— 估计每多一位准度,样本数 ×100。Ch.7 TD 用 bootstrap 把单步样本换成"<em>当前估值的部分信息</em>",大幅减少方差,这是 TD 比 MC 高效的关键。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> RL 里 \(v_\pi(s) = \mathbb E[G_t \mid S_t = s]\) 的"<em>期望</em>" 是对什么随机性求的?为什么从同一个 \(s\) 出发跑两次会得到不同 \(G_t\)?</summary>
+    <p><strong>A.</strong> 期望是对<em>整条 trajectory</em> 的随机性求的:动作 \(a_t \sim \pi(\cdot \mid s_t)\)(若 \(\pi\) 随机)+ 下一状态 \(s_{t+1} \sim p(\cdot \mid s_t, a_t)\)(若环境随机)+ 奖励 \(r_{t+1} \sim p(\cdot \mid s_t, a_t)\)。从同一 \(s_0\) 出发的两次 rollout,即使策略相同,因 \(p\) 与 \(\pi\) 的随机抽样,\(s_1, s_2, \dots\) 的具体值就不同 ⇒ \(G_0\) 不同。MC 正是抓住"<em>一条 trajectory 上的</em> \(G_t\) <em>是随机变量</em>",用样本均值近似它的期望。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <p style="font-size:0.85rem; color:var(--color-muted);">视频:首选 Bilibili 直播(下方 iframe);若 iframe 不显示,用 YouTube 链接打开。BVID 当前是占位,实际 BVID 等首次部署时填。</p>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=16&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=16" target="_blank"><strong>▶ YouTube 备链(建议优先点这个)</strong></a></p>
+
+  <h3>下一节预告</h3>
+  <p>本节交付了"<strong>用样本均值估期望</strong>" 这把钥匙。下一节(L2)把这把钥匙插进 Ch.4 的 PI 锁孔 —— 把 PI 的"<em>用 \(P_\pi\) 解 Bellman 方程算 \(v_{\pi_k}\)</em>"(model-based PE)替换成"<em>跑 \(n\) 条 (s,a)-episode,用 \(\bar G\) 估</em> \(q_{\pi_k}(s, a)\)"(model-free PE)。policy improvement 步骤不变(\(\arg\max_a \hat q\))。这个最朴素的合体算法叫 <strong>MC Basic</strong>,是<em>整本书第一个 model-free 强化学习算法</em>。Ch.5 后四节会层层加码:L3 grid 实算、L4 Exploring Starts(every-visit / 高效采样)、L5 ε-greedy 介绍、L6 ε-greedy MC + 全章总结。</p>
+
+  <!-- Bottom nav -->
+  <nav class="lesson-nav">
+    <a href="../ch04/lesson-03.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-02.html">Next →</a>
+  </nav>
+</div>
+
+<!-- Components -->
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>

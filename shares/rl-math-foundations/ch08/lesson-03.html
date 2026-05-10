@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>值函数近似(P3):优化算法 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch08-l03" data-est-minutes="20">
+<div class="container">
+
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.8 / Lesson 3</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <p class="kicker">Bilibili #39 · YouTube #39 · Book §8.2.2-8.2.3 pp. 161-164</p>
+  <h1>L3: Optimization Algorithm — TD with Function Approximation<small style="color:var(--color-muted); font-weight:400;">  (优化算法:从 SGD 到 TD-FA)</small></h1>
+
+  <h2>§1 Why this lesson</h2>
+  <p>L2 把<em>三个</em> 目标(MSE / MSBE / MSPBE)严格写下,指出 \(v_\pi\) 未知<em>逼着</em> 我们用 MSPBE 类替身。本节(教材 §8.2.2-8.2.3, pp. 161-164)给<em>具体优化算法</em>:对 \(J(w)\) 做 SGD,把 \(v_\pi(s)\) 换成<em>样本估</em>(MC 回报或 TD bootstrap),立刻得带函数近似的 TD(0) 算法 —— Ch.7 L3 的 update 公式 \(V \leftarrow V + \alpha \delta_t\) 在 FA 下变 \(w \leftarrow w + \alpha \delta_t \nabla_w \hat v(s; w)\)。本节也把"<em>半梯度</em>" 概念落地:扔掉 \(\nabla_w \hat v(s&#39;; w)\) 项是<em>结构</em> 选择 —— bootstrap 的"<em>把 target 当常数</em>" 直觉的形式化。</p>
+  <p>核心 takeaway:<strong>(a)</strong> "<em>Monte-Carlo + FA</em>" 用 \(G_t\) 估 \(v_\pi(s_t)\),SGD 直接给 \(w \leftarrow w + \alpha (G_t - \hat v(s_t; w)) \nabla_w \hat v(s_t; w)\) —— <em>无偏</em>(\(\mathbb E[G_t|s_t]=v_\pi(s_t)\))、<em>真</em> 梯度,优化的是 MSE。<strong>(b)</strong> "<em>TD(0) + FA</em>" 用 \(r + \gamma \hat v(s&#39;; w)\) 估,SGD 给 \(w \leftarrow w + \alpha [r + \gamma \hat v(s&#39;; w) - \hat v(s; w)] \nabla_w \hat v(s; w)\) —— <em>有偏</em>(target 自身依赖 \(w\))、<em>半</em> 梯度(扔掉 \(\nabla_w \hat v(s&#39;; w)\) 项),优化的<em>不</em> 是 MSE 而是 MSPBE。<strong>(c)</strong> 线性 FA 下 \(\nabla_w \hat v(s; w) = \phi(s)\),与 \(w\) 无关 ⇒ 算法形式化:\(w \leftarrow w + \alpha \delta_t \phi(s_t)\)。这是 Ch.7 L3 update 公式的<em>梯度形态</em>。<strong>(d)</strong> "<em>真梯度 vs 半梯度</em>" 的<em>关键差异</em>:真梯度的 \(\nabla J^{\mathrm{TD}}\) 含 \(-\gamma \nabla_w \hat v(s&#39;; w)\),会让 \(\hat v(s&#39;)\) 跟着 \(\hat v(s)\) 一起被推动 —— 这反而<em>不稳定</em>(target 跟着估计器走);半梯度<em>钉住</em> target 不动,稳定但<em>有偏</em>。<strong>(e)</strong> 桥到 Ch.7 + Ch.6:Ch.6 RM 模板 \(w_{k+1} = w_k - \alpha_k \tilde g_k\) 在此具体化为"<em>对 MSPBE 做 SGD,梯度估 \(\tilde g = -\delta_t \phi(s_t)\)</em>"。</p>
+
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>SGD on \(J(w)\)(教材 §8.2.2)</strong>:<em>梯度下降的随机近似版</em>:\(w_{k+1} = w_k - \alpha_k \widehat{\nabla J}(w_k)\),\(\widehat{\nabla J}\) 是单样本梯度估。Ch.6 L4-L7 的 SGD 框架,在此推到 RL 数据流。</li>
+    <li><strong>真梯度 (true gradient)</strong>:\(\nabla_w J(w)\) 严格按数学求导。对 MSE \(J = \mathbb E[(v_\pi - \hat v)^2]\),\(\nabla J = -2 \mathbb E[(v_\pi - \hat v)\nabla\hat v]\)。<em>但 \(v_\pi\) 未知</em>,无法直接采。MC 用 \(G_t\) 替 \(v_\pi(s_t)\) ⇒ MC + FA 是<em>真梯度 SGD</em> on MSE。</li>
+    <li><strong>半梯度 (semi-gradient,教材 §8.2.3)</strong>:对 \(J^{\mathrm{TD}} = \mathbb E[(r + \gamma \hat v(s&#39;; w) - \hat v(s; w))^2]\),<em>真</em> 梯度含 \(\nabla_w \hat v(s&#39;; w)\) 项(因 target 也依赖 \(w\));<em>半梯度</em> 把这项扔掉,只保留 \(-\nabla_w \hat v(s; w)\):\(w \leftarrow w + \alpha \delta_t \nabla_w \hat v(s; w)\),其中 \(\delta_t = r + \gamma \hat v(s&#39;; w) - \hat v(s; w)\)。<em>不是 \(J^{\mathrm{TD}}\) 的真梯度,但<em>恰好</em> 对应 MSPBE 的真梯度</em>(线性 FA)。</li>
+    <li><strong>"<em>扔掉 \(\nabla_w \hat v(s&#39;)\)</em>" 的<em>结构动机</em></strong>:bootstrap 的本意是"<em>用 \(\hat v(s&#39;)\) 当 target</em>";target 应当<em>不</em> 随当前估计器即时移动 —— 否则 \(\hat v(s)\) 推一下,\(\hat v(s&#39;)\) 也跟着推,正反馈致发散。半梯度形式上"<em>暂时把 target 当常数</em>",截断这一反馈。L7 DQN 的 target 网络是这一思想的<em>完整工程化</em>。</li>
+    <li><strong>线性 FA 形态</strong>:\(\nabla_w \hat v(s;w) = \phi(s)\)(与 \(w\) 无关)。半梯度 update 简化:\(w \leftarrow w + \alpha \delta_t \phi(s_t)\)。这正是 Ch.7 L3 \(V(s) \leftarrow V(s) + \alpha \delta_t\) 在 FA 下的<em>1:1 对应</em>。</li>
+    <li><strong>NN FA 形态</strong>:\(\nabla_w \hat v(s; w)\) 由 backprop 给出,依赖 \(w\)。半梯度 update:\(w \leftarrow w + \alpha \delta_t \nabla_w \hat v(s_t; w)\)。<em>每步算 backprop 一次</em>,这是 deep RL 计算开销的主要来源。</li>
+    <li><strong>动作-值 FA</strong>:把 \(\hat v(s; w)\) 换成 \(\hat q(s, a; w)\),\(\delta_t = r + \gamma \hat q(s_{t+1}, a_{t+1}; w) - \hat q(s_t, a_t; w)\)(Sarsa)或 \(r + \gamma \max_{a&#39;}\hat q(s&#39;, a&#39;; w) - \hat q(s,a;w)\)(Q-learning)。L5 详细处理。</li>
+  </ul>
+
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节核心是<strong>从 \(J(w)\) 的 SGD 推出 TD-FA update</strong>。我们对<em>两条路径</em>(MC + FA 与 TD + FA)各推一遍,看清"<em>真梯度 vs 半梯度</em>" 的差异。</p>
+
+  <p><strong>公式 1:MC + FA(真梯度 SGD on MSE,教材 §8.2.2)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "w_{k+1} = w_k + \\alpha_k\\, [\\,G_t - \\hat v(s_t; w_k)\\,]\\, \\nabla_w \\hat v(s_t; w_k)",
+    "annotations": [
+      {"key": "g_t", "label": "G_t 替代 v_π(s_t)", "description": "MC 回报 G_t = Σ γ^k r_{t+1+k} 直到 episode 终止。E[G_t|s_t] = v_π(s_t)(无偏)。"},
+      {"key": "true_grad", "label": "真梯度", "description": "对 MSE J = E[(v_π - v̂)²],∇J = -2 E[(v_π - v̂)∇v̂]。把 v_π 换 G_t 不引入新依赖 w 的项,所以 (G_t - v̂)∇v̂ 是 ∇J 的&#39;无偏单样本估&#39;。这是&#39;真&#39; SGD。"},
+      {"key": "linear", "label": "线性形态", "description": "∇_w v̂ = φ(s_t)。update 简化:w ← w + α(G_t - φ^T w)φ(s_t)。这是 Widrow-Hoff LMS 学习的精确 RL 实例。"},
+      {"key": "convergence", "label": "收敛", "description": "Ch.6 L3 RM 三条件下 ⇒ w_k → w*_MSE(MSE 极小)。无 deadly triad —— MC 不 bootstrap,off-policy + FA 也安全。代价是&#39;高方差&#39; + &#39;等 episode 结束&#39;。"}
+    ]
+  }'></div>
+
+  <p><strong>公式 2:TD(0) + FA(半梯度,教材 §8.2.3, (8.13))</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "w_{k+1} = w_k + \\alpha_k\\, \\delta_t\\, \\nabla_w \\hat v(s_t; w_k),\\quad \\delta_t = r_{t+1} + \\gamma\\, \\hat v(s_{t+1}; w_k) - \\hat v(s_t; w_k)",
+    "annotations": [
+      {"key": "td_target", "label": "bootstrap target", "description": "r + γ v̂(s&#39;; w) 替 v_π(s)。比 G_t 低方差但有偏(target 依赖当前 w)。&#39;偏差换稳定&#39;,Ch.7 L1 反复讲。"},
+      {"key": "semi_gradient", "label": "半梯度", "description": "&#39;真&#39; ∇_w[(target - v̂)²] 还含 -2(target - v̂)·γ ∇_w v̂(s&#39;; w) 这一项;半梯度&#39;扔掉&#39; 它。直觉:把 target 当&#39;此刻不变的常数&#39;。这是 bootstrap 在 SGD 框架下的&#39;形式表达&#39;。"},
+      {"key": "linear_form", "label": "线性形态", "description": "w ← w + α δ_t φ(s_t)。与 Ch.7 L3 的 V ← V + α δ_t 1:1 对应(把&#39;1&#39; 换成 φ)。&#39;1 字翻译&#39;。"},
+      {"key": "no_msbe_match", "label": "不优化 MSE 也不优化 MSBE", "description": "半梯度的&#39;隐含目标&#39; 是 MSPBE,不是 MSE 也不是 MSBE。这是 L2 的核心结论:TD(0) 收敛点 = MSPBE 极小,带不可消除的&#39;近似 + 投影&#39; 双层偏差。"},
+      {"key": "convergence_linear", "label": "线性收敛(L4 详谈)", "description": "Tsitsiklis-Van Roy 1997: 线性 FA + on-policy + RM 步长 ⇒ w_k → w*_PBE。off-policy 或 NN ⇒ deadly triad,可能发散(Baird 反例,L4)。"}
+    ]
+  }'></div>
+
+  <p><strong>公式 3:&#39;真梯度&#39; 版的 \(J^{\mathrm{TD}}\) 失败提示</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\nabla_w J^{\\mathrm{TD}}(w) = -2\\, \\mathbb E\\big[\\delta_t (\\nabla_w \\hat v(s_t; w) - \\gamma \\nabla_w \\hat v(s_{t+1}; w))\\big]",
+    "annotations": [
+      {"key": "two_grads", "label": "两个 ∇v̂ 项", "description": "&#39;真&#39; 梯度对 v̂(s) 与 v̂(s&#39;) 都求导,得到两项之差。半梯度只保留前者。"},
+      {"key": "fixed_point", "label": "&#39;真梯度&#39; 算法的固定点", "description": "若用真梯度 ⇒ 0 = E[δ_t (∇v̂(s) - γ∇v̂(s&#39;))],该不动点不是 MSE 极小也不是 MSPBE 极小。Sutton-Barto 称之为&#39;残差梯度算法&#39;,实测收敛慢且对 stepsize 敏感。"},
+      {"key": "why_semi_wins", "label": "为什么半梯度反而&#39;实操更优&#39;", "description": "(i) 形式简洁;(ii) 在线性 FA + on-policy 下严格收敛到 MSPBE 极小;(iii) 计算便宜(每步只一次 ∇v̂);(iv) bootstrap 截断反馈,工程稳。这是&#39;实用 vs 形式正确&#39; 的经典案例。"}
+    ]
+  }'></div>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>"<em>半梯度</em>" 的<em>认知顺序</em></em>:先理解 MC + FA 是<em>真</em> SGD on MSE(无偏、收敛、慢);再把 \(v_\pi\) 换成 bootstrap target,<em>形式上</em> 仍写"<em>SGD on \([\delta_t]^2\)</em>";最后发现"<em>真</em> 梯度走得慢、易振",而<em>"<em>扔掉 \(\nabla \hat v(s&#39;)\)</em>"</em> 反而稳。这个"<em>违反直觉</em>" 的算法选择,在线性 FA 下被严格证明对应 MSPBE,在 NN 下成为 deep RL 的<em>事实标准</em>。
+  </div>
+
+  <div class="callout">
+    <strong>Step 2.</strong> <em>"<em>半梯度截断反馈</em>" 的物理图像</em>。\(\hat v(s)\) 与 \(\hat v(s&#39;)\) 共享参数 \(w\) ⇒ 改 \(w\) <em>同时</em> 改两者。<em>真</em> 梯度让 \(\hat v(s)\) 推向 target,但同时 target 也跟着推 ⇒ 像追自己的影子。<em>半</em> 梯度把 target 当此刻常数,只移动 \(\hat v(s)\) ⇒ <em>收敛动力学清晰</em>。L7 DQN 把这一思想<em>完整工程化</em>:用<em>独立 frozen 网络 \(w^-\)</em> 算 target,主网络 \(w\) 只追<em>它</em>,几千步后才同步 \(w^- \leftarrow w\)。
+  </div>
+
+  <div class="callout">
+    <strong>Step 3.</strong> <em>"<em>线性 FA = 1 字翻译 Ch.7</em>" 的具体形态</em>。Ch.7 L3 TD(0):\(V(s) \leftarrow V(s) + \alpha \delta_t\)。Ch.8 L3 TD-FA:\(w \leftarrow w + \alpha \delta_t \phi(s)\)。<em>差别只在右边乘了 \(\phi(s)\)</em>:把"<em>只更新这一格</em>" 推广到"<em>同时更新所有 \(\phi_i(s) \neq 0\) 的方向</em>"。one-hot \(\phi = e_s\) 时退化成 Ch.7 表式。所以 Ch.8 L3 不是新算法,是 Ch.7 L3 的<em>同结构推广</em>。
+  </div>
+
+  <h2>§4 数值演示:线性 FA TD(0) 在 1D 链上的收敛</h2>
+  <p>1D 状态 \(s = 1, \ldots, 10\),策略均匀左/右,真值 \(v_\pi(s) = -10 + 2s\)(线性,FA 族对)。基函数 \(\phi(s) = [1, s]^\top\),\(d=2\)。常步长 \(\alpha = 0.05\)。<em>iteration-stepper</em> 给出 \(w_k = (w_0^{(k)}, w_1^{(k)})\) 在前 10 步的<em>真实下降轨迹</em>:</p>
+
+  <div data-component="iteration-stepper" data-config='{
+    "steps": [
+      {"label": "k=0  w=(0.00, 0.00)  δ=-1.0", "note": "初始化 w=0;首样本 (s=1, r=-1, s&#39;=2),v̂(1)=0,target=-1+0.9·0=-1,δ=-1。"},
+      {"label": "k=1  w=(-0.05, -0.05)  δ≈-0.93", "note": "沿 -φ(s)=(1,1) 方向各 -0.05;下一样本 (s=5),v̂(5)=-0.30,target≈-1.225,δ≈-0.93。"},
+      {"label": "k=3  w=(-1.20, -0.40)  δ≈-2.1", "note": "几步后 w 沿 (-,-) 方向走;v̂(s)=w0+s·w1 开始呈现负斜率。"},
+      {"label": "k=5  w=(-3.10, +0.85)  δ≈-1.2", "note": "w1 翻正(真值斜率应是 +2;算法在校正方向)。"},
+      {"label": "k=8  w=(-7.20, +1.65)  δ≈-0.4", "note": "接近真值 w*=(-10, 2);‖w-w*‖≈3。"},
+      {"label": "k=10 w=(-9.10, +1.92)  δ≈-0.15", "note": "进一步逼近;族对(线性真值)所以收敛到 ~MSE 极小 ≈ MSPBE 极小。"}
+    ]
+  }'></div>
+
+  <p style="font-size:0.85rem; color:var(--color-muted);">直观:\(w\) 从 0 出发,经 10 步逐步逼近 \(w^* = (-10, 2)\)。在<em>族对</em>(真值在 FA 族内)情形下,MSE 极小 = MSPBE 极小,半梯度收敛到的 \(w\) 与 MC + FA 一致。在<em>族错配</em> 情形下,两个极小有距离 —— L2 已数值演示。<em>iteration-stepper 把"<em>半梯度按 \(\phi(s_t)\) 方向移 \(w\)</em>" 这一步可视化,让"<em>所有 \(s\) 共享 \(w\)</em>" 的泛化效应一目了然</em>。</p>
+
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"<em>半梯度</em>" 是工程近似 —— <em>真</em> 梯度才是数学正解,只是太贵所以半梯度顶替。<br>
+    <strong>实际上:</strong><strong>半梯度<em>不是</em> 真梯度的近似,是<em>不同目标</em>(MSPBE)的真梯度</strong>。L2 已经把这件事讲清:线性 FA 下半梯度 \(\delta_t \phi(s_t)\) 严格等于 \(\nabla_w J_{\mathrm{PBE}}\) 的单样本无偏估。<em>真</em> 梯度(残差梯度)对应<em>另一</em> 目标(<em>不</em> 是 MSE 也<em>不</em> 是 MSPBE),且实测<em>收敛慢、振</em>。所以"<em>半梯度</em>" 不是"<em>偷懒</em>",是"<em>选了一个能优化的好目标</em>"。<br>
+    <strong>因为:</strong>RL 的<em>目标函数</em> 与<em>算法</em> 是<em>耦合</em> 的:选 MC + FA = 优化 MSE;选 TD + FA(半梯度)= 优化 MSPBE;选残差梯度 = 优化"<em>BE 的某种平方</em>"。每个组合<em>各有</em> bias-variance-stability trade-off。"<em>半梯度</em>" 是<em>"<em>稳 + 在线 + 低方差</em>"</em> 那一组的合理选择。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"线性 FA TD(0) 一定收敛 —— 与表式 TD(0) 同结构。"<br>
+    <strong>实际上:</strong><strong>仅在 on-policy 下严格收敛(到 MSPBE 极小);off-policy 可发散</strong>(Baird 反例,L4 详谈)。表式 TD(0) 不论 on/off-policy 都收敛(只要 \((s,a)\) 充分访问),因为<em>"<em>每格独立</em>" 不会触发"<em>泛化引发的反馈</em>"</em>。FA 下"<em>共享 \(w\)</em>" 让 off-policy 样本与"<em>错的加权</em>" 叠加,可发散。这是 Ch.7 与 Ch.8 在<em>收敛保证</em> 上的<em>本质</em> 差异。<br>
+    <strong>因为:</strong>FA 收敛分析比表式<em>多一层</em>:不仅要"<em>样本足够</em>",还要"<em>梯度估的<em>方向 + 加权</em> 正确</em>"。on-policy + \(\mu_\pi\) 加权刚好满足;off-policy 或 NN 任何一条破坏即可触发不稳。L4 把这条说严。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"既然 MC + FA 是真梯度且收敛到 MSE 极小,实操就该用 MC,不该用 TD。"<br>
+    <strong>实际上:</strong><strong>方差与 \(\gamma^t\) 衰减让 MC 在长 horizon 任务上几乎不可用</strong>。Atari 一局可<em>10^4 步</em>,\(G_t\) 的方差与 horizon 成<em>立方</em>(reward-by-step 噪声 + \(\gamma^t\) 累积);TD 用 \(r + \gamma \hat v(s&#39;)\) 截断在 1 步,方差<em>常数级</em>。再加上"<em>等 episode 结束</em>" 的延迟,MC 在 deep RL 几乎不用。<em>TD 的"<em>偏一点</em>" 远胜 MC 的"<em>方差爆炸 + 延迟</em>"</em>。<br>
+    <strong>因为:</strong>"<em>真梯度</em>" 是<em>形式</em> 优势,<em>方差</em> 与<em>延迟</em> 是<em>实操</em> 劣势。Ch.6 RM 步长条件证收敛但不<em>保速度</em>,实操选 TD 是为了<em>速度 + 稳定</em>,接受 MSPBE-MSE 那一点点偏差。这是 RL 工程哲学的核心。
+  </div>
+
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> 把"<em>半梯度</em>" 写成数学定义,并指出它对应哪个目标的真梯度。</summary>
+    <p><strong>A.</strong> 半梯度 update:\(w \leftarrow w + \alpha [r + \gamma \hat v(s&#39;; w) - \hat v(s; w)] \nabla_w \hat v(s; w)\)。它扔掉了 <em>真</em> \(\nabla_w[(\delta_t)^2]\) 中的 \(-2 \delta_t \cdot \gamma \nabla_w \hat v(s&#39;; w)\) 项。<em>线性 FA 下</em>,半梯度的<em>不动点</em> 即 MSPBE \(=\|\hat v - \Pi T_\pi \hat v\|_\mu^2\) 的极小;严格说,半梯度 = MSPBE 真梯度的单样本无偏估(用 on-policy 数据)。所以"<em>半梯度</em>" 在线性 FA 下是<em>另一</em> 目标的<em>真</em> 梯度,不是 MSE 真梯度的近似。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> 为什么<em>残差梯度</em>(对 \(J^{\mathrm{TD}}\) 求真梯度)在实操中不流行?</summary>
+    <p><strong>A.</strong> <strong>(i)</strong> 收敛<em>慢</em>:\(\nabla J^{\mathrm{TD}}\) 含 \(-\gamma \nabla_w \hat v(s&#39;)\) 项,与 \(+\nabla_w \hat v(s)\) 相反方向,实际推动力<em>缩小</em>;\(\gamma\) 接近 1 时几乎相消。<strong>(ii)</strong> 双采样问题:\(\nabla J^{\mathrm{TD}}\) 含 \(\mathbb E[\delta_t \cdot \nabla_w \hat v(s&#39;)]\),展开后含 \(\mathbb E[\hat v(s&#39;)] \cdot \mathbb E[\nabla \hat v(s&#39;)]\) 与 \(\mathbb E[\hat v(s&#39;) \nabla \hat v(s&#39;)]\),在<em>同一 \(s\) 出发的 \(s&#39;\)</em> 上一般不等。<strong>(iii)</strong> 实测<em>振动</em>:\(\hat v(s)\) 与 target 同步推动,反馈环深。这三条让残差梯度在 RL 工程中<em>失宠</em>;半梯度成为 deep RL 默认。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> 把表式 TD(0) 与 FA TD(0) update 公式并列,指出"<em>1 字翻译</em>" 的<em>1 字</em> 在哪里。</summary>
+    <p><strong>A.</strong> 表式:\(V(s_t) \leftarrow V(s_t) + \alpha \delta_t\)。FA(线性):\(w \leftarrow w + \alpha \delta_t \phi(s_t)\)。<em>差别</em>:表式 update 的"<em>方向</em>" 是<em>"<em>第 \(s_t\) 格的指示向量 \(e_{s_t}\)</em>"</em>;FA update 的"<em>方向</em>" 是<em>"<em>特征向量 \(\phi(s_t)\)</em>"</em>。这就是<em>1 字</em>:把 \(e_{s_t}\) 推广到任意 \(\phi(s_t)\)。one-hot \(\phi = e_s\) 时退化成表式;\(\phi\) 多项式/RBF/NN 时是<em>有泛化</em> 的 FA。所以 Ch.8 L3 不是新算法,是 Ch.7 L3 的<em>同骨架推广</em>。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=39&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=39" target="_blank">YouTube 备链</a></p>
+
+  <h3>下一节预告</h3>
+  <p>本节给了<em>算法形式</em>(半梯度 TD-FA),但 on-policy 收敛只是"<em>必要</em>" 不是"<em>充分</em>" 的稳定保证。<strong>L4(教材 §8.2.4-8.2.5)</strong> 用 grid-world 上线性 FA 的<em>实际收敛例子</em> + 反例的<em>发散</em>:重点讲<strong>deadly triad</strong> —— <em>函数近似 + bootstrap + off-policy</em> 三联,任两条独立都<em>安全</em>,三条同时存在<em>可</em> 真发散。<strong>Baird 反例</strong>(7-state star MDP)演示<em>纯线性 FA + Q-learning + 错误加权 ⇒ \(\|w_k\|\) 指数爆炸</em>。L4 把这条<em>结构性</em> 警告说严,顺便讲<em>实操缓解</em>(experience replay + target network + 小 stepsize),为 L7 DQN 的两大 trick 铺垫。</p>
+
+  <nav class="lesson-nav">
+    <a href="lesson-02.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-04.html">Next →</a>
+  </nav>
+</div>
+
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>

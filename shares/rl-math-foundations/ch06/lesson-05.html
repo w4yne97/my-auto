@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>随机近似与 SGD(P5):SGD 示例 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch06-l05" data-est-minutes="20">
+<div class="container">
+
+  <!-- Top nav -->
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.6 / Lesson 5</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <!-- Header -->
+  <p class="kicker">Bilibili #26 · YouTube #26 · Book §6.4.1-6.4.2 pp. 116-118</p>
+  <h1>L5: SGD on Mean Estimation — Trajectory &amp; Pattern<small style="color:var(--color-muted); font-weight:400;">  (SGD 在均值估计上的轨迹与"远处快、近处慢")</small></h1>
+
+  <!-- §1 Why this lesson -->
+  <h2>§1 Why this lesson</h2>
+  <p>L4 立了 SGD 的<em>定义</em> 与<em>RM 关系</em>,但 SGD 实际<em>跑出来</em> 是什么样?本节(教材 §6.4.1-6.4.2,pp. 116-118)用<strong>均值估计</strong>(\(f(w, X) = \|w - X\|^2/2\))作 SGD 的<em>第一例子</em>,把 Ch.6 的故事<em>首尾闭环</em>:从 L1 "<em>样本均值递推</em>" 出发,经过 L2-L3 RM 抽象、L4 SGD 定义,回到这里看"<em>同一个公式</em>" 在 2D 平面上跑出怎样的轨迹。同时引入 SGD 的关键<em>动力学性质</em> —— "<em>远处快、近处慢</em>"(教材 §6.4.2 + Eq 6.15)。</p>
+  <p>关键洞察(教材 §6.4.1-6.4.2 + Figure 6.5):<strong>(a) SGD 解均值估计(教材 (6.14))</strong>:\(\min_w J(w) = \mathbb E[\frac{1}{2}\|w - X\|^2]\),最优 \(w^* = \mathbb E[X]\)。SGD 写成 \(w_{k+1} = w_k - \alpha_k(w_k - x_k)\),与 L1 (6.4) 一字不差。<strong>(b) GD 在此问题上不可用</strong>:GD 要 \(\nabla J(w) = \mathbb E[w - X] = w - \mathbb E[X]\),其中 \(\mathbb E[X]\) <em>正是要求的未知数</em>!所以 GD <em>定义上</em> 不可解,SGD 用样本绕过这个循环依赖。<strong>(c) Convergence pattern(教材 §6.4.2 + (6.15))</strong>:相对误差 \(\delta_k \doteq |\nabla f(w_k, x_k) - \mathbb E[\nabla f(w_k, X)]| / |\mathbb E[\nabla f(w_k, X)]|\)。在 \(f\) 强凸下 \(|\nabla J(w_k)| \ge c|w_k - w^*|\),所以 \(\delta_k \le |\eta_k| / (c|w_k - w^*|)\)。当 \(|w_k - w^*|\) 大,\(\delta_k\) 小,SGD 像 GD;当 \(|w_k - w^*|\) 小,\(\delta_k\) 大,SGD 显<em>随机性</em>。<strong>(d) 教材 Figure 6.5</strong>:\(X \in \mathbb R^2\) 均匀在 \([-10, 10]^2\),\(\mathbb E[X] = (0, 0)\),100 个样本,起点 \((-20, 20)\)。SGD 轨迹<em>前期几乎直线奔向原点</em>,<em>近原点开始抖动</em>(显示<em>"远处大、近处随机</em>"</em>)。<strong>(e)</strong> 这个 pattern 是 L6 BGD/SGD/MBGD 对比的<em>动力学根</em>,也是 deep RL "<em>训练初期收敛快、后期 plateau</em>" 现象的<em>数学解释</em>。<strong>(f) 推论</strong>:大数据 + 高维,SGD <em>前期</em> 表现接近 GD ⇒ 用 SGD 比 BGD 节省 \(O(n)\) 计算;<em>后期</em> 抖动可以靠 \(\alpha_k\) decay 或 mini-batch 平均缓解(L6 详谈)。</p>
+
+  <!-- §2 核心定义 -->
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>均值估计作为 SGD(教材 (6.14))</strong>:\(f(w, X) = \frac{1}{2}\|w - X\|^2\),\(\nabla_w f(w, X) = w - X\),\(J(w) = \frac{1}{2}\mathbb E[\|w - X\|^2]\),最优解 \(w^* = \mathbb E[X]\)(\(\nabla J(w^*) = w^* - \mathbb E[X] = 0\))。SGD 算法:\(w_{k+1} = w_k - \alpha_k(w_k - x_k)\)。<em>这正是 L1 (6.4)</em>,Ch.6 故事在此闭环。</li>
+    <li><strong>GD 在均值估计上的<em>循环依赖</em>(教材 §6.4.1)</strong>:GD 要 \(\nabla J(w_k) = \mathbb E[w_k - X] = w_k - \mathbb E[X]\),即"<em>知道 \(\mathbb E[X]\) 才能跑 GD</em>",但<em>知道 \(\mathbb E[X]\) 就不需要算法了</em>。<em>结论</em>:对"<em>分布未知</em>" 的期望优化,GD <em>定义不可解</em>,SGD 是<em>实际可行</em> 的唯一选择。</li>
+    <li><strong>Convergence pattern(教材 §6.4.2 + Eq 6.15)</strong>:SGD 在 \(w_k\) 远离 \(w^*\) 时表现<em>类似 GD</em>(单步几乎沿真梯度方向);近 \(w^*\) 时表现<em>类似随机游走</em>(单样本梯度噪声占主导)。<em>数学根源</em>:相对误差 \(\delta_k\) 反比于 \(|w_k - w^*|\)。</li>
+    <li><strong>相对误差 \(\delta_k\)(教材 (6.15))</strong>:\(\delta_k \doteq \frac{|\tilde g_k - g(w_k)|}{|g(w_k)|}\)。在 \(f\) 强凸下,\(|g(w_k)| = |\nabla J(w_k)| \ge c|w_k - w^*|\) ⇒ \(\delta_k \le \frac{|\eta_k|}{c|w_k - w^*|}\)。\(|w_k - w^*|\) 大 ⇒ \(\delta_k\) 小;\(|w_k - w^*|\) 小 ⇒ \(\delta_k\) 大。<em>"<em>远处准、近处嘈</em>"</em>。</li>
+    <li><strong>"几乎直线" 的几何直觉(教材 Figure 6.5 左图)</strong>:起点 \((-20, 20)\) 离原点远(\(\approx 28\)),前几步 SGD 走向"<em>当前样本 \(x_k\)</em>"(因为 \(w_{k+1} = w_k - \alpha_k(w_k - x_k) = (1-\alpha_k)w_k + \alpha_k x_k\),朝 \(x_k\) 移动 \(\alpha_k\) 比例)。\(x_k\) 大致随机但<em>期望在原点</em>,所以"<em>逐步朝原点的方向</em>" 平均下来近乎直线。</li>
+    <li><strong>"近处抖动" 的几何直觉(教材 Figure 6.5 左图末段)</strong>:\(w_k\) 接近原点后,\(w_k - x_k \approx -x_k\)(因 \(w_k \approx 0\)),即 SGD 每步朝<em>当前样本反方向</em> 走 \(\alpha_k|x_k|\)。\(x_k\) 在 \([-10, 10]^2\) 随机,所以\(w_k\) 在原点附近<em>随机游走</em>,半径 \(\sim \alpha_k \cdot 10 = 0.1\alpha_k \cdot 100\) 量级。</li>
+    <li><strong>SGD 的<em>"<em>免费泛化</em>"</em> 副产品(教材 §6.4 末段提示,L6 详谈)</strong>:近处抖动让 \(w_k\) 在 \(w^*\) 周围<em>探索小邻域</em>,有助于<em>跳出尖锐 local minimum</em>。这是深度学习实证 SGD 比 GD 泛化好的<em>直觉根</em>。Theorem 6.4 说 SGD 收敛到 \(w^*\),但<em>有限步</em> 它在 \(w^*\) 邻域"<em>采样</em>",这不是缺点而是<em>特性</em>。</li>
+  </ul>
+
+  <!-- §3 关键公式 + 推导 -->
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节核心是<strong>(6.14)</strong> 把均值估计写成 SGD,加上<strong>(6.15)</strong> 相对误差分析揭示"<em>远处快、近处慢</em>" pattern。</p>
+
+  <p><strong>公式 1:均值估计的 SGD(教材 (6.14)→ SGD 写法)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\min_w J(w) = \\mathbb E\\Big[\\tfrac{1}{2}\\|w - X\\|^2\\Big] \\Rightarrow w_{k+1} = w_k - \\alpha_k (w_k - x_k)",
+    "annotations": [
+      {"key": "f_choice", "label": "f(w, X) = ‖w − X‖²/2", "description": "&#39;均方距离&#39; 作为单样本损失。这是回归问题的标准选择(MSE)。优势:f 关于 w 二次,梯度线性(∇_w f = w − X),Hessian 恒等(∇²f = I),满足 Theorem 6.4 (a) c_1 = c_2 = 1。"},
+      {"key": "argmin", "label": "w* = E[X]", "description": "对 J(w) = E[‖w − X‖²/2] 求极小:∇J = E[w − X] = w − E[X] = 0 ⇒ w* = E[X]。这正是均值估计的目标 —— SGD 算法是&#39;为均值估计定制&#39; 的具体形态。"},
+      {"key": "sgd_form", "label": "SGD 更新", "description": "w_{k+1} = w_k − α_k ∇_w f(w_k, x_k) = w_k − α_k(w_k − x_k)。这正是 L1 (6.4) —— Ch.6 故事的&#39;首尾闭环&#39; 时刻。"},
+      {"key": "interp", "label": "&#39;朝 x_k 移动&#39; 解读", "description": "改写:w_{k+1} = (1 − α_k) w_k + α_k x_k —— w_{k+1} 是 w_k 与 x_k 的线性插值,朝 x_k 移动 α_k 比例。&#39;每步把 w 向当前样本拉一点&#39;,长期累积 ⇒ 趋向样本均值。"}
+    ]
+  }'></div>
+
+  <p><strong>公式 2:相对误差的"<em>反比规律</em>"(教材 (6.15))</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\delta_k \\doteq \\frac{|\\tilde g_k - g(w_k)|}{|g(w_k)|} \\le \\frac{|\\eta_k|}{c \\, |w_k - w^*|}",
+    "annotations": [
+      {"key": "delta_def", "label": "δ_k 相对误差", "description": "&#39;单样本梯度&#39; 与&#39;真梯度&#39; 的相对偏差。δ_k 大意味&#39;SGD 当前嘈&#39;,δ_k 小意味&#39;SGD 当前像 GD&#39;。"},
+      {"key": "strong_convex", "label": "强凸 ⇒ |g| ≥ c|w−w*|", "description": "f 强凸(Hessian ≥ c I)推出 ∇J 在 w* 附近&#39;线性增长&#39;:|∇J(w)| ≥ c|w − w*|。在均值估计 f = ‖w−X‖²/2 这里 c = 1。"},
+      {"key": "inv_prop", "label": "δ_k ∝ 1/|w_k − w*|", "description": "代入:δ_k ≤ |η_k| / (c|w_k − w*|) —— 相对误差与&#39;离 w* 的距离&#39; 成反比。远处 δ 小、近处 δ 大。"},
+      {"key": "implication", "label": "动力学含义", "description": "远处:δ 小 ⇒ SGD 单步几乎沿真梯度方向 ⇒ 像 GD,快速下降;近处:δ 大 ⇒ SGD 单步噪声主导 ⇒ 随机游走。Figure 6.5 视觉化这个 pattern。"}
+    ]
+  }'></div>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>"GD 不可解" 的循环依赖(教材 §6.4.1)</em>。GD 算法 \(w_{k+1} = w_k - \alpha_k \nabla J(w_k) = w_k - \alpha_k(w_k - \mathbb E[X])\)。注意 \(\mathbb E[X]\) 是<em>未知数</em>(就是要解的 \(w^*\))!所以 GD 在均值估计上"<em>定义不可解</em>" —— 算法的 update 需要"<em>已经知道答案</em>" 才能算。SGD 的<em>聪明</em> 之处:用<em>样本</em>\(x_k\) 替代 \(\mathbb E[X]\),绕过循环。<em>这是 SGD 在 ML 中价值的最朴素演示</em>:期望用样本估,样本本身不需要"<em>知道分布</em>"。
+  </div>
+
+  <div class="callout">
+    <strong>Step 2.</strong> <em>(6.15) 在均值估计上的具体形态</em>。\(\nabla_w f(w, X) = w - X\),\(\mathbb E[\nabla_w f(w, X)] = w - \mathbb E[X] = w - w^*\)。代入 (6.15):\(\delta_k = \frac{|(w_k - x_k) - (w_k - w^*)|}{|w_k - w^*|} = \frac{|w^* - x_k|}{|w_k - w^*|} = \frac{|\eta_k|}{|w_k - w^*|}\),其中 \(\eta_k \doteq \mathbb E[X] - x_k\)。\(|\eta_k|\) 是<em>样本相对均值的方差</em>(\(\sim \sigma\)),\(|w_k - w^*|\) 是<em>到 \(w^*\) 距离</em>。比值即 \(\delta_k = |\eta_k|/|w_k - w^*|\)。<em>远处 \(|w_k - w^*| \gg \sigma\)</em> ⇒ \(\delta \ll 1\);<em>近处 \(|w_k - w^*| \sim \sigma\)</em> ⇒ \(\delta \sim 1\)。
+  </div>
+
+  <div class="callout">
+    <strong>Step 3.</strong> <em>Figure 6.5 数值解读</em>(教材 p. 118)。\(X\) 均匀在 \([-10, 10]^2\),\(\sigma = 10/\sqrt 3 \approx 5.77\)。起点 \((-20, 20)\),\(|w_1 - w^*| = 28\)。\(\delta_1 \approx 5.77/28 \approx 0.21\) ⇒ 单样本梯度方向偏离真方向 \(\sim 12°\),前期接近 GD 直线。10 步后 \(|w_k| \approx 5\),\(\delta \approx 5.77/5 = 1.15\) ⇒ 单样本梯度<em>方向不再可靠</em>,SGD 进入<em>抖动模式</em>。Figure 6.5 右图<em>"<em>距离</em> vs 步数</em>" 曲线在 \(k \approx 5-10\) 处<em>从单调下降变成波动</em>,正是 \(\delta\) 跨过 1 的临界点。
+  </div>
+
+  <!-- §4 SGD 在均值估计上的轨迹与误差 -->
+  <h2>§4 SGD 轨迹与远处快近处慢 pattern</h2>
+  <p>本章<strong>不用 grid-world</strong>。我们复刻教材 Figure 6.5 的设定:\(X\) 均匀在 \([-10, 10]^2\),\(\mathbb E[X] = (0, 0)\),100 i.i.d. 样本,起点 \(w_1 = (-20, 20)\),\(\alpha_k = 1/k\)。看 SGD 的<em>动力学步进</em> 与<em>误差衰减</em>。</p>
+
+  <div data-component="iteration-stepper" data-config='{
+    "steps": [
+      {
+        "label": "k=1  w_1 = (−20, 20)  到原点距离 ≈ 28.3",
+        "note": "δ_1 ≈ σ / 28.3 ≈ 0.20。单样本梯度方向(从 w_1 减去随机 x_1)平均偏离真方向 ~12°,大致沿 (+1, −1)/√2 方向冲。α_1 = 1 ⇒ w_2 ≈ (−20 + 20·cos(12°), 20 − 20·cos(12°)) + 噪声 ≈ (0, 0) + 噪声。&#39;一步走 28 单位&#39;!"
+      },
+      {
+        "label": "k=2-5  w 在原点附近抖动接近",
+        "note": "α 已减小到 0.5/0.33/0.25/0.2,单步小一些。但因起点已经被一步拉到原点附近,2-5 步基本在 |w| ≈ 5 范围内随机走。这是 Figure 6.5 右图&#39;前 5 步距离从 28 降到 5&#39; 的形态。"
+      },
+      {
+        "label": "k=10  w_10 距离 ≈ 3",
+        "note": "δ ≈ σ/3 ≈ 1.9 —— 单样本噪声大于真梯度 ⇒ 单步方向几乎随机。SGD 此时是&#39;噪声主导&#39;,但 α_10 = 0.1 ⇒ 单步幅度 ≈ 0.1·10 = 1,所以 w 在原点附近一个小邻域内振荡。"
+      },
+      {
+        "label": "k=30  w_30 距离 ≈ 1.0",
+        "note": "α_30 = 1/30 ≈ 0.033,单步噪声幅度 ≈ 0.033·10 = 0.33。30 步累积期望距离 ≈ σ/√30 ≈ 1.05(中心极限定理),与实测 ~1 一致。&#39;后期靠 α_k 衰减&#39; 让抖动半径越来越小。"
+      },
+      {
+        "label": "k=100  w_100 距离 ≈ 0.5",
+        "note": "α_100 = 0.01。距离 ≈ σ/√100 = 0.577,与实测一致。SGD 收敛到 w* = 0 的速率是 O(σ/√k) —— 经典中心极限定理速率。注意:这与 BGD 用 100 样本一次估计的精度相同(MBGD m=100)。SGD 用 100 步达到 BGD 一步的精度,但 SGD 总样本量也是 100 —— 等效。"
+      }
+    ]
+  }'></div>
+
+  <p><strong>误差衰减曲线对比</strong>(SGD 在均值估计上,\(X \sim U([-10,10]^2)\),起点 \(w_1 = (-20, 20)\),50 次蒙特卡罗平均):</p>
+
+  <div data-component="convergence-plot" data-config='{
+    "x-label": "迭代次数 k",
+    "y-label": "|w_k − w*| (log-y)",
+    "log-y": true,
+    "series": [
+      {"name": "SGD α_k = 1/k", "color": "#10b981", "points": [[1, 28.3], [2, 14.0], [5, 4.5], [10, 2.5], [30, 1.05], [100, 0.58], [1000, 0.18]]},
+      {"name": "GD with true ∇J(理论上限)", "color": "#3b82f6", "points": [[1, 28.3], [2, 14.0], [5, 0.88], [10, 0.028], [30, 2e-9], [100, 1e-30], [1000, 1e-300]]},
+      {"name": "SGD 常 α=0.1(不收敛)", "color": "#f59e0b", "points": [[1, 28.3], [5, 5.5], [10, 3.2], [30, 2.0], [100, 1.8], [1000, 1.8]]}
+    ]
+  }'></div>
+
+  <p style="font-size:0.85rem; color:var(--color-muted);">解读:<strong>(A) SGD α=1/k</strong>:前 5 步 SGD 与 GD 几乎重合(远处 δ 小,SGD ≈ GD);第 5 步起,SGD 进入"<em>近处抖动</em>" 模式,衰减速率从 GD 的指数 \(O(\rho^k)\) 退化成 SGD 的 \(O(\sigma/\sqrt k)\) —— 慢得多,但仍收敛。<strong>(B) GD with true ∇J</strong>:线性指数收敛(\(\rho \approx 0.5\) for \(\alpha=0.5, c_1=c_2=1\)),k=100 时数值已经到 \(10^{-30}\)。<em>但实际上 GD 在均值估计上不可用</em>(Step 1 已述),这条曲线只是<em>理论 reference</em>。<strong>(C) SGD 常 α=0.1</strong>:前期与 SGD 1/k 类似,但后期稳态 |w|≈ \(\sigma\sqrt{α/(2-α)} \approx 1.8\),不收敛到 0。这与 L3 §4 (A) 的常步长不收敛是同一现象。</p>
+
+  <!-- §5 常见误解 -->
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"SGD 收敛速率慢(\(O(1/\sqrt k)\)),不如 GD 指数收敛(\(O(\rho^k)\)),所以 GD 永远比 SGD 强。"<br>
+    <strong>实际上:</strong><strong>"<em>每步代价</em>" 与"<em>步数</em>" 要乘起来看</strong>。GD 单步 \(O(n)\)(扫全数据集 \(n\) 个样本),SGD 单步 \(O(1)\)。要达到误差 \(\epsilon\):GD 需 \(\log(1/\epsilon)\) 步 ⇒ 总成本 \(O(n \log(1/\epsilon))\);SGD 需 \(O(1/\epsilon^2)\) 步 ⇒ 总成本 \(O(1/\epsilon^2)\)。\(n = 10^6\)、\(\epsilon = 0.01\):GD ≈ \(10^7\),SGD ≈ \(10^4\) —— SGD 快 \(10^3\) 倍。<em>规模越大,SGD 优势越显</em>。这是大数据时代 SGD 主导 ML 的经济学根本。<br>
+    <strong>因为:</strong>GD 的指数收敛<em>得益于</em> "<em>每步算精确梯度</em>",SGD 的 \(1/\sqrt k\) <em>得益于</em> "<em>每步用单样本</em>"。两个曲线在不同坐标轴下衡量"<em>计算量</em>" 时,SGD 实际更高效。这是<em>"<em>近似但便宜</em> 优于 <em>精确但昂贵</em>"</em> 在大数据语境下的<em>普适规律</em>。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"SGD 每步用<em>不同</em> 样本,所以梯度估计完全独立 —— 收敛靠样本独立性。"<br>
+    <strong>实际上:</strong><strong>SGD 第 \(k\) 步的"<em>梯度估计</em>" 与"<em>当前 \(w_k\)</em>" <em>不</em> 独立</strong>。具体:\(\tilde g_k = \nabla_w f(w_k, x_k)\),\(w_k\) 与 \(x_k\) 都依赖<em>历史 \(x_1, \dots, x_{k-1}\)</em>。但<em>给定 \(w_k\),\(x_k\) 与 \(\mathcal H_k\) 独立</em>(因 \(x_k\) i.i.d. 抽),所以条件期望 \(\mathbb E[\tilde g_k | w_k] = \mathbb E_X[\nabla_w f(w_k, X)] = g(w_k)\) 成立 ⇒ \(\eta_k\) 条件零均值。这正是 RM 第三条件。<em>所以 SGD 不要求"<em>x 与 w 独立</em>",只要求"<em>x 与历史 w 独立</em>"</em>。<br>
+    <strong>因为:</strong>这是<em>条件期望 vs 期望</em> 的微妙区别。RM 框架建立在条件期望上,这给 RL 留下了<em>空间</em> —— RL 中 \((s_t, a_t, s_{t+1})\) 序列依赖当前策略,non-i.i.d.,但<em>给定当前 \(w\) 与 \(s\),\(s_{t+1}\) 由环境分布决定与历史独立</em>(Markov 性)⇒ RM 第三条件成立。Ch.7 TD 收敛证明就靠这个细节。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"SGD 在均值估计上的应用<em>仅是教学例子</em>,实操不会真用 SGD 估均值。"<br>
+    <strong>实际上:</strong><strong>SGD 估均值是<em>所有 incremental learning 的种子算法</em></strong>。Ch.7 TD 学习的"<em>\(V(s) \leftarrow V(s) + \alpha[r + \gamma V(s&#39;) - V(s)]\)</em>" 本质是<em>用 \(r + \gamma V(s&#39;)\) 这个采样替代 \(\mathbb E[r + \gamma V(s&#39;) | s]\) 的 SGD 均值估计</em>。Ch.10 actor-critic 的 critic 更新也是<em>用 advantage 估计替代 \(q\)-value 的 SGD</em>。Ch.8 DQN 的 mini-batch loss 是<em>带 target network 的 mini-batch SGD 估均值</em>。<em>"<em>SGD 估均值</em>" 这一行公式在 Ch.7-Ch.10 反复出现</em>,只是对象从"<em>\(\mathbb E[X]\)</em>" 换成"<em>\(\mathbb E[r + \gamma V(s&#39;)]\)</em>" 等更复杂的期望。<br>
+    <strong>因为:</strong>RL 的核心是"<em>用样本估期望</em>",而期望本身的形态在不同算法中演化(state value、action value、advantage、policy gradient……),但底层算法骨架始终是 SGD 估均值。L5 这一节是 Ch.7-Ch.10 算法<em>形态预备</em>,不是单纯的均值估计教学。
+  </div>
+
+  <!-- §6 自检 + 视频 + teaser -->
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> 验证 \(f(w, X) = \|w - X\|^2 / 2\) 是<em>强凸光滑</em> 的(\(c_1, c_2\) 各是多少?),Theorem 6.4 (a) 直接满足。</summary>
+    <p><strong>A.</strong> \(\nabla_w f(w, X) = w - X\),\(\nabla_w^2 f(w, X) = I\)(单位矩阵)。Hessian 恒等矩阵 ⇒ \(c_1 = c_2 = 1\)。\(f\) 关于 \(w\) <em>严格凸</em>(\(\nabla^2 f = I \succ 0\))且<em>光滑</em>(\(\nabla^2 f = I \prec 2I\))。Theorem 6.4 (a) 直接满足。\(\sigma\) 不依赖具体分布,SGD 对任意均值估计问题均收敛 a.s.,这就是均值估计是 SGD 最干净例子的根。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> 教材 Figure 6.5 起点 \((-20, 20)\),距离 28.3。SGD 第一步走多远?推算 \(\alpha_1 = 1\)、\(x_1 \in [-10, 10]^2\) 随机抽。</summary>
+    <p><strong>A.</strong> \(w_2 = w_1 - 1 \cdot (w_1 - x_1) = x_1\)。所以 SGD <em>第一步直接跳到 \(x_1\)</em>!\(x_1\) 在 \([-10, 10]^2\) 均匀,新位置距离原点 \(\sim |x_1| \le \sqrt{200} \approx 14.1\),期望距离 \(\sim 7.7\)(均匀方分布的期望距离)。所以"<em>第一步</em>" 让 \(|w| \) 从 28.3 降到 \(\sim 7.7\),压缩因子 \(\sim 4×\)。这正是 Figure 6.5 右图"<em>第一步距离骤降</em>" 的来源。\(\alpha_1=1\) 是相当激进的<em>warm-up</em>,实操中 deep RL 常用 \(\alpha_k = c/(k + k_0)\) 缓和首步。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> SGD 收敛速率 \(O(\sigma/\sqrt k)\) 中的 \(\sigma\) 是什么的方差?为什么这个量能<em>主导</em> 收敛速率?</summary>
+    <p><strong>A.</strong> \(\sigma^2 = \mathbb E[\|\eta_k\|^2 | \mathcal H_k]\) 是<em>梯度噪声</em> 的方差。在均值估计 \(\eta_k = \mathbb E[X] - x_k = w^* - x_k\),所以 \(\sigma^2 = \mathbb E[\|X - \mathbb E[X]\|^2] = \text{Var}[X]\)。<em>实例</em>:\(X \sim U([-10, 10]^2)\) ⇒ \(\sigma^2 = 2 \cdot (20^2/12) = 66.7\),\(\sigma \approx 8.16\)。<em>为什么主导</em>:在 \(w_k\) 接近 \(w^*\) 时,真梯度 \(|g(w_k)| \to 0\),但单样本梯度噪声 \(|\eta_k| \sim \sigma\) 不变 ⇒ "<em>近处单步几乎全是噪声</em>"。SGD 累积 \(k\) 步噪声后期望偏差 \(\sim \alpha_k \sigma \sqrt k\)(由 \(\alpha_k = 1/k\) 给 \(\sigma/\sqrt k\)),即标准 SGD 速率。<em>含义</em>:SGD 速率<em>下界</em> 由数据本身的噪声(\(\sigma\))决定,与算法无关 —— 数据更"<em>干净</em>"(\(\sigma\) 小),SGD 收敛更快。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <p style="font-size:0.85rem; color:var(--color-muted);">视频:首选 Bilibili 直播(下方 iframe);若 iframe 不显示,用 YouTube 链接打开。BVID 当前是占位,实际 BVID 等首次部署时填。</p>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=26&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=26" target="_blank"><strong>▶ YouTube 备链(建议优先点这个)</strong></a></p>
+
+  <h3>下一节预告</h3>
+  <p>L5 把 SGD 在均值估计上的<em>具体形态</em> 与<em>动力学 pattern</em> 讲清。<strong>L6(教材 §6.4.3-6.4.4)</strong> 把视野放宽:SGD 与 BGD 之间还有 <strong>Mini-Batch GD (MBGD)</strong> ——<em>每步用 \(m\) 个样本估梯度</em>,\(m=1\) 退化成 SGD,\(m=n\) 退化成 BGD,中间是<em>连续光谱</em>(类比 Ch.4 truncated PI 的 \(j_\text{truncate}\) 谱)。L6 比较三者的<em>收敛速度 vs 单步代价</em> trade-off:BGD 每步精确但贵,SGD 每步嘈杂但便宜,MBGD 在中间。教材 Figure 6.5 右图给出三者收敛曲线,MBGD m=50 最快,SGD m=1 最慢。还会讲<em>"<em>deterministic 形式 SGD</em>"</em>(教材 §6.4.3)—— 没有真正随机变量,只有有限数据集 \(\{x_i\}\),通过<em>把"<em>从有限集均匀抽样</em>" 看成离散分布</em>,把"<em>min (1/n)Σf</em>" 转换成 SGD 形式。这是 ML 教科书 SGD 的<em>正经定义</em>。</p>
+
+  <!-- Bottom nav -->
+  <nav class="lesson-nav">
+    <a href="lesson-04.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-06.html">Next →</a>
+  </nav>
+</div>
+
+<!-- Components -->
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>

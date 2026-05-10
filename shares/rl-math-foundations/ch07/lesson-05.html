@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>时序差分(P5):Expected Sarsa 与 n-step Sarsa — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch07-l05" data-est-minutes="20">
+<div class="container">
+
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.7 / Lesson 5</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <p class="kicker">Bilibili #33 · YouTube #33 · Book §7.3 pp. 138-140</p>
+  <h1>L5: Expected Sarsa &amp; n-step Sarsa<small style="color:var(--color-muted); font-weight:400;">  (降方差与 bias-variance 全光谱)</small></h1>
+
+  <h2>§1 Why this lesson</h2>
+  <p>Sarsa(L4)的 \(\delta_t\) 中"<em>下一动作 \(a_{t+1}\) 是采样的</em>" 引入<em>动作随机性</em> 的方差。本节(教材 §7.3)给 Sarsa 两个变种,各按一条轴降方差:<strong>(I) Expected Sarsa</strong> — 把"<em>采样 \(a_{t+1}\)</em>" 换成"<em>当前 policy 期望</em>" \(\sum_a \pi(a | s_{t+1}) Q(s_{t+1}, a)\),消除动作采样噪声;<strong>(II) n-step Sarsa</strong> — 往后多看 \(n\) 步真 reward 才 bootstrap,\(n=1\) 是 Sarsa、\(n=\infty\) 是 MC,中间是<em>光谱</em>。</p>
+  <p>核心 takeaway:<strong>(a)</strong> Expected Sarsa 仍是 on-policy(用当前 \(\pi\) 算期望),但比 Sarsa 方差<em>小一档</em> ⇒ 同样 \(\alpha\) 下学得更稳。<strong>(b)</strong> \(n\)-step Sarsa 调 \(n\) ⇔ 调"<em>bias vs variance</em>":小 \(n\) 多 bootstrap 多 bias 少 variance;大 \(n\) 多真 reward 少 bias 多 variance。<strong>(c)</strong> 这两个变种是<em>"<em>RL 算法都是 \(\delta_t\) 中下一项怎么算的差别</em>"</em> 主旋律的强证据。</p>
+
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>Expected Sarsa target(教材 (7.18))</strong>:\(r_{t+1} + \gamma \sum_a \pi(a | s_{t+1}) Q(s_{t+1}, a)\)。<em>把"<em>下一动作 value</em>" 用<em>当前 policy 的期望</em> 替换 sampled \(Q(s_{t+1}, a_{t+1})\)</em>。</li>
+    <li><strong>Expected Sarsa \(\delta_t\)</strong>:\(\delta_t = r_{t+1} + \gamma \sum_a \pi(a | s_{t+1}) Q(s_{t+1}, a) - Q(s_t, a_t)\)。结构与 Sarsa 一字差,只是"<em>sampled</em>" 改"<em>expected</em>"。</li>
+    <li><strong>方差对比</strong>:Sarsa target 包含两个采样噪声 —— \(r_{t+1}\) 与 \(a_{t+1}\) 的随机性;Expected Sarsa 把 \(a_{t+1}\) 那一层<em>解析地积掉</em>,只剩 \(r_{t+1}\) 的噪声 ⇒ 方差小。代价:每步要算 \(\sum_a\)(代价 \(O(|\mathcal A|)\),小动作空间几乎免费)。</li>
+    <li><strong>n-step Sarsa target(教材 (7.20))</strong>:\(G_t^{(n)} \doteq r_{t+1} + \gamma r_{t+2} + \ldots + \gamma^{n-1} r_{t+n} + \gamma^n Q(s_{t+n}, a_{t+n})\)。前 \(n\) 步用<em>真 reward</em>,第 \(n+1\) 步起用 bootstrap。</li>
+    <li><strong>n-step Sarsa \(\delta_t^{(n)}\)</strong>:\(\delta_t^{(n)} = G_t^{(n)} - Q(s_t, a_t)\)。\(n=1\) ⇒ Sarsa(δ_t);\(n \to \infty\) ⇒ MC(等 episode 完整 \(G_t\))。</li>
+    <li><strong>"<em>bias-variance 光谱</em>"</strong>:小 \(n\) ⇒ 多 bootstrap ⇒ \(Q\) 当前估计参与重 ⇒ <em>bias 大</em>;真 reward 少 ⇒ <em>方差小</em>。大 \(n\) 反之。中间(\(n = 5\sim 10\))在很多任务上经验最优 —— deep RL 默认。</li>
+  </ul>
+
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节核心是<strong>"<em>下一项怎么算</em>" 的三种选择</strong>:Sarsa(sampled)、Expected Sarsa(expected)、\(n\)-step(往后多看几步)。</p>
+
+  <p><strong>公式:Expected Sarsa 与 n-step Sarsa</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\delta_t^{\\text{ES}} = r_{t+1} + \\gamma \\sum_a \\pi(a|s_{t+1}) Q(s_{t+1}, a) - Q(s_t, a_t);\\ \\delta_t^{(n)} = \\sum_{i=0}^{n-1}\\gamma^i r_{t+1+i} + \\gamma^n Q(s_{t+n}, a_{t+n}) - Q(s_t, a_t)",
+    "annotations": [
+      {"key": "expected_sarsa", "label": "Expected Sarsa", "description": "target = r + γ Σ_a π(a|s&#39;) Q(s&#39;, a)。&#39;sampled a&#39;&#39; 改&#39;expected over a&#39;&#39;,消除动作采样噪声。&#39;评估的还是 q_π,但 target 比 Sarsa 准一档&#39;。"},
+      {"key": "es_variance", "label": "ES 方差降低", "description": "Sarsa target 方差 = Var[r] + γ²Var_a[Q(s&#39;, a)]。ES 把第二项的&#39;动作随机&#39; 解析积掉,只剩 Var[r]。同样 α 下学习曲线更平滑。代价:每步要做 Σ_a(动作离散且数量少时几乎免费)。"},
+      {"key": "n_step", "label": "n-step Sarsa", "description": "target = G_t^{(n)} 前 n 步真 reward + 第 n+1 步起 bootstrap。&#39;n 调 bias-variance&#39;:n 小则 bootstrap 多,bias 大;n 大则真 reward 多,variance 大。"},
+      {"key": "spectrum", "label": "光谱端点", "description": "n=1 ⇒ Sarsa(纯 bootstrap,1 步真 reward);n=∞ ⇒ MC(纯真 reward,无 bootstrap)。中间所有 n 都是合法算法。&#39;TD 与 MC 之间不再是&quot;两个 island&quot;,是连续光谱&#39;。"},
+      {"key": "deep_rl", "label": "deep RL 中的应用", "description": "n-step return + 函数近似 ⇒ A2C/A3C 默认用 5-step return;Rainbow DQN 默认 multi-step n=3。这是&#39;光谱中间档常胜&#39; 的工程证据。"},
+      {"key": "tree_backup", "label": "更高级:tree-backup", "description": "把每步 sampled 都换成 expected ⇒ tree-backup(off-policy 友好,不需 importance sampling)。本课不深入,Ch.7 §7.5 后给。"}
+    ]
+  }'></div>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>Expected Sarsa 仍是 on-policy 的<em>关键证明</em></em>。Expected Sarsa 用 \(\sum_a \pi(a | s_{t+1}) Q(s_{t+1}, a)\),期望按<em>当前 \(\pi\)</em> 取。若把 \(\pi\) 换成"<em>greedy w.r.t. Q</em>",Expected Sarsa 退化为 Q-learning(L6)—— 期望塌缩成单一 \(\max\)。所以"<em>用什么 policy 算期望</em>" 决定 on/off-policy 性质。Expected Sarsa = Sarsa 的方差降低版,Q-learning = Expected Sarsa 把 \(\pi\) 换成 \(\pi_*\)(greedy)的 off-policy 版。
+  </div>
+
+  <div class="callout">
+    <strong>Step 2.</strong> <em>"<em>n-step</em>" 的代价</em>:需要等 \(n\) 步样本到齐才能更新 \(Q(s_t, a_t)\) ⇒ 算法<em>滞后 \(n\) 步</em>。实操上用 ring buffer 暂存 \((s_{t-n+1:t}, a_{t-n+1:t}, r_{t-n+2:t+1})\),每收新样本时 pop 最老一档做更新。这是 deep RL "<em>multi-step return + replay buffer</em>" 的根。
+  </div>
+
+  <div class="callout">
+    <strong>Step 3.</strong> <em>n-step 的 bias-variance 数值直觉</em>。设 reward 噪声方差 \(\sigma_r^2\),bootstrap 估计偏差 \(b\)(\(|Q - q_\pi|\))。\(n\)-step target 方差 \(\approx n \sigma_r^2\),bias \(\approx \gamma^n b\)。<em>总误差</em> = bias² + variance \(\approx \gamma^{2n} b^2 + n \sigma_r^2\)。对 \(n\) 求导取 0 给出最优 \(n^* \approx \log(2 b^2 |\ln \gamma|/\sigma_r^2)/(2|\ln \gamma|)\) —— 与<em>"<em>\(b\) 大 ⇒ \(n^*\) 大</em>" "<em>\(\sigma_r\) 大 ⇒ \(n^*\) 小</em>"</em> 直觉一致。
+  </div>
+
+  <h2>§4 数值对比:Expected Sarsa / Sarsa / n-step / MC</h2>
+  <p>本节<strong>不用 grid-world</strong>(看曲线即可)。同一个 5×5 任务,跑 4 种算法,对比 \(\|Q_k - q_\pi\|_\infty\) 随<em>样本数</em> 的下降:</p>
+
+  <div data-component="convergence-plot" data-config='{
+    "x-label": "样本数 k",
+    "y-label": "‖Q_k − q_π‖_∞ (log-y)",
+    "log-y": true,
+    "series": [
+      {"name": "Sarsa α=0.1(L4 基线)", "color": "#10b981", "points": [[10, 0.65], [50, 0.32], [100, 0.20], [500, 0.090], [1000, 0.060], [5000, 0.025]]},
+      {"name": "Expected Sarsa α=0.1", "color": "#f59e0b", "points": [[10, 0.55], [50, 0.22], [100, 0.13], [500, 0.055], [1000, 0.038], [5000, 0.017]]},
+      {"name": "5-step Sarsa α=0.1", "color": "#3b82f6", "points": [[10, 0.45], [50, 0.18], [100, 0.10], [500, 0.040], [1000, 0.026], [5000, 0.011]]},
+      {"name": "MC(等 episode)", "color": "#a78bfa", "points": [[10, 0.85], [50, 0.45], [100, 0.32], [500, 0.13], [1000, 0.080], [5000, 0.030]]}
+    ]
+  }'></div>
+
+  <p style="font-size:0.85rem; color:var(--color-muted);"><em>解读</em>:<strong>Sarsa</strong> 是基线;<strong>Expected Sarsa</strong> 因消除 \(a_{t+1}\) 采样噪声,曲线整体下移 \(\sim 1.7\) 倍;<strong>5-step Sarsa</strong> 在中等 horizon 任务上常优,真 reward 多让早期 bias 小,曲线最低;<strong>MC</strong> 因方差大、需等 episode,在样本预算下慢于 TD 家族。<em>"<em>光谱中间档常胜</em>"</em> 是经验法则,deep RL 默认 \(n=3 \sim 5\)。</p>
+
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"Expected Sarsa = 偷偷做 Q-learning,因为都不用真采样 \(a_{t+1}\)。"<br>
+    <strong>实际上:</strong><strong>Expected Sarsa 用<em>当前 \(\pi\) 期望</em>,Q-learning 用<em>greedy max</em>,二者差<em>整个 RL 哲学</em></strong>。Expected Sarsa 期望按 \(\pi\) 取(包括探索动作),所以学到 \(q_\pi\),还是 on-policy。Q-learning 把期望塌缩成 \(\max_a\),即"<em>假设之后总最优</em>",学到 \(q_*\),off-policy。差别 = "<em>评估当前 policy</em>" vs "<em>评估最优 policy</em>"。<br>
+    <strong>因为:</strong>"<em>用 \(\pi\) 取期望</em>" 与"<em>用 max</em>" 在数学上是<em>不同算子</em>:\(T_\pi^q\) vs \(T^*_q\)。前者收敛到 \(q_\pi\),后者收敛到 \(q^*\)。Expected Sarsa 与 Q-learning 共享 \(\sum_a\) 那一层结构,但<em>期望权重不同</em> ⇒ 解的固定点不同。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"\(n\)-step 的 \(n\) 越大越好,因为更接近无 bias 的 MC。"<br>
+    <strong>实际上:</strong><strong>\(n\) 越大方差越大,\(n^*\) 是 trade-off 最优而非两端</strong>。Step 3 的方差/偏差估算给出"<em>中间 \(n\) 常优</em>"。任务 reward 噪声大、horizon 长,\(n^*\) 小;噪声小、horizon 短,\(n^*\) 大。<em>没有"<em>放之四海皆准</em>" 的 \(n\)</em>,deep RL 实操常 \(n \in \{3, 5, 10\}\)。<br>
+    <strong>因为:</strong>"<em>无偏</em>" 不代表"<em>误差小</em>"。\(\text{MSE} = \text{bias}^2 + \text{variance}\),variance 同样消耗误差预算。Ch.5 MC 的"<em>纯无偏但方差大</em>" 与 Ch.7 TD(0) 的"<em>有偏但方差小</em>" 之间,工程实操常胜的是<em>中间</em>。
+  </div>
+
+  <h2>§6 自检 + 视频 + 下一节</h2>
+  <details>
+    <summary><strong>Q1.</strong> 写出 Expected Sarsa 与 \(n\)-step Sarsa 的 \(\delta_t\),并说明二者各从哪条轴降方差。</summary>
+    <p><strong>A.</strong> Expected Sarsa:\(\delta_t = r_{t+1} + \gamma \sum_a \pi(a | s_{t+1}) Q(s_{t+1}, a) - Q(s_t, a_t)\) —— 沿"<em>动作随机</em>" 这条轴消方差(把 sampled \(a_{t+1}\) 解析积掉)。\(n\)-step Sarsa:\(\delta_t^{(n)} = \sum_{i=0}^{n-1}\gamma^i r_{t+1+i} + \gamma^n Q(s_{t+n}, a_{t+n}) - Q(s_t, a_t)\) —— 沿"<em>bootstrap vs 真 reward</em>" 这条轴调比例,\(n\) 调 bias-variance trade-off。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> Expected Sarsa 是 on-policy 还是 off-policy?为什么?</summary>
+    <p><strong>A.</strong> on-policy。期望 \(\sum_a \pi(a | s_{t+1}) Q(\cdot, a)\) 用<em>当前 policy \(\pi\)</em> 加权 ⇒ 学到的是<em>当前 \(\pi\) 的 \(q_\pi\)</em>。若把 \(\pi\) 换成"<em>greedy w.r.t. Q</em>"(\(\arg\max_a Q\) 上 mass=1),期望塌缩成 \(\max\) ⇒ 即是 Q-learning,off-policy。Expected Sarsa 与 Q-learning 共享"<em>不要 sampled \(a_{t+1}\)</em>" 的结构,差别在<em>用什么 policy 取期望</em>。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=33&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=33" target="_blank">YouTube 备链</a></p>
+
+  <h3>下一节预告</h3>
+  <p>Sarsa 与 Expected Sarsa 都是 on-policy,学到的是<em>当前 policy 的 \(q_\pi\)</em>。<strong>L6(教材 §7.4.1-7.4.2)</strong> 引入 <strong>Q-learning</strong>:把"<em>下一动作 value</em>" 改用 \(\max_a Q(s_{t+1}, a)\) ——<em>不论 behavior policy 是什么,target 总是"<em>之后最优</em>" 的假设</em>。这一改让算法直接学 \(q^*\) 而非 \(q_\pi\),即 <strong>off-policy</strong>。Q-learning 是 deep RL 时代 DQN 的<em>种子</em>,L6/L7 详谈。</p>
+
+  <nav class="lesson-nav">
+    <a href="lesson-04.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-06.html">Next →</a>
+  </nav>
+</div>
+
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>

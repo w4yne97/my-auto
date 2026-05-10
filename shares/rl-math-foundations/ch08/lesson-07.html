@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>值函数近似(P7):DQN 的两大 trick — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch08-l07" data-est-minutes="20">
+<div class="container">
+
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.8 / Lesson 7</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <p class="kicker">Bilibili #43 · YouTube #43 · Book §8.4.1 pp. 183-184</p>
+  <h1>L7: DQN — Target Network + Experience Replay<small style="color:var(--color-muted); font-weight:400;">  (DQN 两大 trick:目标网络 + 经验回放)</small></h1>
+
+  <h2>§1 Why this lesson</h2>
+  <p>L6 给出 DQN 目标函数 (8.37) + target network 的<em>第一</em> 个动机(让梯度可算 + 截断 bootstrap 反馈)。本节(教材 §8.4.1, pp. 183-184)把<strong>两大 trick</strong> <em>独立</em> 摊开:<em>(a)</em> <strong>target network</strong> 解决"<em>bootstrap 自反馈</em>";<em>(b)</em> <strong>experience replay</strong> 解决"<em>样本时间相关 + off-policy 加权失配</em>"。两者<em>缺一</em> 都让 NN-Q-learning 实测发散(Mnih 2015 的 ablation 验证)。本节给出<em>各自的<em>数学动机</em></em> 与<em>实现细节</em>,以及把它们拼成完整 DQN(Algorithm 8.3)。</p>
+  <p>核心 takeaway:<strong>(a)</strong> target net 把"<em>追自己影子</em>" 改成"<em>追固定影子</em>",每 \(C\) 步同步 \(w_T \leftarrow w\)。\(C\) 太小退化无 trick,\(C\) 太大 target 长期 stale ⇒ 实操 \(C \in [10^3, 10^4]\)(Atari)或 \(C \approx 100\)(教材 grid)。<strong>(b)</strong> Replay buffer \(\mathcal B = \{(s, a, r, s&#39;)\}\) 存最近若干 transition,每次更新主网络<em>均匀</em> 抽 mini-batch。两个效果:<em>(b1)</em> <em>打散时间相关</em>(连续步同一轨迹 → 抽样后近似独立),让 SGD 收敛假设近似成立;<em>(b2)</em> <em>近似均匀分布</em>(buffer 是<em>多 episode 多策略</em> 历史的混合,均匀抽 ≈ uniform 分布)⇒ (8.37) 中"<em>(S, A) ~ Uniform</em>" 假设近似满足 ⇒ off-policy 加权失配缓解。<strong>(c)</strong> 副效益:<em>data efficiency</em> —— 每条 transition 平均被用 \(B\) 次(buffer 满 \(N\)、batch \(B\)、迭代 \(K\) 次 ⇒ 每条用约 \(B K / N\) 次)。<strong>(d)</strong> 完整 DQN(Algorithm 8.3):behavior policy \(\pi_b\) 收集 \(\mathcal B\) → 均匀抽 batch → 算 \(y_T\)(用 \(w_T\)) + MSE loss + Adam → 每 \(C\) iter 同步 \(w_T \leftarrow w\)。</p>
+
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>Replay buffer \(\mathcal B\)</strong>:一个 FIFO 容器,存最近 \(N\) 条 transition \((s_i, a_i, r_i, s&#39;_i)\)。\(N\) 典型值 \(10^5\)-\(10^6\)(Atari);教材 grid 实验 \(N=1000\)(单个 episode 1000 步)。新 transition 进 ⇒ 旧的出。</li>
+    <li><strong>均匀抽样 (uniform sampling)</strong>:每次 update 从 \(\mathcal B\) 中<em>独立同分布</em> 抽 \(B\) 条样本。"<em>必须均匀</em>"(教材 §8.4.1 反复强调)—— 因为 (8.37) 假设 \((S, A) \sim \text{Uniform}\)。Prioritized replay(Schaul et al., 2016)是<em>非</em> 均匀变体,需<em>重要性采样</em> 修正,本节不展开。</li>
+    <li><strong>Target network \(w_T\)</strong>:与主网络<em>同结构异参</em>。每 \(C\) 步同步 \(w_T \leftarrow w\)。在算 target \(y_T = r + \gamma \max_{a&#39;}\hat q(s&#39;, a&#39;; w_T)\) 时<em>only</em> 它出现,梯度不传播(autograd 的 detach)。</li>
+    <li><strong>同步频率 \(C\)</strong>:超参,典型 \(10^3\)-\(10^4\)(Atari)。物理像<em>低通滤波</em>:\(C\) 大 ⇒ target 平滑慢、稳但延迟;\(C\) 小 ⇒ target 响应快、噪但实时。无理论最优值,凭实测调。</li>
+    <li><strong>Mini-batch loss</strong>:\(L(w) = \frac{1}{B}\sum_{i \in \text{batch}}(y_{T,i} - \hat q(s_i, a_i; w))^2\),\(y_{T,i} = r_i + \gamma \max_{a&#39;}\hat q(s&#39;_i, a&#39;; w_T)\)。这是教材 §8.4.1 的"<em>TD error / loss function</em>",对 \(B\) 条样本求平均。</li>
+    <li><strong>"<em>break correlation</em>" 的<em>数学含义</em></strong>:原始 RL 数据 \((s_t, a_t, r_t, s_{t+1})\) 来自<em>同一</em> trajectory,\((s_{t+1}, a_{t+1})\) 与 \((s_t, a_t)\) 高度相关。SGD 的"<em>独立样本</em>" 假设要求样本独立 i.i.d.;直接训 NN 在<em>连续步</em> 上 ⇒ 梯度估强相关 ⇒ Adam 步长估错 ⇒ 不稳。Replay buffer 把<em>多 episode</em> 样本混存,均匀抽样 ⇒ 抽到的 \(B\) 条样本来自<em>不同</em> 时刻 / episode,近似独立。</li>
+    <li><strong>"<em>uniform 分布假设</em>" 的<em>数学含义</em></strong>:(8.37) 的 \(\mathbb E\) 含<em>(S, A)</em> 分布。教材选 uniform("<em>最简</em>"),但 behavior policy 写 buffer ⇒ \((S, A)\) 的实际分布是<em>policy-induced</em>(off-policy 偏离)。Replay buffer 是<em>多策略历史</em> 的混合,均匀抽样 \(\approx\) "<em>把多个 policy-induced 分布混成均匀</em>"。这是 deadly triad 中<em>"<em>off-policy 加权失配</em>" 那一条</em>的工程缓解。</li>
+  </ul>
+
+  <h2>§3 关键公式与 Trick 详解</h2>
+  <p>本节核心是<strong>两大 trick 的<em>独立</em> callout</strong>:每个 trick 一个 WHY,以及它解决什么问题。</p>
+
+  <div class="callout">
+    <strong>Trick 1: Target Network</strong>(教材 §8.4.1, "<em>The first technique is to use two networks</em>")<br>
+    <em>WHAT:</em> 维护一份与主网络<em>同结构异参</em> 的 \(\hat q(s, a; w_T)\)。算 target \(y_T = r + \gamma \max_{a&#39;}\hat q(s&#39;, a&#39;; w_T)\) 时用 \(w_T\),主网络只对自己的 \(w\) 求梯度。每 \(C\) 步同步 \(w_T \leftarrow w\)。<br>
+    <em>WHY (i):</em> <strong>截断 bootstrap 自反馈</strong>。无 target net 时,\(\hat q(S, A; w)\) 和 \(\max_{a&#39;}\hat q(S&#39;, a&#39;; w)\) 共用 \(w\) ⇒ update \(w\) 同时移动两边 ⇒ "<em>追自己影子</em>" ⇒ 正反馈循环 ⇒ 实测发散(尤其 NN 谱条件差时)。target net 把 max 中的 \(w\) 替成 frozen \(w_T\) ⇒ target 在 \(C\) 步内是常数 ⇒ 主网络追<em>固定</em> 目标 ⇒ 收敛动力学清晰(像监督学习的"<em>固定标签</em>")。<br>
+    <em>WHY (ii):</em> <strong>梯度可算</strong>。无 target net 时,\(\nabla_w[r + \gamma \max_{a&#39;}\hat q(S&#39;, a&#39;; w) - \hat q(S, A; w)]^2\) 含<em>两个</em> \(\nabla_w \hat q\) 项,链式法则展开极复杂,且 \(\max\) 的<em>不光滑</em> 让<em>第二个梯度</em> 仅对最优 \(a&#39;\) 非零(数值不稳)。target net 把 max 内的 \(w\) 替 \(w_T\) ⇒ 梯度只对前面 \(\hat q(S, A; w)\) 求 ⇒ (8.38) 简洁,autograd 自然支持。<br>
+    <em>同步频率 \(C\):</em> 实操 \(C \in [10^3, 10^4]\)(Atari);太小退化无 trick,太大 target 长期 stale 收敛慢。教材 grid 实验 \(C \approx 100\) 即可,因网络小、任务简单。
+  </div>
+
+  <div class="callout">
+    <strong>Trick 2: Experience Replay</strong>(教材 §8.4.1, "<em>The second technique is experience replay</em>")<br>
+    <em>WHAT:</em> 维护 FIFO buffer \(\mathcal B = \{(s_i, a_i, r_i, s&#39;_i)\}\)(typical \(|\mathcal B| = 10^5\)-\(10^6\),教材 grid 实验 \(10^3\))。behavior policy \(\pi_b\) 不断写 \(\mathcal B\)。每次 update 主网络时<em>均匀</em> 抽 \(B\) 条样本(\(B=32\)-\(256\) 典型,教材 grid \(B=100\))。<br>
+    <em>WHY (i):</em> <strong>打散时间相关性</strong>。原始 trajectory \((s_0, a_0, r_1, s_1, a_1, \ldots)\) 中,\((s_t, a_t)\) 与 \((s_{t+1}, a_{t+1})\) 高度相关。SGD/Adam 假设样本独立,相关样本让<em>梯度估</em> 强偏 ⇒ Adam 自适应步长估错 ⇒ NN 不稳。Buffer 均匀抽样 ⇒ 抽到的 \(B\) 条来自<em>不同时刻 / episode</em>,近似独立 ⇒ SGD 假设近似满足。<br>
+    <em>WHY (ii):</em> <strong>近似均匀分布(缓解 off-policy 加权失配)</strong>。(8.37) 的 \(\mathbb E\) 用 \((S, A) \sim \text{Uniform}\),behavior policy 写的实际分布是 policy-induced 的(\(d_b \neq\) uniform)。但 buffer 是<em>多 episode、多 policy</em> 历史的<em>混合</em>(behavior policy 在训练中也变,如 ε-greedy ε 衰减),均匀抽样 \(\approx\) "<em>多策略平均</em>" \(\approx\) uniform。这把 deadly triad 的 off-policy 加权失配那一条<em>显著</em> 缓解(虽不严格消除)。<br>
+    <em>WHY (iii):</em> <strong>Data efficiency(副效益)</strong>。每条 transition 平均被抽用 \(B \cdot K / N\) 次(\(K\) 次 update,buffer 大小 \(N\))。教材 grid 实验 \(B=100, N=1000, K=1000\) ⇒ 每条用 \(\approx 100\) 次。这让<em>稀缺真实交互</em> 充分挖掘,Atari 一般 1 frame 用 8 次。这是<em>副效益</em>,主效益是 (i)(ii)。<br>
+    <em>必须均匀抽样</em>:(8.37) 的 \(\mathbb E\) 假设 uniform。非均匀(prioritized replay)需重要性采样修正(Schaul 2016),否则梯度估有偏,本节不展开。
+  </div>
+
+  <p><strong>把两件事合起来看 —— 完整 DQN 数据流(教材 Algorithm 8.3)</strong>:</p>
+
+  <pre class="mermaid">
+graph LR
+  B[behavior policy π_b] --> Buf[replay buffer 𝓑<br/>FIFO N transitions]
+  Buf -- uniform sample B --> Loss[mini-batch MSE loss]
+  Main[main net w] --> Loss
+  Tgt[target net w_T<br/>frozen] --> Loss
+  Loss -- backward + Adam --> Main
+  Main -- every C iter --> Tgt
+  </pre>
+
+  <p style="font-size:0.85rem; color:var(--color-muted);">数据流:behavior policy 写 buffer;buffer 给 mini-batch;mini-batch + 主网络 + target 网络共算 loss;loss 反向 update 主网络;每 \(C\) 步主网络<em>同步</em> 给 target。<em>两大 trick 各管一段</em>:replay 处理"<em>buffer → batch</em>"(打散相关 + 近均匀);target net 处理"<em>loss 算 target</em>"(截断 bootstrap 自反馈)。两条独立但<em>合力</em> 让 NN-Q-learning 稳。</p>
+
+  <p><strong>Algorithm 8.3 公式</strong>(教材 §8.4.1):</p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "y_T = r + \\gamma \\max_{a&#39;\\in\\mathcal A(s&#39;)} \\hat q(s&#39;, a&#39;; w_T),\\quad L(w) = \\frac{1}{B}\\sum_{i\\in\\text{batch}}(y_{T,i} - \\hat q(s_i, a_i; w))^2",
+    "annotations": [
+      {"key": "y_T", "label": "TD target(用 target net)", "description": "y_T 是&#39;期望的 q*(s,a)&#39;。max 用 target net w_T,而非主网络 w ⇒ 截断 bootstrap 自反馈。算法上:对所有 a&#39; ∈ A(s&#39;) 用 target net forward 一次,取 max。"},
+      {"key": "loss", "label": "mini-batch MSE loss", "description": "B 条样本平均。这是&#39;监督学习风格&#39;:y_T 当固定 label,主网络 q̂(s,a;w) 当模型,L 是 MSE。autograd 给 ∇_w L,Adam update。"},
+      {"key": "batch_uniform", "label": "B 条样本均匀抽自 𝓑", "description": "buffer 𝓑 容量 N,均匀抽 B 条 ⇒ 数据近似独立 + 加权近似均匀。这是 (8.37) E[·] 的样本估的&#39;两条假设近似&#39; 体现。"},
+      {"key": "C_sync", "label": "每 C iter 同步 w_T ← w", "description": "Algorithm 8.3 最后一行:&#39;Set w_T = w every C iterations.&#39; C 是关键超参,平衡 target stale 与稳定性。"}
+    ]
+  }'></div>
+
+  <p>各超参的<em>分布感</em>(教材 grid 实验 vs Atari 标准)用 distribution-bar 展示:</p>
+
+  <div data-component="distribution-bar" data-config='{
+    "title": "DQN 关键超参(教材 grid §8.4.2 vs Atari Mnih 2015)",
+    "items": [
+      {"label": "buffer N (grid)", "value": 1000},
+      {"label": "buffer N (Atari)", "value": 1000000},
+      {"label": "batch B (grid)", "value": 100},
+      {"label": "batch B (Atari)", "value": 32},
+      {"label": "sync C (grid)", "value": 100},
+      {"label": "sync C (Atari)", "value": 10000}
+    ]
+  }'></div>
+
+  <p style="font-size:0.85rem; color:var(--color-muted);">直观:buffer 与 sync 频率<em>规模差 100-1000×</em>(Atari 任务大,需更长 buffer + 更长 stale target);batch 反而<em>grid 比 Atari 大</em>(grid 一局只 1000 步,batch 100 占 10%;Atari 一局可 10000+ 步,batch 32 已够 mini-batch 平滑)。这些<em>都凭实测调</em>,无理论最优值。</p>
+
+  <h2>§4 Ablation:<em>去掉某一 trick</em> 会怎样</h2>
+  <p>Mnih 2015 与教材 Fig. 8.12 的实验提示:两大 trick<em>缺一</em> 让 DQN 训练曲线<em>显著</em> 恶化。</p>
+
+  <div data-component="convergence-plot" data-config='{
+    "title": "DQN ablation: loss vs iteration(各 trick 缺失对比)",
+    "xlabel": "iteration",
+    "ylabel": "TD loss",
+    "series": [
+      {"name": "完整 DQN", "data": [[0,4.5],[200,1.5],[400,0.6],[600,0.3],[800,0.15],[1000,0.08]]},
+      {"name": "无 target net", "data": [[0,4.5],[200,3.0],[400,4.5],[600,8.0],[800,15.0],[1000,30.0]]},
+      {"name": "无 replay", "data": [[0,4.5],[200,2.5],[400,2.2],[600,2.5],[800,2.8],[1000,3.0]]}
+    ]
+  }'></div>
+
+  <p style="font-size:0.85rem; color:var(--color-muted);">读法:<em>完整 DQN</em> loss 单调下降至 0;<em>无 target net</em> loss 先降后<em>指数发散</em>(追自己影子的正反馈累积爆);<em>无 replay</em> loss 早期下降但<em>停在中位</em>(连续步样本相关 + off-policy 加权失配 ⇒ NN 优化方向不准,卡在 bad local)。两个 trick 各<em>必要</em>,无法互相替代。</p>
+
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"<em>target network 的同步频率 \(C\) 越大越稳</em>,所以 \(C \to \infty\) 应该最好(target 永远固定)。"<br>
+    <strong>实际上:</strong><strong>\(C \to \infty\) 让 target 永远 stale</strong>。\(w_T\) 一直保持在初始化值 ⇒ \(y_T = r + \gamma \max\hat q(s&#39;, \cdot; w_T^{\text{init}})\) 是<em>初始化随机</em> 的 fake target ⇒ 主网络追<em>错</em> target 学到一团乱码。<em>主网络收敛到 target,但 target 是<em>错的</em></em>。所以 \(C\) 必须有限,让 target 缓慢跟进真值。实操 \(C\) 调到"<em>主网络 \(w\) 在 \(C\) 步内变化幅度可控</em>" 即可,典型 \(10^3\)-\(10^4\)。<br>
+    <strong>因为:</strong>target net 的<em>设计意图</em> 是"<em>短期固定让主网络追,长期同步让 target 不停留</em>",像<em>低通滤波器</em>。\(C\) 是滤波时间常数:太小没滤,太大相位延迟过大。最佳 \(C\) 让 target 跟得上"<em>真值在 \(\hat q\) 空间的运动</em>" 但又比主网络慢一步。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"<em>experience replay 的主效益是 data efficiency</em>(每条样本用多次)。"<br>
+    <strong>实际上:</strong><strong>data efficiency 只是<em>副</em> 效益,主效益是<em>打散时间相关</em> + <em>近似均匀分布</em></strong>。即使<em>无限</em> 样本,replay 仍<em>必要</em>:连续步<em>必然</em> 时间相关(SGD 假设破坏);behavior policy 数据<em>必然</em> 非均匀(off-policy 加权失配)。这两条与<em>样本量</em> 无关,纯粹是<em>分布</em> 性质。教材 §8.6 Q&A 明确:"<em>It is necessary to break the correlation between the samples in the sequence to satisfy the assumption of uniform distribution.</em>" Data efficiency 是<em>buffer + 均匀抽样</em> 的<em>顺带</em> 好处。<br>
+    <strong>因为:</strong>(8.37) 的 \(\mathbb E\) 假设 \((S, A) \sim \text{Uniform}\) 且<em>独立</em>。原始 RL 数据<em>都不</em> 满足。Replay buffer 的<em>两条作用</em>(打散相关、近似均匀)正<em>分别</em> 修这两条。Data efficiency 是"<em>同样的样本被多次抽</em>" 自然产生,不是设计目标。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"<em>tabular Q-learning 也可以用 replay buffer</em>,效果应该更好(data efficiency)。"<br>
+    <strong>实际上:</strong><strong>tabular Q-learning <em>可以</em> 用 replay,但<em>不必须</em></strong>(教材 §8.6 Q&A 明确)。tabular Q-learning 是 off-policy ⇒ 不要求样本来自当前策略 ⇒ buffer 重抽样不引入额外偏差。但 tabular 没有 deadly triad:每格<em>独立</em> update,无 FA 共享 \(w\) 的放大效应 ⇒ 时间相关 + 加权失配<em>不致命</em>。所以 tabular Q-learning 收敛<em>不依赖</em> replay,replay 只提升<em>data efficiency</em>。这反过来说明:DQN 中 replay 的<em>核心价值</em> 不是 data efficiency(若是,tabular 也<em>必须</em> 用 replay),而是<em>缓解 deadly triad</em>(只在 FA 下才<em>致命</em>)。<br>
+    <strong>因为:</strong>tabular 没有 deadly triad ⇒ 无<em>分布失配的致命放大</em>;FA 有 deadly triad ⇒ <em>必须</em> 工程缓解。Replay 是 FA 下"<em>把 deadly triad 的两条(off-policy 加权 + 时间相关)同时弱化</em>" 的设计;tabular 不需要这种缓解。
+  </div>
+
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> 写出 target network 的<em>两个动机</em>(WHY)。</summary>
+    <p><strong>A.</strong> <em>(i)</em> <strong>截断 bootstrap 自反馈</strong>:无 target net 时 \(\hat q(S, A; w)\) 与 \(\max\hat q(S&#39;, \cdot; w)\) 共用 \(w\),update 同时移动两边 ⇒ 追自己影子 ⇒ 正反馈致发散。target net 把 max 内的 \(w\) 冻成 \(w_T\) ⇒ target 短期固定 ⇒ 主网络追<em>固定</em> target ⇒ 收敛动力学清晰。<em>(ii)</em> <strong>梯度可算</strong>:无 target net 时 \(\nabla_w(r + \gamma \max\hat q(S&#39;, \cdot; w) - \hat q(S, A; w))^2\) 含两个 \(\nabla_w \hat q\) 项 + max 的不光滑 ⇒ 复杂且不稳;target net 让梯度只对 \(\hat q(S, A; w)\) 求 ⇒ (8.38) 简洁。两件事<em>同源</em>,都因"<em>w 同时出现两次</em>"。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> 写出 experience replay 的<em>三个动机</em>,并指出哪个是主、哪个是副。</summary>
+    <p><strong>A.</strong> <em>(i)</em> <strong>打散时间相关</strong>:连续步样本高相关,违反 SGD i.i.d. 假设;buffer 均匀抽样 ⇒ 样本近似独立。<em>(ii)</em> <strong>近似均匀分布</strong>:(8.37) 假设 \((S, A) \sim \text{Uniform}\),behavior policy 数据非均匀 ⇒ off-policy 加权失配;buffer 是多策略历史混合,均匀抽样 \(\approx\) uniform ⇒ 失配缓解。<em>(iii)</em> <strong>data efficiency</strong>:每条样本被多次抽用。<em>主</em>:(i) 与 (ii)(都是 SGD 假设的近似满足,与样本量无关);<em>副</em>:(iii)(顺带好处)。教材 §8.6 Q&A 与 §8.4.1 都强调主效益是 (i)+(ii),不是 (iii)。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> 教材为什么说"<em>tabular Q-learning 可以用 replay 但不必须</em>",而 DQN <em>必须</em> 用 replay?</summary>
+    <p><strong>A.</strong> tabular Q-learning <em>没有</em> deadly triad:每格 \(Q(s, a)\) 独立 update,无 FA 共享 \(w\) 的放大效应 ⇒ 时间相关 + off-policy 加权失配<em>不致命</em>(只是<em>慢</em>,不发散)。tabular Q-learning 是 off-policy(target 用 \(\max\)),buffer 重抽样不引入额外偏差,<em>可</em> 用 replay 提升 data efficiency,但收敛<em>不依赖</em> 它。DQN 是 NN-FA + bootstrap + off-policy = 三联齐 ⇒ deadly triad <em>真</em> 触发,无 replay 时实测发散。所以 DQN <em>必须</em> 用 replay 把"<em>off-policy 加权失配</em>" + "<em>时间相关</em>" 两条<em>同时</em> 缓解。这是 tabular 与 FA 在<em>稳定性需求</em> 上的本质差。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=43&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=43" target="_blank">YouTube 备链</a></p>
+
+  <h3>下一节预告</h3>
+  <p>L7 把<em>两大 trick</em> 摆清。<strong>L8(教材 §8.4.2-8.6, pp. 184-190)</strong> 把它们<em>合起来</em> 跑完整 DQN 实验:5×5 grid + behavior policy 1 局 1000 步 + buffer 1000 + batch 100 + 1 隐藏层 100 神经元 + Adam ⇒ <em>1000 iter 学出最优策略</em>(教材 Fig. 8.11)。还会做<em>少样本 ablation</em>(buffer 100 步 ⇒ NN 拟合 buffer 但 \(\hat q\) 偏 \(q^*\),Fig. 8.12),展示 DQN 的"<em>NN 拟合能力</em>" 与"<em>策略最优性</em>" 不一定同步。最后给 Ch.8 全章<em>3-4 个 takeaway</em> + <em>Ch.9 桥</em>:DQN 只能处理<em>discrete actions</em>(因为 \(\max_a\)),Ch.9 直接参数化<em>策略</em>,打开<em>continuous actions</em> 的门。</p>
+
+  <nav class="lesson-nav">
+    <a href="lesson-06.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-08.html">Next →</a>
+  </nav>
+</div>
+
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({ startOnLoad: true, theme: 'default' });</script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>

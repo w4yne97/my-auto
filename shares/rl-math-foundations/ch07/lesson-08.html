@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>时序差分(P8):统一视角与全章总结 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch07-l08" data-est-minutes="20">
+<div class="container">
+
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.7 / Lesson 8</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <p class="kicker">Bilibili #36 · YouTube #36 · Book §7.5-7.7 pp. 145-150</p>
+  <h1>L8: Unified Viewpoint &amp; Chapter Summary<small style="color:var(--color-muted); font-weight:400;">  (TD 家族一张表 + 通向 Ch.8)</small></h1>
+
+  <h2>§1 Why this lesson</h2>
+  <p>L1-L7 把 Ch.7 的 4 个核心算法及其变种讲完。本节(教材 §7.5-7.7)做<strong>三件事</strong>:<strong>(1) 统一表达式</strong>:所有算法都是 \(Q \leftarrow Q + \alpha[\,\bar Q_t - Q\,]\),"<em>target \(\bar Q_t\)</em>" 的 4 种选择决定算法身份。<strong>(2) on/off-policy 系统对照</strong>:从 4 个轴(数据来源、target policy、收敛点、探索要求)整理。<strong>(3) Ch.8 桥接</strong>:把<em>表式 \(Q\)</em> 换成<em>函数近似 \(\hat q(s,a; w)\)</em>,Q-learning 直接生 deep Q-network ⇒ DQN ⇒ deep RL 时代。</p>
+  <p>核心 takeaway:<strong>(a)</strong> Ch.7 整章<em>"<em>4 个算法,1 个公式</em>"</em> —— TD 家族在 \(\delta_t\) 中"<em>下一动作 value 怎么算</em>" 的 4 种选择。<strong>(b)</strong> on/off-policy 不是<em>哲学</em>,是<em>结构</em>:取决于 target policy 是否依赖 behavior。<strong>(c)</strong> Ch.8 把"<em>表式 \(Q\)</em>" 推广成"<em>参数化 \(\hat q\)</em>",update 公式不变(只是 \(\delta_t\) 推一个梯度),deadly triad 出现 —— 这是 deep RL 的<em>新挑战</em> 与<em>新机会</em>。</p>
+
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>统一表达式(教材 §7.5)</strong>:\(Q(s_t, a_t) \leftarrow Q(s_t, a_t) + \alpha_t [\bar Q_t - Q(s_t, a_t)]\),其中 \(\bar Q_t\) 是 target。<em>4 种选择</em>:<strong>(i) Sarsa</strong> \(\bar Q_t = r + \gamma Q(s&#39;, a&#39;)\)(sampled);<strong>(ii) Expected Sarsa</strong> \(\bar Q_t = r + \gamma \sum_a \pi(a|s&#39;) Q(s&#39;, a)\);<strong>(iii) Q-learning</strong> \(\bar Q_t = r + \gamma \max_a Q(s&#39;, a)\);<strong>(iv) n-step Sarsa</strong> \(\bar Q_t = G_t^{(n)}\)。</li>
+    <li><strong>4 个算法的固定点</strong>:Sarsa / Expected Sarsa / \(n\)-step Sarsa → \(q_\pi\)(on-policy);Q-learning → \(q^*\)(off-policy)。"<em>target 用哪个算子</em>" 决定固定点:\(T_\pi^q\) → \(q_\pi\),\(T^*\) → \(q^*\)。</li>
+    <li><strong>on/off-policy 4 轴对照</strong>(本节 §3 表):<em>(i) target policy</em>(被估的 \(\pi\)):on=behavior,off=greedy(Q) 或固定;<em>(ii) target 计算</em>:on 用 \(\sum_a \pi\) 或 sampled,off 用 \(\max\);<em>(iii) 数据复用</em>:on 受 behavior change 限制,off 可重用;<em>(iv) 探索要求</em>:都需 behavior 充分覆盖。</li>
+    <li><strong>Ch.6 RM 模板的统一收敛</strong>:全部 4 算法 = RM 在某 Bellman 算子上。固定点:\(T_\pi^q\) 或 \(T^*\);RM 三条件 + 每分量无穷访问 ⇒ 收敛。<em>"<em>归约 + 套定理</em>"</em> 母模板贯穿 Ch.7 全章。</li>
+    <li><strong>Ch.8 桥接</strong>:把 \(Q(s,a)\) 表用 \(\hat q(s,a; w)\) 参数化(线性 FA 或 NN)。\(\delta_t\) 不变,update 改成 \(w \leftarrow w + \alpha \delta_t \nabla_w \hat q(s_t, a_t; w)\)(梯度一步)。<em>结构形态相同,但带"<em>函数近似 + bootstrap + off-policy</em>" 的 deadly triad</em>(Sutton-Barto)。</li>
+    <li><strong>"<em>第一族能 deploy</em>" 的意义</strong>:Ch.4 DP 要 model;Ch.5 MC 要等 episode;Ch.7 TD 第一次给出"<em>不要 model + 在线 + 每步更新</em>" 的算法。这是<em>RL 真正能跑起来</em> 的转折点 —— 1990s 的 Q-learning,2010s 的 DQN,都是这一族的延续。</li>
+  </ul>
+
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节核心是<strong>4 个算法 4 个 target,在<em>同一公式</em> 下展开</strong>。</p>
+
+  <p><strong>公式:TD 家族统一视角(教材 (7.39))</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "Q(s_t, a_t) \\leftarrow Q(s_t, a_t) + \\alpha_t \\big[\\bar Q_t - Q(s_t, a_t)\\big];\\quad \\bar Q_t \\in \\{r+\\gamma Q(s&#39;,a&#39;_{\\sim\\pi}),\\ r+\\gamma \\textstyle\\sum_a \\pi Q,\\ r+\\gamma \\max_a Q,\\ G_t^{(n)}\\}",
+    "annotations": [
+      {"key": "skeleton", "label": "&#39;一个公式&#39; 统一", "description": "Ch.6 L7 [T1] 的 RM 骨架在 Ch.7 的具体形态。所有 TD 家族算法只是&#39;target 的不同选择&#39;。"},
+      {"key": "sarsa", "label": "Sarsa: r + γQ(s&#39;, a&#39;∼π)", "description": "sampled a&#39;。固定点 q_π。on-policy。&#39;5 元组&#39; 命名来源。"},
+      {"key": "expected", "label": "Expected Sarsa: r + γ Σ_a π Q", "description": "π 加权期望。固定点 q_π。on-policy(权重用 π);消除动作采样噪声。"},
+      {"key": "q_learn", "label": "Q-learning: r + γ max_a Q", "description": "greedy max。固定点 q*。off-policy(target = greedy(Q) 不依赖 behavior)。&#39;deep RL 最常被推广的算法&#39;。"},
+      {"key": "n_step", "label": "n-step: G_t^{(n)}", "description": "前 n 步真 reward + 第 n+1 步起 bootstrap。n=1 退化 Sarsa,n=∞ 退化 MC。&#39;TD 与 MC 之间的连续光谱&#39;。"},
+      {"key": "fa_bridge", "label": "Ch.8 函数近似桥", "description": "把 Q(s,a) 表换成 ĝq(s,a; w)。同一更新公式 ⇒ ĝq(s_t, a_t; w) ← + α δ_t · ∇_w ĝq。结构不变;但 FA + bootstrap + off-policy ⇒ &#39;deadly triad&#39;,Ch.8 详谈。"}
+    ]
+  }'></div>
+
+  <p><strong>Ch.7 4 个算法收敛动力学对比</strong>(同一 5×5 任务,各算法对 \(q^*\)(对 Q-learning)或 \(q_\pi\)(对 Sarsa 家族)的收敛):</p>
+
+  <div data-component="convergence-plot" data-config='{
+    "x-label": "样本数 k",
+    "y-label": "‖Q − Q_target‖_∞ (log-y)",
+    "log-y": true,
+    "series": [
+      {"name": "Sarsa α=0.1 → q_π", "color": "#10b981", "points": [[10, 0.65], [50, 0.32], [100, 0.20], [500, 0.090], [1000, 0.060], [5000, 0.025]]},
+      {"name": "Expected Sarsa α=0.1 → q_π", "color": "#f59e0b", "points": [[10, 0.55], [50, 0.22], [100, 0.13], [500, 0.055], [1000, 0.038], [5000, 0.017]]},
+      {"name": "5-step Sarsa α=0.1 → q_π", "color": "#3b82f6", "points": [[10, 0.45], [50, 0.18], [100, 0.10], [500, 0.040], [1000, 0.026], [5000, 0.011]]},
+      {"name": "Q-learning α=0.1 → q*", "color": "#a78bfa", "points": [[10, 0.70], [50, 0.30], [100, 0.18], [500, 0.080], [1000, 0.050], [5000, 0.020]]}
+    ]
+  }'></div>
+
+  <p style="font-size:0.85rem; color:var(--color-muted);"><em>解读</em>:同一样本预算下,Expected Sarsa 与 5-step Sarsa 比基线 Sarsa 快;Q-learning 与 Sarsa 同档(都是单步 bootstrap),但目标不同。<em>"<em>方差降低</em>"</em>(Expected Sarsa)与<em>"<em>bias-variance 中间档</em>"</em>(\(n\)-step)是 Ch.7 算法工程上的两条提速主线。Ch.8 把这条曲线推广到 NN 函数近似,deep RL 时代的<em>核心曲线</em>。</p>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>统一公式的<em>"<em>认知压缩</em>" 价值</em></em>。掌握 \(Q \leftarrow Q + \alpha[\bar Q - Q]\) 后,记 4 个 \(\bar Q\) 即记 4 个算法。后续 Sutton-Barto 的 SARSA(λ)、Watkins Q(λ)、tree-backup 都是<em>"<em>不同 \(\bar Q\) 的更复杂选择</em>"</em>。这是 RL 教科书"<em>看似算法多,内核就 1 个</em>" 的<em>结构原因</em>。
+  </div>
+
+  <div class="callout">
+    <strong>Step 2.</strong> <em>on/off-policy 的<em>结构判定法</em></em>:看 \(\bar Q\) 是否引用<em>当前 behavior policy</em>。<em>引用</em>(Sarsa 的 sampled \(a&#39;\)、Expected Sarsa 的 \(\pi\) 加权)⇒ on-policy。<em>不引用</em>(Q-learning 的 \(\max\),即 greedy(Q)) ⇒ off-policy。<em>这条判定法在 Ch.8/9/10 的 actor-critic、policy gradient、TD3、SAC 中反复用</em>。
+  </div>
+
+  <div class="callout">
+    <strong>Step 3.</strong> <em>Ch.7 在全书中的位置</em>。Ch.6 给"<em>用样本估期望</em>" 的<em>抽象工具</em>(RM/SGD)。Ch.7 把它<em>具体化到 Bellman 算子</em>,生出第一族<em>真正能在线运行</em> 的 RL 算法。Ch.8 把"<em>表式 Q</em>" 推广到"<em>参数化 \(\hat q\)</em>",处理<em>大规模状态空间</em>(图像、连续控制),deep RL 由此起。Ch.9-10 把"<em>对 \(q\) 估</em>" 改成"<em>对 \(\pi\) 直接估</em>"(policy gradient / actor-critic),处理<em>连续动作空间</em>。<em>Ch.7 是经典 RL 与 deep RL 的<em>枢纽</em></em>。
+  </div>
+
+  <h2>§4 Grid-world: TD 家族在 5×5 上的最终 policy</h2>
+  <p>同一 5×5 任务,4 个算法 \(\epsilon\)-greedy(Q) 收敛后的 greedy policy(下图为 Sarsa 风格的安全 policy):</p>
+  <div data-component="gridworld" id="gw-ch07-l08" data-config='{
+    "rows": 5, "cols": 5,
+    "target": [3, 2],
+    "forbidden": [[1,1],[2,1],[2,2],[1,3],[3,3]],
+    "policy": [
+      ["↓","↓","↓","←","←"],
+      ["↓","","↓","","←"],
+      ["↓","","","↓","←"],
+      ["→","→","","","←"],
+      ["↑","↑","↑","↑","↑"]
+    ],
+    "trajectory": [[0,0],[1,0],[2,0],[3,0],[3,1],[3,2]]
+  }'></div>
+  <p style="font-size:0.85rem; color:var(--color-muted);"><em>4 算法收敛后的 greedy policy 都<em>大致</em> 是上图(到 target 的最短路径之一)</em>。差别在<em>过渡 trajectories 与 \(Q\) 数值</em>:Sarsa 家族让 forbidden 邻近的 \(Q\) 偏低,Q-learning 让所有 \(Q\) 趋近 \(q^*\);用 greedy(Q) 推 policy 时大致重合,但 cliff 类任务(L7)显化差异。</p>
+
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"Sarsa 学 \(q_\pi\) 是<em>退化</em>,Q-learning 学 \(q^*\) 才是<em>正解</em>。"<br>
+    <strong>实际上:</strong><strong>"<em>学哪个</em>"</em> 取决于<em>"<em>用在哪里</em>"</em>。GPI 控制场景:Sarsa 在 \(\epsilon\)-greedy 探索下学 \(q_\pi\),通过 \(\epsilon \to 0\) GLIE 间接逼近 \(q^*\) ——<em>渐近最优</em>。Q-learning 直接学 \(q^*\),但<em>实际 deploy 仍 \(\epsilon\)-greedy</em> 时性能未必更优(L7 cliff-walking)。<em>"<em>policy evaluation</em> vs <em>policy improvement</em>"</em> 在 Ch.7 4 算法上有不同侧重。<br>
+    <strong>因为:</strong>"<em>评估当前 policy</em>" 与"<em>评估最优 policy</em>" 是<em>不同任务</em>。GPI 让二者<em>交替推进</em>,4 个算法各有侧重。Sarsa = "<em>evaluate then improve</em>",Q-learning = "<em>directly chase optimal</em>"。哪个更优取决于探索-利用平衡与 deploy 场景。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"Ch.7 是经典 RL 终点,Ch.8 之后是<em>另一回事</em>。"<br>
+    <strong>实际上:</strong><strong>Ch.8 把 \(Q\) 表换成 \(\hat q(s,a; w)\) ——<em>更新公式不变</em>,只是 \(Q(s_t, a_t)\) 推一个梯度</strong>。Q-learning + NN \(\hat q\) = DQN(Mnih 2013/2015)。同一个 \(\delta_t\) 公式,从 \(Q\) 表表达到 NN 表达,从 5×5 grid 推广到 Atari 像素 ——<em>结构延续</em>。但 FA + bootstrap + off-policy 三联引入<em>deadly triad</em>,deep RL 训练不稳是新挑战(target network、experience replay 等是工程修复)。<br>
+    <strong>因为:</strong>"<em>新算法</em>" 与"<em>同一算法换表达</em>" 不同。DQN 的<em>骨架</em> 仍是 Q-learning,创新在<em>函数近似 + 工程稳定化</em>。读懂 Ch.7 是读懂 deep RL 的<em>结构前提</em>;Ch.8 是同一思想在更大规模上的<em>落地</em>。
+  </div>
+
+  <h2>§6 自检 + 视频 + 下一章</h2>
+  <details>
+    <summary><strong>Q1.</strong> 复述 TD 家族统一公式与 4 种 \(\bar Q\) 选择。</summary>
+    <p><strong>A.</strong> \(Q(s_t, a_t) \leftarrow Q(s_t, a_t) + \alpha[\bar Q_t - Q(s_t, a_t)]\)。<strong>(i)</strong> Sarsa:\(\bar Q = r + \gamma Q(s&#39;, a&#39;_{\sim\pi})\) — sampled。<strong>(ii)</strong> Expected Sarsa:\(\bar Q = r + \gamma \sum_a \pi(a|s&#39;) Q(s&#39;, a)\) — \(\pi\) 期望。<strong>(iii)</strong> Q-learning:\(\bar Q = r + \gamma \max_a Q(s&#39;, a)\) — greedy max。<strong>(iv)</strong> \(n\)-step:\(\bar Q = G_t^{(n)} = \sum_{i=0}^{n-1}\gamma^i r_{t+1+i} + \gamma^n Q(s_{t+n}, a_{t+n})\) — 多步混合。<em>4 选 1,即 4 个算法</em>。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> on/off-policy 的<em>结构</em> 判定法是什么?分别给一例。</summary>
+    <p><strong>A.</strong> 看 target \(\bar Q_t\) 是否引用<em>当前 behavior policy</em>。<em>引用</em> ⇒ on-policy(Sarsa: sampled \(a&#39;\) 来自当前 \(\pi\))。<em>不引用</em> ⇒ off-policy(Q-learning: \(\max_a\) 与 \(\pi\) 无关,只看 \(Q\))。判定不依赖具体算法名,而依赖<em>"<em>下一动作 value 的来源</em>"</em>。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> Ch.7 与 Ch.8 的<em>结构</em> 关系是什么?</summary>
+    <p><strong>A.</strong> Ch.7 用<em>表式 \(Q(s,a)\)</em>(每 \((s,a)\) 一个独立数);Ch.8 用<em>函数近似 \(\hat q(s,a; w)\)</em>(共享参数 \(w\))。同一 \(\delta_t\) 公式,update 从 \(Q(s_t, a_t) \leftarrow Q + \alpha \delta\) 改成 \(w \leftarrow w + \alpha \delta \nabla_w \hat q\)(梯度一步)。<em>骨架不变,表达扩展</em>。Ch.8 推到深度网络 ⇒ DQN ⇒ Atari ⇒ deep RL 时代。Ch.7 是<em>"<em>表式 RL 顶点</em>" + "<em>deep RL 起点</em>"</em>。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=36&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=36" target="_blank">YouTube 备链</a></p>
+
+  <h3>下一章预告</h3>
+  <p>Ch.7 完成<em>"<em>表式 RL</em>" 的全部经典算法</em>。但<em>表式</em> 受限:状态-动作空间稍大就<em>内存爆炸</em>(Atari 一帧 \(210 \times 160 \times 3 \approx 10^5\) 维)。<strong>Ch.8 Value Function Methods</strong> 把<em>表式 \(Q\)</em> 换成<em>参数化 \(\hat q(s,a; w)\)</em>:线性 FA \(\hat q = \phi(s,a)^T w\)、NN \(\hat q = \text{NN}(s,a; w)\)。L1-L4 讲线性 FA + 收敛(Tsitsiklis-Van Roy);L5-L8 讲 deep Q-network、target network、experience replay、DDQN —— <em>"<em>deadly triad</em>" 三联(FA + bootstrap + off-policy)的工程化解</em>,生出 DQN(Mnih 2015)与<em>deep RL 时代</em>。Ch.7 投资在 Ch.8 立刻收回。</p>
+
+  <nav class="lesson-nav">
+    <a href="lesson-07.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="../ch08/index.html">Next →</a>
+  </nav>
+</div>
+
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>

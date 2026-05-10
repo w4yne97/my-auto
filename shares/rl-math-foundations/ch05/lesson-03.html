@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>蒙特卡罗学习(P3):MC Basic 示例 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch05-l03" data-est-minutes="20">
+<div class="container">
+
+  <!-- Top nav -->
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.5 / Lesson 3</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <!-- Header -->
+  <p class="kicker">Bilibili #18 · YouTube #18 · Book §5.2.3 pp. 83-86</p>
+  <h1>L3: MC Basic Walkthrough on Grid<small style="color:var(--color-muted); font-weight:400;">  (MC Basic 示例与 episode-length 影响)</small></h1>
+
+  <!-- §1 Why this lesson -->
+  <h2>§1 Why this lesson</h2>
+  <p>L2 给了 MC Basic 的算法骨架与公式 (5.2)。但"<em>把 PE 替换成样本均值</em>" 这件事在 grid 上跑起来到底什么样?本节(教材 §5.2.3,pp. 83-86)在两个具体例子上手算 —— <em>(1)</em> 教材 Figure 5.3 的 9-格 \(s_1\) 五动作 \(\hat q_{\pi_0}(s_1, \cdot)\) 估算与一步 improvement;<em>(2)</em> 教材 Figure 5.4 的 5×5 grid 上 episode-length \(L \in \{1, 2, 3, 4, 14, 15, 30, 100\}\) 系列实验,直观看"<em>episode 太短 ⇒ 远端 state 学不到任何东西</em>" 的"<em>吸引场</em>" 现象。</p>
+  <p>关键洞察(教材 §5.2.3):<strong>(a) 确定性策略 + 确定性环境 ⇒ 一条 episode 就够</strong>(p. 83 末段)。教材为节省篇幅,在 \(\pi_0\) 与 grid 都<em>确定</em> 的设置下,每个 \((s, a)\) 只跑<em>一条</em> episode 估 \(\hat q\) —— 因为重跑会得到完全相同的 trajectory,样本均值 = 单样本。<em>这<em>不是</em> MC Basic 的一般行为</em>,只是 deterministic 特例,但教学上能大幅简化手算。<strong>(b) 一步迭代到 \(\pi^*\)</strong>(p. 84)。Figure 5.3 的初始 \(\pi_0\) 仅在 \(s_1, s_3\) 上非最优。一外步后两 state 都被改对,新 \(\pi_1\) = \(\pi^*\)。这告诉我们 MC Basic 不弱于 PI 的"<em>每步 improvement 单调有效</em>"。<strong>(c) Episode-length 与 sparse reward 的耦合</strong>(教材 Figure 5.4,p. 85)。5×5 grid 上 \(L = 1\) 时只有 target 邻接格学到非零值;\(L = 2, 3, 4\) 时影响范围向外扩 1-2 格,呈"<em>波纹</em>" 形;\(L = 14\) 时左下角(到 target 至少 \(L_\min = 8\) 步,但因 forbidden 反射可能更长)开始非零,但仍未稳;\(L = 15\) 形成完整 \(v\) 估计;\(L = 30\) 已可学到 \(\pi^*\);\(L = 100\) value 也基本饱和。<em>核心数学</em>:从 state \(s\) 到 target 的 Manhattan 最短步数 \(L_\min(s)\),只要 \(L < L_\min\) 则 \(\hat G(s) = 0\)("<em>这条 episode 还没到 target,所有 reward 都是 0</em>" —— 注意 sparse reward 设置 \(r_\text{boundary} = -1, r_\text{forbidden} = -10, r_\text{target} = 1\))。<strong>(d) Sparse reward 的引子</strong>。这正是 RL 设计 dense reward / reward shaping 的根本动力 —— 否则 episode-length 对 \(L_\min\) 强依赖,大 grid 完全跑不动。</p>
+
+  <!-- §2 核心定义 -->
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>Deterministic 简化(教材 §5.2.3 第一段末)</strong>:若 \(\pi\) 与 \(p\) 都确定,则从 \((s, a)\) 起跑 \(n\) 条 episode 全相同。\(\hat q = g^{(1)}\),单样本即均值。教学例题用此,但<em>不是</em> MC 一般情形。</li>
+    <li><strong>Episode 长度 \(L\)</strong>:每条 episode 跑多少步后被截断。教材 \(L\) 取 1, 2, 3, 4, 14, 15, 30, 100 系列演示效果。</li>
+    <li><strong>到 target 的最小步数 \(L_\min(s)\)</strong>:从 \(s\) 出发<em>最快</em> 到 target 的步数(理想路径)。grid-world 4-动作下 \(L_\min(s) = |\Delta r| + |\Delta c|\)(Manhattan 距离),但 forbidden 阻挡时可能更大。</li>
+    <li><strong>"<em>L &lt; L_min(s) ⇒ \(\hat G(s) = 0\)</em>" 现象(p. 85)</strong>:若 episode 在到达 target 前被截断,return 全部由 \(\{-1, -10, 0\}\) 系列拼成 —— sparse reward 下基本 = 0(若没踩 forbidden / 边界)。这是教材 Figure 5.4(a) "\(L = 1\) 时除 target 邻接外都是 0" 的原因。</li>
+    <li><strong>"<em>吸引场</em>"(教材 p. 85 中段)</strong>:随 \(L\) 增大,非零值<em>从 target 向外扩散</em>,呈现"<em>越靠近 target 值越大</em>" 的形态。这是 \(\gamma\)-discount 把"<em>能否到 target</em>" 转化成"<em>多快到 target</em>" 的几何效果。</li>
+    <li><strong>5×5 grid 的左下角 \(L_\min\) ≈ 8</strong>(教材 p. 86 顶):底-左 \((4, 0)\) 到 target \((3, 2)\) 的 Manhattan 距离 = \(|4-3| + |0-2| = 3\),但因 (2,1)(2,2)(3,3) 等 forbidden 阻挡,绕路至少 8 步(或踩 forbidden 受罚)。所以 \(L < 8\) 时左下角学不到任何东西。</li>
+    <li><strong>Sparse reward 与 dense reward(教材 p. 86 末段)</strong>:本例 \(r_\text{target} = 1\) 之外只有罚分(boundary = -1, forbidden = -10),其余 step 0,这是<em>稀疏奖励</em>。"<em>无奖励信号</em>" 让 MC 必须等 episode 跑到 target 才有 \(G > 0\)。<em>解法</em>:reward shaping(在 target 周围加小正奖励形成"<em>吸引场</em>"),或 dense reward 设计(每一步给 hint),或 hierarchical RL。</li>
+  </ul>
+
+  <!-- §3 关键公式 + 推导 -->
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节<em>没有</em> 新公式,而是把 L2 公式 (5.2) 在<em>具体场景</em> 落地。我们手算 Figure 5.3 例子 \(s_1\) 五个 action 的 \(\hat q_{\pi_0}\)。</p>
+
+  <p><strong>公式回顾:MC Basic 的 q 估计(L2 公式 5.2)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\hat q_{\\pi_k}(s, a) = \\frac{1}{n} \\sum_{i=1}^n g_{\\pi_k}^{(i)}(s, a), \\quad g^{(i)}(s, a) = r_1 + \\gamma r_2 + \\gamma^2 r_3 + \\cdots",
+    "annotations": [
+      {"key": "g_def", "label": "g^(i) 定义", "description": "第 i 条 episode 从 (s, a) 起的 discounted return。本节 deterministic 例题里 n=1 即足。"},
+      {"key": "n_equals_1", "label": "n=1 特殊情况", "description": "教材 §5.2.3 用 deterministic π 与 p,所以 n=1。一般 MC Basic 的 n 要&#39;充分多&#39;,n=1 仅是教学简化。"},
+      {"key": "geom_series", "label": "几何级数", "description": "若 episode 进入吸收循环(如 self-loop on target with r=1),return 是无穷几何级数 1/(1-γ),实操里取足够多 step(教材 §5.2.3 用了无穷展开式)。"}
+    ]
+  }'></div>
+
+  <p><strong>手算:教材 §5.2.3 的 \(s_1\) 五个 action(γ = 0.9)</strong>。\(\pi_0(a_2 \mid s_2) = 1\)(\(s_2 \to\) ↓ 进 \(s_5\)),\(\pi_0(a_3 \mid s_5) = 1\)(\(s_5\) → 右往 \(s_6\) 或 target 方向),……(具体见教材 Figure 5.3)。</p>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>\(a_1 = ↑\)(撞墙)</em>。从 \(s_1\) 起走 ↑ 撞墙,\(r_1 = -1\),回到 \(s_1\)。\(\pi_0(s_1) = ↑\) ⇒ 继续撞墙,\(r_2 = -1\)。无穷循环 ⇒ \(g(s_1, a_1) = -1 - \gamma - \gamma^2 - \dots = -1/(1 - \gamma) = -10\)(\(\gamma = 0.9\))。
+  </div>
+
+  <div class="callout">
+    <strong>Step 2.</strong> <em>\(a_2 = →\)(进 \(s_2\))</em>。从 \(s_1\) 起走 → 进 \(s_2\),\(r_1 = 0\)。\(\pi_0(s_2) = ↓\) 进 \(s_5\),\(r_2 = 0\)。\(\pi_0(s_5)\) → \(s_8\) 等等,最终到 target \(s_9\)。教材给 \(g(s_1, a_2) = 0 + \gamma \cdot 0 + \gamma^2 \cdot 0 + \gamma^3 \cdot 1 + \gamma^4 \cdot 1 + \dots = \gamma^3 / (1-\gamma)\) ≈ 7.29(target 是 self-loop 吸收态)。
+  </div>
+
+  <div class="callout">
+    <strong>Step 3.</strong> <em>\(a_3 = ↓\)(进 \(s_4\))</em>。从 \(s_1\) 起走 ↓ 进 \(s_4\),\(r_1 = 0\)。\(\pi_0(s_4) = →\) 进 \(s_5\),后续与 Step 2 殊途同归 —— 也是 \(g(s_1, a_3) = \gamma^3 / (1-\gamma)\) ≈ 7.29。<em>注意</em>:\(a_2\) 与 \(a_3\) 在这例子里<em>并列最优</em>,improvement 步任选其一。
+  </div>
+
+  <div class="callout">
+    <strong>Step 4.</strong> <em>\(a_4 = ←\)(撞左墙)</em> 与 <em>\(a_5 = stay\)</em>。\(a_4\) 与 \(a_1\) 一样撞墙循环 ⇒ \(g \approx -10\)。\(a_5\) stay 在 \(s_1\),没罚也没赏,\(g = 0 + \gamma \cdot 0 + \dots\)? 不,\(\pi_0(s_1) = ↑\) 让下一步又撞墙,所以是 \(0 + \gamma(-1) + \gamma^2(-1) + \dots = -\gamma / (1-\gamma) = -9\)。<em>所以 improvement 选 \(\arg\max_a \hat q = a_2\) 或 \(a_3\)</em>,把 \(\pi_1(s_1) = ↓\) 或 \(→\)(教材取 \(a_2 = →\)),与 \(\pi^*(s_1) = →\) 一致。
+  </div>
+
+  <!-- §4 Grid-world + episode-length 实验 -->
+  <h2>§4 Grid-world:Episode 长度的相变</h2>
+  <p>用 5×5 grid(\(r_\text{boundary} = -1, r_\text{forbidden} = -10, r_\text{target} = 1, \gamma = 0.9\))演示 episode-length \(L\) 对 \(\hat v\) 与 \(\hat \pi\) 的影响。注意:这里展示的是<em>最终</em>(收敛后)的 \(v\) 与 \(\pi\) 估计,改的是 \(L\) 这个超参。</p>
+
+  <div data-component="gridworld" id="gw-ch05-l03-grid" data-config='{
+    "rows": 5, "cols": 5,
+    "target": [3, 2],
+    "forbidden": [[1,1],[2,1],[2,2],[1,3],[3,3]]
+  }'></div>
+  <p style="font-size:0.85rem; color:var(--color-muted);">教材 Figure 5.4 的 5×5 grid。target = (3,2),forbidden 五格。下面 stepper 展示 \(L = 1, 4, 15, 30, 100\) 时的"<em>非零值半径</em>" 演化。</p>
+
+  <div data-component="iteration-stepper" data-config='{
+    "steps": [
+      {
+        "label": "L=1  仅 target 邻接格学到非零",
+        "note": "Episode 长度 1 ⇒ 起点必须邻接 target 才能在第 1 步 r=1。其他 21 个 state 的 \\hat v ≈ 0。\\hat π 完全没有指向 target 的合理方向(因为没数据)。教材 Figure 5.4(a):仅 (3,1)(2,2)(3,3)(4,2) 等四格有 1.0 等非零值,其余全 0。"
+      },
+      {
+        "label": "L=4  非零半径扩到 4 步(target 周围 1 圈)",
+        "note": "L=4 ⇒ 距 target ≤ 4 步的 state 在 episode 末尾能到 target,\\hat v(s) ≈ γ^{L_min(s)}。教材 Figure 5.4(d):中心一片(3.4)、边缘小一些(0.7-2.4)。但左下角 (4,0) 等 L_min ≥ 8 仍是 0。\\hat π 在中心已收敛,但远端仍乱。"
+      },
+      {
+        "label": "L=14  左下角刚刚开始有数据",
+        "note": "教材 Figure 5.4(e):L_min((4,0)) ≈ 8 但因 forbidden 阻挡实际更大,L=14 时 (4,0) 仍为 0。整体 \\hat v 已经显出&#39;吸引场&#39; 形态(中心 7.7,向外衰减),但远端仍未稳。"
+      },
+      {
+        "label": "L=15  关键相变,所有 state 都有信号",
+        "note": "教材 Figure 5.4(f):所有 25 格 \\hat v 都非零。最远的 (4,0) 也有 0.2。\\hat π 已经几乎收敛到 π*。这说明 L 必须 ≥ max_s L_min(s) ≈ 15 才能让所有 state 都被 target 吸引。"
+      },
+      {
+        "label": "L=30, 100  value 收敛到稳定数值",
+        "note": "教材 Figure 5.4(g) L=30:\\hat v 中心 9.6,边缘 1.9-7.7;π 已是 π*。L=100 (h):中心 10,边缘 5.3-9.0。再加长 episode 仅是 \\hat v 数值更精确,\\hat π 不再变。结论:L ≈ 30 是这例子的&#39;够用&#39; 阈值。"
+      }
+    ]
+  }'></div>
+
+  <p><strong>关键观察</strong>:Episode-length 与 sparse reward 是<em>耦合</em> 的痛点。<em>(i)</em> sparse reward ⇒ \(L < L_\min(s)\) 时 \(\hat v(s) = 0\);<em>(ii)</em> grid 越大、forbidden 越多 ⇒ \(L_\min\) 越大;<em>(iii)</em> MC 必须 \(L \ge \max_s L_\min(s)\) 才能让所有 state 学到。这正是 reward shaping 与 dense reward 设计的<em>根本动力</em>。</p>
+
+  <!-- §5 常见误解 -->
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"教材 §5.2.3 用 \(n = 1\)(单 episode) 估 \(\hat q\),那 MC Basic 一般也 \(n = 1\) 即可。"<br>
+    <strong>实际上:</strong><strong>\(n = 1\) 仅适用于<em>确定性</em> π 与 \(p\)</strong>。教材明说"<em>since this example is deterministic in terms of both the policy and model, running multiple times would generate the same trajectory</em>"(p. 83)。一旦 \(\pi\) 是 stochastic 或 \(p\) 有随机性,从 \((s, a)\) 起的两次 trajectory 就不同 —— \(\hat q\) 是<em>样本均值</em>,n 必须充分多。MC Basic 的<em>一般情形</em> n 要几十到几千。<br>
+    <strong>因为:</strong>样本均值的方差是 \(\text{var}(G) / n\)。Deterministic 设置下 \(\text{var}(G) = 0\) ⇒ \(n = 1\) 就 0 误差。但这<em>不</em> 是 RL 一般情况。Q-learning(Ch.7)、Actor-Critic(Ch.10)默认 \(\pi\) stochastic,所以方差不为零,样本量要求严肃。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"教材 Figure 5.4 \(L = 1\) 时仅 target 邻接学到 1.0,这是 MC 算法<em>失灵</em>。"<br>
+    <strong>实际上:</strong><strong>这是 sparse reward + 短 episode 的<em>必然结果</em>,不是 MC bug</strong>。原因:\(L = 1\) ⇒ episode 只跑 1 步;若起点不邻接 target,这一步只能拿到 0(没踩边界 / forbidden 时)或 -1(撞墙)/ -10(踩 forbidden),<em>都不能给</em> "<em>到 target</em>" 的正信号。<em>解法</em>:加大 \(L\) 让 episode 有机会到 target;或改 reward 设置让"<em>朝 target 方向</em>" 也有奖励(reward shaping)。<br>
+    <strong>因为:</strong>RL 的"<em>delayed reward</em>" 困境:agent 在 \(t\) 步收到 reward,但功劳可能要追溯到 \(t - 100\) 步前的某个动作。MC 完整 return 解决"<em>追溯</em>" 但牺牲 episode-length。Ch.7 TD 用 bootstrap 把"<em>多步追溯</em>" 拆成"<em>每步一小步</em>",大幅减小 \(L\) 需求。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"L=15 与 L=30 \(\hat v\) 不一样,所以 MC 没收敛。"<br>
+    <strong>实际上:</strong><strong>π 已经收敛到 π*,但 \(\hat v\) 还没</strong>。教材 Figure 5.4(g) 注:"<em>although the value estimate is not yet optimal</em>"。原因:\(\pi^* \) 给定后,\(v_{\pi^*}(s) = \mathbb E_{\pi^*}[G_t \mid S_t = s]\) 本身依赖<em>所有未来</em> step,truncated 到 \(L\) 步会少掉 \(\sum_{t > L} \gamma^t r_t\)。但 \(\arg\max_a q(s, a)\) 只关心<em>相对大小</em>,不需要 \(v\) 数值精确。所以 \(\pi^*\) 比 \(v^*\) 更早稳定 —— 这是 MC 与 PI 的共同特性,Ch.4 L1 §5 也讨论过。<br>
+    <strong>因为:</strong>policy improvement 是个"<em>argmax</em>" 操作,只要 q 值的<em>排序</em> 对了,policy 就对。\(L\) 不够时 q 值绝对数偏小但相对排序仍可能正确,所以 \(\pi^*\) 优先收敛。这件事在 Q-learning 里再次出现 —— "<em>q 估计噪</em>" 不一定让"<em>π 退化</em>"。
+  </div>
+
+  <!-- §6 自检 + 视频 + teaser -->
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> 在教材 §5.2.3 例子里(\(\gamma = 0.9\)),为什么 \(g(s_1, a_2) = \gamma^3 / (1 - \gamma)\) 而不是 \(\gamma^3\)?</summary>
+    <p><strong>A.</strong> 关键在 target 是<em>吸收态</em>(reaching target 后 self-loop 不断给 \(r = 1\))。从 \(s_1\) 起 \(a_2\) 进 \(s_2\)(\(r_1 = 0\)),\(s_2 \to s_5\)(\(r_2 = 0\)),\(s_5 \to s_8\)(\(r_3 = 0\)),\(s_8 \to s_9 = \text{target}\)(\(r_4 = 1\)),target self-loop \(r_5 = r_6 = \dots = 1\)。所以 \(g = 0 + \gamma \cdot 0 + \gamma^2 \cdot 0 + \gamma^3 \cdot 1 + \gamma^4 \cdot 1 + \dots = \gamma^3 (1 + \gamma + \gamma^2 + \dots) = \gamma^3 / (1 - \gamma)\)。如果 target 不是吸收态(到达后 episode 结束),则 \(g = \gamma^3\)。两者差一个 \(1/(1-\gamma)\) 倍数,但 improvement 的 argmax 不变(所有 q 都同比例缩放)。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> 教材 Figure 5.4 显示 \(L = 14\) 时左下角 (4,0) 仍为 0,但 \(L = 15\) 时不再为 0。具体相变阈值是多少?</summary>
+    <p><strong>A.</strong> <strong>\(L_\min((4,0))\) = 15</strong>(从 (4,0) 绕开 forbidden 到 (3,2) 的最短"<em>合法</em>" 路径)。Manhattan 距离 = \(|4-3| + |0-2| = 3\),但 (2,1)(2,2)(3,3) 等 forbidden 阻挡,合法绕路至少 15 步。\(L = 14 < 15\) 时,从 (4,0) 起的 episode 没机会到 target,return 全靠 0/罚分构成 ⇒ \(\hat v((4,0)) = 0\)。\(L = 15\) 刚好够,所以 (4,0) 第一次有非零值。这就是教材 p. 86 顶"<em>the episode length must be no less than 15</em>" 的精确含义。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> "Sparse reward 让 MC 跑不动" —— 实际工程里有哪些缓解方案?</summary>
+    <p><strong>A.</strong> 三类:<strong>(1) Reward shaping</strong>(教材 p. 86 末段):在 target 周围加小正奖励形成"<em>吸引场</em>",如 \(r(s) = 1 - \text{dist}(s, \text{target}) \cdot 0.1\)。<strong>(2) Curriculum learning</strong>:先在小 grid 训,再迁移到大 grid。<strong>(3) Hierarchical RL</strong>:把"<em>到 target</em>" 拆成"<em>到 sub-goal 1, 2, ...</em>",每个 sub-goal 给 dense reward。<em>本质都是缩短"<em>有效 sparse 距离</em>"</em>。Ch.7 TD 起则提供算法层缓解 —— bootstrap 让 reward 信号"<em>每步往前传</em>",不必等整条 episode。后两章(Ch.9 Policy Gradient、Ch.10 Actor-Critic)的 advantage / baseline 又进一步降方差。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <p style="font-size:0.85rem; color:var(--color-muted);">视频:首选 Bilibili 直播(下方 iframe);若 iframe 不显示,用 YouTube 链接打开。BVID 当前是占位,实际 BVID 等首次部署时填。</p>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=18&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=18" target="_blank"><strong>▶ YouTube 备链(建议优先点这个)</strong></a></p>
+
+  <h3>下一节预告</h3>
+  <p>本节展示 MC Basic <em>能跑</em>,但<em>样本效率低</em> —— 每个 \((s, a)\) 都要从指定起点 collect "充分多" episode。下一节(L4)处理这个痛点的两面:<strong>(i) Exploring Starts 假设</strong> —— 强行从每个 \((s, a)\) 起跑,这是 MC Basic 与 MC ES 共同依赖的<em>强假设</em>,但在真实环境(机器人、推荐)<em>常常不成立</em>;<strong>(ii) first-visit / every-visit 策略</strong> —— 一条 episode 内可<em>同时</em> 估多个 (s, a),把"<em>n 条独立 episode</em>" 摊开成"<em>1 条 episode 的多个子序列</em>",大幅榨干样本。MC Exploring Starts(Algorithm 5.2)= MC Basic + every-visit + 后向 return 计算 g ← γg + r_t,是 MC 算法族里第一个工程实用版本。</p>
+
+  <!-- Bottom nav -->
+  <nav class="lesson-nav">
+    <a href="lesson-02.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-04.html">Next →</a>
+  </nav>
+</div>
+
+<!-- Components -->
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>蒙特卡罗学习(P2):MC Basic 介绍 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch05-l02" data-est-minutes="20">
+<div class="container">
+
+  <!-- Top nav -->
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.5 / Lesson 2</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <!-- Header -->
+  <p class="kicker">Bilibili #17 · YouTube #17 · Book §5.2.1-5.2.2 pp. 80-83</p>
+  <h1>L2: MC Basic — The First Model-Free RL<small style="color:var(--color-muted); font-weight:400;">  (MC Basic 介绍)</small></h1>
+
+  <!-- §1 Why this lesson -->
+  <h2>§1 Why this lesson</h2>
+  <p>L1 给我们"<em>用样本均值估期望</em>" 的钥匙。本节(教材 §5.2.1-5.2.2,pp. 80-83)把这把钥匙<strong>插进 PI 的锁孔</strong>:把 PI 的 PE 步("<em>用 \(P_\pi\) 解 Bellman 方程</em>")替换成"<em>跑 episode,用样本均值估</em> \(q_{\pi_k}(s, a)\)"。policy improvement 不变。<strong>整本书第一个 model-free RL 算法</strong> —— MC Basic —— 由此诞生。</p>
+  <p>关键洞察(教材 §5.2.1 + Algorithm 5.1):<strong>(a) 为什么直接估 \(q_{\pi_k}\) 而不是 \(v_{\pi_k}\)</strong>:PI 的 improvement 步要 \(\arg\max_a q\)。如果只估 \(v_{\pi_k}\),还得用 \(q = \sum_r p(r\mid s,a)r + \gamma \sum_{s&#39;} p(s&#39;\mid s,a) v(s&#39;)\)(公式 5.1)从 \(v\) 算 \(q\) —— <em>这又把 \(p\) 拉了回来</em>。所以 model-free RL 直接估 \(q\),把 \(p\) 完全踢出去。<strong>(b) 公式 (5.2) 的本质</strong>:\(q_{\pi_k}(s, a) = \mathbb E[G_t \mid S_t = s, A_t = a] \approx \frac{1}{n}\sum_{i=1}^n g_{\pi_k}^{(i)}(s, a)\)。这就是 L1 大数定律 + RL 估值的合体公式。<strong>(c) 算法骨架不变</strong>:外层"<em>评估 → 改进</em>" 仍是 GPI(Ch.4 §4.4 介绍的统一抽象);只是 PE 内层从"<em>解线性系统</em>" 变成"<em>采样 + 平均</em>"。<strong>(d) 与 PI 的收敛关系</strong>:PI 收敛 ⇒ 给足样本时 MC Basic 也收敛 —— "充分多 episode" 把样本均值推近真 \(q_{\pi_k}\),与 PI 等价。但实操中 MC Basic <em>样本效率太低</em>(每 (s, a) 都要 collect "充分多" 条),所以是<em>教学型</em> 算法,工程版要等 L4 / L6 的 efficient 变体。</p>
+
+  <!-- §2 核心定义 -->
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>MC Basic 算法 (Algorithm 5.1,p. 82)</strong>:输入 \(\pi_0\)。每外循环 \(k\):对<em>每个</em> \((s, a)\) collect "<em>充分多</em>" 条 episode → \(q_k(s, a) = \) 样本均值;policy improvement 把 \(\pi_{k+1}(s) = \arg\max_a q_k(s, a)\)。<em>本质</em>:把 PI 的 PE 替换成 MC 估计,其余不变。</li>
+    <li><strong>g_{π_k}^{(i)}(s, a)</strong>:第 \(i\) 条 episode(从 \((s, a)\) 起,跟 \(\pi_k\))得到的<em>discounted return</em>。是公式 (5.2) 求平均的对象。</li>
+    <li><strong>"为什么直接估 q 而非 v"</strong>:improvement 步要 \(\arg\max_a q(s, a)\)。从 \(v\) 推 \(q\) 需要公式 (5.1) 的 \(p(r\mid s,a),\ p(s&#39;\mid s,a)\) —— 这正是 model-free 要避开的。MC Basic 直接估 \(q\),把 \(p\) 完全踢掉。<em>这是 model-based vs model-free 切换的精确点</em>。</li>
+    <li><strong>每个 (s, a) 都要采样的限制</strong>:Algorithm 5.1 要求"<em>对每一个 (s, a) 都收集充分多 episode</em>"。这意味着每个 episode 必须从指定的 \((s_0, a_0)\) 开始 —— 即"<strong>exploring starts</strong>" 假设(L4 重点)。MC Basic 默认这个条件成立,L4 / L5 才开始拆这个假设。</li>
+    <li><strong>GPI (generalized policy iteration) 实例</strong>:Ch.4 §4.4 把"<em>值评估 ↔ 策略改进</em>" 的交替骨架命名为 GPI。MC Basic = GPI 在"<em>PE 用样本均值</em>" 这个特例下的具体落地。Ch.5-Ch.10 大部分算法都是 GPI 的不同 PE / improvement 实现。</li>
+    <li><strong>收敛(教材 §5.2.2 末段)</strong>:PI 收敛 → 给足样本时 \(\hat q \to q_{\pi_k}\) → MC Basic 等价于 PI → 收敛到 \(\pi^*\)。"<em>充分多</em>" 这个量化条件来自 L1 的大数定律。<em>注</em>:实际算法里"<em>充分多</em>" 不可能严格满足,所以 MC Basic 的<em>近似</em> 收敛性更接近 truncated PI(Ch.4 L3) —— PE 没跑到精确,但仍能逼近 \(\pi^*\)。</li>
+    <li><strong>样本效率短板(教材 §5.2.2 末段)</strong>:MC Basic <em>太朴素</em>,每 (s, a) 都要单独 collect 充分多 episode。\(|\mathcal S| \times |\mathcal A|\) 大时根本跑不动。所以 MC Basic 是"<em>教学版</em>",L4 / L6 的 efficient 变体才是工程版。</li>
+  </ul>
+
+  <!-- §3 关键公式 + 推导 -->
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节核心是<strong>把 PI 的 PE 步换成样本均值</strong>。两条公式分别是"<em>替换前</em>" 与"<em>替换后</em>"。</p>
+
+  <p><strong>公式 1:替换前(PI 的 model-based action value,教材 (5.1))</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "q_{\\pi_k}(s, a) = \\sum_r p(r \\mid s, a) r + \\gamma \\sum_{s&#39;} p(s&#39; \\mid s, a) v_{\\pi_k}(s&#39;)",
+    "annotations": [
+      {"key": "p_r", "label": "p(r | s, a)", "description": "奖励的条件分布。需要环境模型显式给出。"},
+      {"key": "p_s_prime", "label": "p(s&#39; | s, a)", "description": "状态转移概率。也需要环境模型显式给出。"},
+      {"key": "v_pi_dependence", "label": "v_{π_k}(s&#39;) 依赖", "description": "需要 v_{π_k} —— 即先解 Bellman 方程。这正是 PI 的 PE 步骤要做的事。整条公式的&#39;model-based&#39; 标签来自这里 + 上面两个 p。"},
+      {"key": "ch4_link", "label": "Ch.4 PI 锁孔", "description": "PI 用这条公式从 v 算 q,再 \\arg\\max_a 选动作。MC Basic 要做的就是&#39;不依赖 p&#39; 直接估 q,把这条公式整体替换。"}
+    ]
+  }'></div>
+
+  <p><strong>公式 2:替换后(MC Basic 的样本均值估计,教材 (5.2))</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "q_{\\pi_k}(s, a) = \\mathbb E[G_t \\mid S_t = s, A_t = a] \\approx \\frac{1}{n} \\sum_{i=1}^n g_{\\pi_k}^{(i)}(s, a)",
+    "annotations": [
+      {"key": "expectation", "label": "E[·] 是定义", "description": "q_{π_k} 本身就是 return 的条件期望。这是 Ch.2 给的定义,本节不变。"},
+      {"key": "sample_mean", "label": "样本均值近似", "description": "n 条独立 episode,每条算一个 g^(i)(s,a),取均值。这是 L1 大数定律的 RL 版本。n→∞ 时严格收敛到 q_{π_k}。"},
+      {"key": "no_p_needed", "label": "不再需要 p", "description": "整条公式没有 p(r|s,a) 也没有 p(s&#39;|s,a)。模型完全踢出公式 ⇒ MC 是 model-free 的精确意义。"},
+      {"key": "exploring_starts", "label": "(s, a) 起点要求", "description": "公式要求 episode 从 (s, a) 起 —— 即 episode 开局时 S_t=s, A_t=a。实操要&#39;exploring starts&#39; 让所有 (s, a) 都被采到 —— L4 详谈这个假设的代价。"}
+    ]
+  }'></div>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>Algorithm 5.1 骨架(p. 82)</em>。<strong>外循环</strong> \(k = 0, 1, 2, \dots\)。<em>内层 1 (PE)</em>:对每个 \(s \in \mathcal S\) 与 \(a \in \mathcal A(s)\),从 \((s, a)\) 起按 \(\pi_k\) 跑充分多 episode,取平均得 \(q_k(s, a) \approx q_{\pi_k}(s, a)\)。<em>内层 2 (improvement)</em>:\(a_k^*(s) = \arg\max_a q_k(s, a)\),\(\pi_{k+1}(a \mid s) = 1\) if \(a = a_k^*(s)\) else 0。<em>对照 PI</em>:外循环骨架完全相同,差别只在 PE 实现 —— PI 解线性系统,MC Basic 跑样本。
+  </div>
+
+  <div class="callout">
+    <strong>Step 2.</strong> <em>"为什么直接估 q,不估 v 后再算 q"</em>。如果先估 \(v_{\pi_k}\)(L1 公式 \(\bar G \approx v_\pi\)),再用公式 (5.1) 推 \(q\),会再次需要 \(p(r\mid s,a)\) 和 \(p(s&#39;\mid s,a)\) —— <em>这就把 model 拉了回来,违背 model-free 初衷</em>。所以 MC Basic 直接对 \((s, a)\) 估 \(q\):每条 episode 从 \((s, a)\) 起跑,得到的 return 就是 \(g^{(i)}(s, a)\)。这是"<strong>q-估计是 MC 的 first-class 设计选择</strong>" 的根源。
+  </div>
+
+  <div class="callout">
+    <strong>Step 3.</strong> <em>收敛性(教材 §5.2.2 末段)</em>。三步:<em>(i)</em> PI 严格收敛(Ch.4 L2 §3 Theorem 4.1);<em>(ii)</em> 给足样本时 \(\hat q_{\pi_k} \to q_{\pi_k}\)(L1 大数定律);<em>(iii)</em> 内嵌等价 ⇒ MC Basic 在 \(n \to \infty\) 极限下与 PI 行为相同 ⇒ 收敛到 \(v^*, \pi^*\)。<em>实操含义</em>:有限 \(n\) 时 \(\hat q\) 是<em>带噪</em> 的近似,MC Basic 实际更像 truncated PI(Ch.4 L3) —— PE 没解到精确,但靠 GPI "<em>多跑几个外步弥补</em>"。
+  </div>
+
+  <!-- §4 算法拆解 -->
+  <h2>§4 Grid-world + 算法步骤</h2>
+  <p>用教材 §5.2.3 的 9-格初始策略 \(\pi_0\)(L3 会详细手算)演示 MC Basic 的两层循环结构。Grid 给出策略的箭头(forbidden 格留空),iteration-stepper 展示外循环 + PE 采样 + improvement 的步骤。</p>
+
+  <div data-component="gridworld" id="gw-ch05-l02-pi0" data-config='{
+    "rows": 3, "cols": 3,
+    "target": [2, 2],
+    "forbidden": [[1,2]],
+    "policy": [
+      ["↑", "↓", "→"],
+      ["→", "↓", ""],
+      ["→", "→", "·"]
+    ]
+  }'></div>
+  <p style="font-size:0.85rem; color:var(--color-muted);">教材 Figure 5.3 的 3×3 简化版 \(\pi_0\):target = (2,2),forbidden = (1,2)。\(\pi_0\) 在 \(s_1 = (0,0)\) 给出"<em>↑</em>"(撞墙)、\(s_3 = (0,2)\) 给出"<em>→</em>"(撞墙) —— 都是<em>非最优</em>。target 格 (2,2) 用"<em>·</em>" 表示停留(self-loop)。</p>
+
+  <div data-component="iteration-stepper" data-config='{
+    "steps": [
+      {
+        "label": "k=0  外循环开始,π_0 给定(部分非最优)",
+        "note": "MC Basic 接管:对每个 (s, a) 都要 collect 充分多 episode 估 q_{π_0}(s, a)。3×3 grid 共 9 个 state,每 state 5 个 action ⇒ 共 45 个 (s, a) 对要采样。每对至少几十条 episode 才能让 \\hat q 稳定。"
+      },
+      {
+        "label": "k=0 内层 PE: 收集 (s_1=(0,0), a=↑) 的 episodes",
+        "note": "从 (0,0) 起,首步必须 a=↑(撞墙,r=-1),之后跟 π_0:回到 (0,0) 继续撞墙……得 g^{(i)}(s_1, ↑) = -1 + γ(-1) + γ²(-1) + ... = -1/(1-γ) ≈ -10。多条独立 episode 的均值 \\hat q ≈ -10。"
+      },
+      {
+        "label": "k=0 内层 PE: 收集 (s_1, a=↓) 的 episodes",
+        "note": "从 (0,0) 起,首步 a=↓ 进入 (1,0),之后 π_0(1,0)=→ 撞 forbidden (1,2)…… 实际轨迹会进入 target。\\hat q(s_1, ↓) ≈ +0.5(综合 forbidden 罚分与达到 target 的 reward)。"
+      },
+      {
+        "label": "k=0 内层 PE: 类似收集所有 9×5 = 45 个 (s, a)",
+        "note": "对每个 (s, a) 都要 collect。注意 forbidden (1,2) 也作为 starting state 出现 —— 这是 MC Basic 的 exploring-starts 假设(L4 详谈)。所有 \\hat q_0(s, a) 估完后,进入 improvement。"
+      },
+      {
+        "label": "k=0 改进: π_1(s) = arg max_a \\hat q_0(s, a)",
+        "note": "对 s_1=(0,0):\\hat q_0(s_1, ·) 在 a=↓ 处最大(+0.5),所以 π_1(s_1) = ↓(从撞墙改成走下)。其他 state 类似。一外步后 π_1 已经接近 π*。"
+      },
+      {
+        "label": "k=1, 2, ... 重复采样 + 改进",
+        "note": "若 π_1 已是 π*(本例 3×3 简化版可能 1 步即收敛),后续 k=1, 2 仍重复采样 —— 这就是 MC Basic 的&#39;wasteful&#39;:已收敛仍 collect 充分多 episode。L4 / L6 改进版会用&#39;single episode&#39; 替代。"
+      }
+    ]
+  }'></div>
+
+  <p><strong>关键观察</strong>:外循环骨架是 GPI(Ch.4 §4.4),与 PI 完全相同。差别<em>只在</em> PE 内层:PI 解线性系统 \(v_{\pi_k} = (I - \gamma P_{\pi_k})^{-1} r_{\pi_k}\),MC Basic 跑 \(n\) 条 episode 取均值。<em>这是把 model-based 切到 model-free 的精确锁眼</em>。</p>
+
+  <!-- §5 常见误解 -->
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"MC Basic 直接把 PI 的 PE 替换掉,所以 \(\hat v\) 就是中间产物 —— 估了 v 再用公式 (5.1) 推 q。"<br>
+    <strong>实际上:</strong><strong>MC Basic 直接估 \(q\),不经过 \(v\)</strong>。原因:improvement 步要 \(\arg\max_a q\),从 \(v\) 推 \(q\) 需要 \(p\)(公式 5.1)—— 那 \(p\) 又被拉回来了,违背 model-free 设计。所以教材 Algorithm 5.1 直接 collect (s, a)-episode 估 \(q\),完全跳过 \(v\)。<strong>"q is the first-class citizen in MC"</strong> 是 Ch.5-Ch.7 所有 MC/TD 算法(包括 Q-learning)的共同设计原则。<br>
+    <strong>因为:</strong>v 与 q 是<em>双胞胎</em>(\(v(s) = \sum_a \pi(a\mid s) q(s, a)\)),但 v → q 的反向变换需要 model。所以 model-free 选 q 当主语,model-based 选 v 当主语。这件事在 Ch.7 Q-learning 里再次出现 —— Q-learning 不维护 v,只维护 q。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"MC Basic 比 PI 慢是因为<em>采样</em> 比<em>解方程</em> 慢。"<br>
+    <strong>实际上:</strong><strong>MC Basic 慢是因为<em>样本量需求大</em></strong>。对每个 (s, a) 要 collect "充分多" episode —— "充分多" 取决于 var(G) 与目标精度,典型几十到几千条。45 个 (s, a) 对 × 1000 episode/对 = 45000 episode。每条 episode 又有十几步。所以 MC Basic 总样本量比 PI 高 4-6 个数量级。<em>这就是为什么 MC Basic 是教学版,不是工程版</em>。<br>
+    <strong>因为:</strong>样本均值方差衰减是 \(O(1/n)\),所以"<em>从 0.1 到 0.01</em>" 要 100 倍样本(L1 Q2)。L4 Exploring Starts 用 every-visit 把"<em>一条 episode</em>" 摊开成"<em>多个子 episode</em>",L5 ε-greedy 用"<em>一条超长 episode</em>" 替"<em>多条独立 episode</em>",都是为了榨干样本。Ch.7 TD 用 bootstrap 进一步降方差。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"MC Basic 算法的'GPI 实例' 标签是个标签游戏,没实际意义。"<br>
+    <strong>实际上:</strong><strong>GPI 视角让 Ch.5-Ch.10 全章无缝衔接</strong>。MC Basic = GPI(PE = 样本均值);TD(Ch.7) = GPI(PE = bootstrap);Q-learning = GPI(PE = bootstrap + max);Actor-Critic(Ch.10) = GPI(PE = critic 网络,improvement = actor 梯度)。读者只要抓住"<em>外循环 PE ↔ improvement 交替</em>" 这一张图,就能把 50 节课的 RL 算法世界压缩成"<em>每个算法填两个空</em>"。<br>
+    <strong>因为:</strong>RL 算法本质上是"<em>估值 ↔ 改策略</em>" 的反馈回路。GPI 给出这个回路的<em>抽象骨架</em>,具体填法是<em>设计选择</em>。Ch.5 L1-L6 学的是 PE 怎么填(从样本均值 → first/every-visit → ε-greedy 取代 exploring-starts),improvement 仍是 \(\arg\max\)。Ch.7 起才开始动 improvement 一侧。
+  </div>
+
+  <!-- §6 自检 + 视频 + teaser -->
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> MC Basic 直接估 \(q\) 而不估 \(v\)。如果硬要估 \(v\) 再算 \(q\),会发生什么?</summary>
+    <p><strong>A.</strong> 把 \(v\) 估完后,要用 \(q(s, a) = \sum_r p(r\mid s,a) r + \gamma \sum_{s&#39;} p(s&#39;\mid s,a) v(s&#39;)\)(公式 5.1)算 \(q\)。这条公式需要 \(p(r\mid s,a)\) 和 \(p(s&#39;\mid s,a)\) —— <em>正是 model-free 要踢掉的</em>。所以"<em>估 v 再推 q</em>" 路线会把 model 拉回来,违背初衷。MC Basic 选择"<em>直接估 q</em>",彻底切断对 \(p\) 的依赖。这件事在 Q-learning(Ch.7)里再次成为设计原则:Q-learning 永远不维护 \(v\),只维护 \(q\)。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> Algorithm 5.1 第二行"<em>对每个 (s, a) collect 充分多 episode</em>" —— 这条要求暗藏什么假设?</summary>
+    <p><strong>A.</strong> <strong>Exploring starts 假设</strong>(L4 主题):每条 episode 必须能从指定的 \((s_0 = s, a_0 = a)\) 起。实操中这意味着 agent 可以<em>任意</em> 选择初始 state-action 对 —— <em>这在仿真器里成立,但在真实环境(机器人、推荐)里几乎不成立</em>。MC Basic 默认这个条件成立,L4 用 every-visit 在一定程度上缓解(一条 episode 可估多个 (s, a)),L5 用 ε-greedy 彻底替换("<em>不需要任意初始</em>(s, a)<em>,只要策略 soft 让所有 (s, a) 都有正概率被访问</em>")。这是 Ch.5 后半的主线张力。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> 教材 §5.2.2 末段说"MC Basic 是 PI 的<em>近似版</em>",PI 收敛 ⇒ MC Basic 收敛。但严格地,样本数 \(n\) 必须多大才"够"?</summary>
+    <p><strong>A.</strong> <strong>没有有限的"够"</strong>。L1 大数定律给的是 \(n \to \infty\) 时 \(\hat q \to q\),不给有限 \(n\) 时的精度保证。Hoeffding 等集中不等式可给"<em>误差 \(\le \varepsilon\) 的概率 \(\ge 1 - \delta\)" 类型的<em>样本复杂度</em> 上界,但要求 reward 有界 + i.i.d.,且 \(n = O(\frac{1}{\varepsilon^2} \log \frac{1}{\delta})\) —— 通常很大。所以 MC Basic 实际靠"<em>外循环 GPI 多跑几步弥补 PE 不精确</em>",其行为更接近 truncated PI(Ch.4 L3)。Ch.6 RM 框架会给一般 stochastic approximation 的收敛证明,Ch.7 TD 在此框架下证明 \(\hat q\) 几乎必然收敛到 \(q^*\)。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <p style="font-size:0.85rem; color:var(--color-muted);">视频:首选 Bilibili 直播(下方 iframe);若 iframe 不显示,用 YouTube 链接打开。BVID 当前是占位,实际 BVID 等首次部署时填。</p>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=17&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=17" target="_blank"><strong>▶ YouTube 备链(建议优先点这个)</strong></a></p>
+
+  <h3>下一节预告</h3>
+  <p>本节给了 MC Basic 的<em>骨架</em>(算法 5.1)与<em>替换公式</em>(5.2)。下一节(L3)在教材 §5.2.3 的具体 grid-world 上<em>手算</em> 几条 episode,展示 MC Basic 如何从初始非最优 \(\pi_0\) 一步迭代到 \(\pi^*\)。重点看"<em>episode length 与 sparse reward 的相互作用</em>"(教材 Figure 5.4)—— episode 太短时,远离 target 的 state 学不到任何值,直到 episode 足够长才形成"<em>吸引场</em>"。这是 MC 在 sparse reward 场景下的<em>核心痛点</em>,也是 reward shaping 与 dense reward 设计的引子。</p>
+
+  <!-- Bottom nav -->
+  <nav class="lesson-nav">
+    <a href="lesson-01.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-03.html">Next →</a>
+  </nav>
+</div>
+
+<!-- Components -->
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>

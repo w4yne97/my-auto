@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>时序差分(P4):Sarsa — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch07-l04" data-est-minutes="20">
+<div class="container">
+
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.7 / Lesson 4</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <p class="kicker">Bilibili #32 · YouTube #32 · Book §7.2 pp. 133-138</p>
+  <h1>L4: Sarsa<small style="color:var(--color-muted); font-weight:400;">  (TD 在 q 上的同构 — 名字就是 5 元组)</small></h1>
+
+  <h2>§1 Why this lesson</h2>
+  <p>L1-L3 讲 TD(0) 估 \(v_\pi(s)\)。但 RL 想"<em>改 policy</em>" 而非只"<em>评 policy</em>",需要 \(q_\pi(s,a)\)(每个 \((s,a)\) 一条估计)。本节(教材 §7.2)把 TD(0) <em>原样套到 \(q\) 上</em>,得 <strong>Sarsa</strong> —— TD 框架的<em>第一个动作-值同构变种</em>。整章<em>"<em>每个算法 = \(\delta_t\) 中下一状态 value 的某种算法</em>"</em> 的家族大幕由此拉开。</p>
+  <p>核心 takeaway:<strong>(a)</strong> Sarsa 名字直接来自每步样本 5 元组:<strong>(s, a, r, s′, a′)</strong>(即 \(s_t, a_t, r_{t+1}, s_{t+1}, a_{t+1}\))—— 算法字面拼读。<strong>(b)</strong> 更新:\(Q(s_t, a_t) \leftarrow Q(s_t, a_t) + \alpha [r_{t+1} + \gamma Q(s_{t+1}, a_{t+1}) - Q(s_t, a_t)]\)。\(\delta_t\) 中"<em>下一状态 value</em>" = <strong>从当前 policy <em>采样</em> 的 \(a_{t+1}\) 上的 \(Q\)</strong>。<strong>(c)</strong> 关键性质:<strong>on-policy</strong> ——<em>同一</em> policy 既负责采数据也负责被估、被改。<strong>(d)</strong> 收敛:套 Theorem 6.3,与 TD(0) 同样模板。</p>
+
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>Sarsa 5 元组(教材 §7.2)</strong>:每步收 \((s_t, a_t, r_{t+1}, s_{t+1}, a_{t+1})\)。<em>名字</em>: <strong>S</strong>tate <strong>a</strong>ction <strong>r</strong>eward <strong>s</strong>tate <strong>a</strong>ction —— 把 5 个字符串首尾拼接,正是"<em>Sarsa</em>"。<em>这是 RL 中少有的"<em>算法名 = 数据格式</em>"</em>。</li>
+    <li><strong>Sarsa 更新(教材 (7.10)/(7.11))</strong>:\(Q(s_t, a_t) \leftarrow Q(s_t, a_t) + \alpha_t \delta_t\),其中 \(\delta_t = r_{t+1} + \gamma Q(s_{t+1}, a_{t+1}) - Q(s_t, a_t)\)。<em>结构与 TD(0) 一字不差,只是把 \(V\) 换成 \(Q\)、把 \(s_{t+1}\) 换成 \((s_{t+1}, a_{t+1})\)</em>。</li>
+    <li><strong>"<em>采样的 \(a_{t+1}\)</em>" — 关键差别</strong>。\(a_{t+1}\) <em>不是</em>"<em>下一时刻最好动作</em>",而是"<em>当前 policy \(\pi\) 在 \(s_{t+1}\) 处<em>实际采样到</em> 的动作</em>"。\(a_{t+1} \sim \pi(\cdot | s_{t+1})\)。这把 Sarsa 钉死在 on-policy 阵营。</li>
+    <li><strong>on-policy 含义</strong>:<em>用当前 \(\pi\) 采数据 + 改进 \(\pi\) 也用同一族 \(Q\)</em>。算法循环:用 \(\pi_k\) 采 episode → 用样本更新 \(Q\) → 由 \(Q\) 派生 \(\pi_{k+1}\)(\(\epsilon\)-greedy)→ 重复。</li>
+    <li><strong>policy 改进步骤</strong>:每若干次 \(Q\) 更新后,把 \(\pi\) 改为 \(\epsilon\)-greedy w.r.t. 当前 \(Q\)。这与 Ch.5 MC 控制(L5)结构一致。</li>
+    <li><strong>收敛条件(教材 §7.2 末)</strong>:每个 \((s,a)\) 步长两条件 + 每个 \((s,a)\) 无穷访问 + reward 有界 ⇒ 在 GLIE(Greedy in Limit with Infinite Exploration)下 \(Q \to q_*\),\(\pi \to \pi^*\)。</li>
+  </ul>
+
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节核心是<strong>从 TD(0) 到 Sarsa 的"<em>1 字翻译</em>"</strong>:把 \(V\) 改 \(Q\),把 \(s_{t+1}\) 加上 \(a_{t+1}\)。</p>
+
+  <p><strong>公式:Sarsa 更新与 5 元组拼读</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "Q(s_t, a_t) \\leftarrow Q(s_t, a_t) + \\alpha_t\\big[\\underbrace{r_{t+1}}_{\\text{r}} + \\gamma Q(\\underbrace{s_{t+1}}_{\\text{s&#39;}}, \\underbrace{a_{t+1}}_{\\text{a&#39;}}) - Q(\\underbrace{s_t}_{\\text{s}}, \\underbrace{a_t}_{\\text{a}})\\big]",
+    "annotations": [
+      {"key": "name", "label": "名字溯源", "description": "5 元组 (s, a, r, s&#39;, a&#39;) 拼读 = Sarsa。这是 RL 中难得&#39;算法名直接告诉你它的输入&#39; 的例子。"},
+      {"key": "delta", "label": "δ_t 形态", "description": "δ_t = r + γ Q(s&#39;, a&#39;) − Q(s, a)。与 TD(0) δ_t 一字不差,只是&#39;状态 value V&#39; 换成&#39;状态-动作 value Q&#39;。所以 Sarsa = &#39;TD(0) 在 q 上&#39;。"},
+      {"key": "sampled_a", "label": "a&#39; 是&#39;采样&#39;,不是&#39;最优&#39;", "description": "a&#39; ∼ π(·|s&#39;) —— 从当前 policy 采。这把 Sarsa 钉死在 on-policy。&#39;采样&#39; 还是&#39;max&#39; 还是&#39;期望&#39; 是 Sarsa / Q-learning / Expected Sarsa 的&#39;唯一&#39; 结构差异(L5/L6 揭示)。"},
+      {"key": "rm_form", "label": "RM 形态", "description": "g(Q)(s,a) = Q(s,a) − E[r + γQ(s&#39;, a&#39;) | s,a, π],根 Q = q_π;g̃ = Q(s,a) − [r + γ Q(s&#39;, a&#39;)] = -δ_t。Sarsa = RM 在 Bellman 期望算子 T_π^q 上。"},
+      {"key": "convergence", "label": "收敛", "description": "Theorem 7.2(教材 §7.2):三条件 + GLIE ⇒ Q → q*。证明走 Theorem 6.3 多变量 RM 模板,与 TD(0) 完全平行。"}
+    ]
+  }'></div>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>"<em>5 元组</em>" 在算法实现上的意义</em>。Sarsa 的<em>每步</em> 必须先<em>选好下一动作 \(a_{t+1}\)</em> 才能算 \(\delta_t\)。所以伪代码是 <em>"<em>选 a → 跑环境 → 看 r、s′ → 选 a′ → 用 (s,a,r,s′,a′) 更新 Q → s,a := s′,a′ → 再循环</em>"</em>。<em>动作选择与值更新交错</em>,这是 on-policy 的<em>结构表征</em>:数据来源(\(\pi\))与 update 用到的"<em>下一动作</em>"(也是 \(\pi\))<em>同一</em>。Q-learning 在 L6 会打破这一点。
+  </div>
+
+  <div class="callout">
+    <strong>Step 2.</strong> <em>"<em>评估 + 改进</em>" 交替(GPI in Sarsa)</em>。Ch.5 L5 GPI 在 Sarsa 中的具体形态:每若干步用 \(\epsilon\)-greedy w.r.t. 最新 \(Q\) 更新 \(\pi\)。<em>评估不必精确收敛</em>,改进也不必等评估完(<em>truncated PI</em>)。这是 RL 实操的标配:每步样本既改 \(Q\) 又(隐式)改 \(\pi\)。理论收敛要"<em>探索保持</em>"(\(\epsilon \to 0\) 但 \(\sum \epsilon = \infty\)) ⇒ GLIE。
+  </div>
+
+  <div class="callout">
+    <strong>Step 3.</strong> <em>Sarsa 学到的是"<em>当前 \(\pi\) 下的 \(q_\pi\)</em>"</em>。注意:Sarsa 收敛点<em>不是</em> \(q^*\),而是<em>当前 policy 的 \(q_\pi\)</em>。每次 \(\pi\) 更新后,\(Q\) 又开始追新的 \(q_\pi\)。所以 Sarsa <em>整个 GPI 循环</em> 才收敛到 \(q^*\)。这与 Q-learning 直接学 \(q^*\) 形成<em>哲学差异</em>。L6 在此对比。
+  </div>
+
+  <h2>§4 Grid-world 例子:Sarsa 在 5×5 上学最短路</h2>
+  <p>5×5 grid,target=(3,2),forbidden={(1,1),(2,1),(2,2),(1,3),(3,3)}。从 (0,0) 起跑 Sarsa + \(\epsilon\)-greedy。下图是 \(Q\) 收敛后由 \(Q\) 派生的 greedy policy:</p>
+  <div data-component="gridworld" id="gw-ch07-l04" data-config='{
+    "rows": 5, "cols": 5,
+    "target": [3, 2],
+    "forbidden": [[1,1],[2,1],[2,2],[1,3],[3,3]],
+    "policy": [
+      ["↓","↓","↓","←","←"],
+      ["↓","","↓","","←"],
+      ["↓","","","↓","←"],
+      ["→","→","","","←"],
+      ["↑","↑","↑","↑","↑"]
+    ],
+    "trajectory": [[0,0],[1,0],[2,0],[3,0],[3,1],[3,2]]
+  }'></div>
+
+  <p><strong>用 iteration-stepper 演示 Sarsa 4 步更新</strong>:</p>
+  <div data-component="iteration-stepper" data-config='{
+    "steps": [
+      {
+        "label": "Init: Q(s,a)=0;ε=0.1;α=0.1;γ=0.9",
+        "note": "起始所有 Q=0;policy 对每个状态打一个动作偏好(右、下…)。"
+      },
+      {
+        "label": "t=0: s=(0,0), a=down, r=0, s&#39;=(1,0), a&#39;=down",
+        "note": "δ_0 = 0 + 0.9·0 − 0 = 0 ⇒ Q((0,0), down) 不变。无 reward 的过道步。"
+      },
+      {
+        "label": "t=1: s=(1,0), a=down, r=0, s&#39;=(2,0), a&#39;=down",
+        "note": "δ_1 = 0;Q 不变。继续过道。"
+      },
+      {
+        "label": "t=2: s=(3,1), a=right, r=+1, s&#39;=(3,2)=target, a&#39;=任意",
+        "note": "δ_2 = 1 + γ·Q(target, ·) − Q((3,1), right) = 1。Q((3,1), right) ← 0 + 0.1·1 = 0.1。target 处 Q=0(已收终态)。"
+      },
+      {
+        "label": "Episode 2 起,reward 信息&#39;反向接龙&#39;",
+        "note": "下一 episode 走到 (3,1) 时 a&#39; 选 right(因 Q 偏向 right);走到 (3,0) 时 a=right 的更新 δ = 0 + 0.9·0.1 − 0 = 0.09 ⇒ Q((3,0), right) ← 0.009。reward 信号沿轨迹反向传播,每过一 episode 多走一格回去。"
+      },
+      {
+        "label": "经 ~500 episode 后,Q 表收敛,greedy(Q) ≈ π*",
+        "note": "整张 Q 表稳定,greedy policy 趋近最优(忽略 forbidden 反射的最短路径)。Sarsa 完成&#39;评估 + 改进&#39; GPI 循环。"
+      }
+    ]
+  }'></div>
+
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"Sarsa 与 Q-learning 区别只在 \(\max\) vs 没 \(\max\)。"<br>
+    <strong>实际上:</strong><strong>真正区别在<em>"<em>下一动作怎么决定</em>"</em></strong>。Sarsa 用<em>当前 policy 实际采样的 \(a_{t+1}\)</em>(可能是探索的);Q-learning 用<em>greedy 选择的 \(\arg\max_a Q(s_{t+1}, a)\)</em>(假设之后总最优)。这一差别让 Sarsa 是 on-policy(学到的是<em>真实 \(\pi\)</em> 包括探索的代价),Q-learning 是 off-policy(学到的是<em>纯贪婪 policy</em> 的 \(q^*\),无视当前探索)。<br>
+    <strong>因为:</strong><em>"<em>评估哪个 policy</em>"</em> 与<em>"<em>用哪个 policy 采数据</em>"</em> 在 Q-learning 中分离 ⇒ 学到 \(q^*\) 不依赖 behavior。Sarsa 中两者锁住 ⇒ 学到的 \(q\) 反映了"<em>探索造成的额外代价</em>"。Cliff-walking 经典例:Sarsa 会绕安全路,Q-learning 走悬崖边 —— 因为 Sarsa 把"<em>万一探索失误掉崖</em>" 计入了。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"Sarsa 一次只能学到 one-step 信息,效率低。"<br>
+    <strong>实际上:</strong><strong>Sarsa 通过 bootstrap 让信息<em>沿轨迹反向接龙</em></strong>。\(Q(s_t, a_t)\) 的 target 含 \(\gamma Q(s_{t+1}, a_{t+1})\) —— 而 \(Q(s_{t+1}, a_{t+1})\) 已经从<em>未来轨迹</em> 学到一些。每 episode 回来,reward 信号往回传一格。L5 \(n\)-step Sarsa 让"<em>一次往回传 \(n\) 格</em>",在 bias-variance 之间给更多选择。<br>
+    <strong>因为:</strong>"<em>1 步样本</em>" 不等于"<em>1 步信息</em>"。bootstrap 让<em>过去所有学到的</em> 都参与<em>当前 target</em>,信息利用率本质上很高 —— 这是 Ch.7 全章在样本效率上胜过 MC 的根本。
+  </div>
+
+  <h2>§6 自检 + 视频 + 下一节</h2>
+  <details>
+    <summary><strong>Q1.</strong> 写出 Sarsa 的 \(\delta_t\) 与更新公式,并解释 \(a_{t+1}\) 来自哪里。</summary>
+    <p><strong>A.</strong> \(\delta_t = r_{t+1} + \gamma Q(s_{t+1}, a_{t+1}) - Q(s_t, a_t)\);\(Q(s_t, a_t) \leftarrow Q(s_t, a_t) + \alpha\delta_t\)。\(a_{t+1} \sim \pi(\cdot | s_{t+1})\) —— 从<em>当前 policy 实际采样</em>(可能是探索动作)。这是 on-policy 的特征:同一 \(\pi\) 同时负责"<em>采数据</em>" 与"<em>构造 target</em>"。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> 为什么"<em>5 元组</em>" 是 Sarsa 的命名来源?</summary>
+    <p><strong>A.</strong> Sarsa 每步用样本 \((s_t, a_t, r_{t+1}, s_{t+1}, a_{t+1}) = (s, a, r, s&#39;, a&#39;)\),5 个字符串首尾拼读 = "<em>Sarsa</em>"。这与 TD(0) 用 4 元组 \((s, r, s&#39;)\)、Q-learning 实质 4 元组 \((s, a, r, s&#39;)\)(下一动作不"<em>采样</em>",直接 \(\max\))形成对照。<em>"<em>需要 5 个数据点</em>" 等价于"<em>需要采样下一动作</em>"</em>,这在结构上锁定 on-policy。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=32&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=32" target="_blank">YouTube 备链</a></p>
+
+  <h3>下一节预告</h3>
+  <p>Sarsa 用<em>采样下一动作</em>,方差还是不小。<strong>L5(教材 §7.3)</strong> 给两个降方差变种:<strong>Expected Sarsa</strong>(target 用 \(\sum_a \pi(a|s_{t+1}) Q(s_{t+1}, a)\) 把"<em>采样</em>" 换成"<em>当前 policy 上的期望</em>",方差小一档);<strong>n-step Sarsa</strong>(target 往后看 \(n\) 步 真 reward 才 bootstrap,在 \(n=1\)(Sarsa)与 \(n=\infty\)(MC)之间给整条光谱)。<em>这把 bias-variance trade-off 这条轴上每个点都给读者了</em>。</p>
+
+  <nav class="lesson-nav">
+    <a href="lesson-03.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-05.html">Next →</a>
+  </nav>
+</div>
+
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>值函数近似(P4):示例与 Deadly Triad — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch08-l04" data-est-minutes="40">
+<div class="container">
+
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.8 / Lesson 4</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <p class="kicker">Bilibili #40 · YouTube #40 · Book §8.2.4-8.2.5 pp. 164-179</p>
+  <h1>L4: Illustrative Examples and Deadly Triad<small style="color:var(--color-muted); font-weight:400;">  (示例分析 + 致命三联)</small></h1>
+
+  <h2>§1 Why this lesson</h2>
+  <p>L3 给出 TD-FA 算法形式 \(w \leftarrow w + \alpha \delta_t \nabla_w \hat v(s; w)\),并指出"<em>线性 FA + on-policy ⇒ 收敛到 MSPBE 极小</em>" 这一保证。本节(教材 §8.2.4-8.2.5, pp. 164-179)做<em>两件事</em>:<strong>(a)</strong> 把算法跑在 5×5 grid-world 上,直观看<em>线性 FA 学出来的 \(\hat v\) 长什么样</em> —— 多项式基(\(d=3, 6, 10\))与 Fourier 基(\(q=1,2,3\))给出 RMSE 随 episode 单调下降,但<em>受逼近族容量限制</em>,RMSE 不到 0;<strong>(b)</strong> 把 §8.2.5 的<em>理论分析</em> 摊开:确定型 \(w_{t+1} = w_t + \alpha(b - A w_t)\) 收敛到 \(w^* = A^{-1} b\),其中 \(A = \Phi^\top D(I - \gamma P_\pi)\Phi\) 正定 ⇒ \(\|I - \alpha A\|_2 < 1\) ⇒ 几何收敛;同时摆出"<em>w* = MSPBE 极小</em>" 与误差界 \(\|\Phi w^* - v_\pi\|_D \le \frac{1}{1-\gamma} \min_w \sqrt{J_E(w)}\) 这一<em>实操可怕</em>(\(\gamma\) 接近 1 时上界爆)的事实。</p>
+  <p>但本节的<em>核心戏剧</em> 在 <strong>deadly triad</strong> —— Sutton-Barto 命名的三联组合:<em>函数近似 + bootstrap + off-policy</em>。任两条独立都不出问题,三条同时出现可让 \(\|w_k\|\) 指数发散。<strong>Baird 反例</strong>(7-state star MDP)是<em>纯线性 FA + Q-learning + 错误加权 ⇒ 权重发散</em> 的经典构造:每条都"<em>合法</em>",凑齐三件就<em>炸</em>。本节把这条<em>结构性</em> 警告说严,顺便交代<em>实操缓解</em>(experience replay + target network + 小 stepsize)—— 这正是 L7 DQN 两大 trick 的<em>诞生动因</em>。</p>
+
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>多项式特征 (polynomial features,教材 (8.15)-(8.17))</strong>:把 \((x, y) = (\text{col}, \text{row})\) 归一化到 \([-1, 1]\) 后,取 \(\phi(s) = [1, x, y]^\top\)(\(d=3\) 平面)、\([1, x, y, x^2, y^2, xy]^\top\)(\(d=6\) 二次面)、或 \(d=10\)(三次)。维度<em>越高</em>,\(\hat v\) 表达力<em>越强</em>,RMSE 下界<em>越低</em>。但 \(\phi\) 是<em>线性</em> 组合,真实 \(v_\pi\) 若<em>非</em>多项式则永远到不了 0。</li>
+    <li><strong>Fourier 特征 (Fourier basis,教材 (8.18))</strong>:\(\phi(s) = [\cos(\pi(c_1 x + c_2 y))]\),\(c_1, c_2 \in \{0, \ldots, q\}\),维度 \((q+1)^2\)。\(q=1\) 给 \(d=4\),\(q=3\) 给 \(d=16\)。<em>正交基</em>,理论性能优于多项式。</li>
+    <li><strong>(8.22) 确定型 update</strong>:\(w_{t+1} = w_t + \alpha (b - A w_t)\),\(A = \Phi^\top D(I - \gamma P_\pi)\Phi\),\(b = \Phi^\top D r_\pi\)。\(D\) 是<em>稳态分布</em> \(d_\pi\) 的对角阵。<em>不动点</em> \(w^* = A^{-1} b\) 即 MSPBE 极小。</li>
+    <li><strong>\(A\) 正定 (positive definite)</strong>:对任意非零 \(x\),\(x^\top A x > 0\)(教材 Box 8.4 证)。证法用<em>strict diagonal dominance</em>:\(M = D(I - \gamma P_\pi)\) 满足 \((M+M^\top) \mathbf 1 = 2(1-\gamma) d_\pi > 0\),且对角占优 ⇒ \(M + M^\top \succ 0\) ⇒ \(A \succ 0\)(\(\Phi\) 列满秩)。</li>
+    <li><strong>误差界 (8.32)</strong>:\(\|\hat v(w^*) - v_\pi\|_D \le \frac{1}{1 - \gamma} \min_w \sqrt{J_E(w)}\)。<em>"<em>逼近族最优</em>" 的 \((1-\gamma)^{-1}\) 倍</em> 是 \(\hat v(w^*)\) 离 \(v_\pi\) 距离的<em>松上界</em>。\(\gamma = 0.99\) 时常数 \(=100\),量纲<em>骇人</em> —— 实操 \(\hat v\) 远比这界紧,但<em>worst case</em> 警告深刻。</li>
+    <li><strong>Deadly triad (致命三联,Sutton-Barto §11.3)</strong>:\((1)\) 函数近似(共享 \(w\),不是表式);\((2)\) bootstrap(target 含 \(\hat v(s&#39;; w)\),不是 MC);\((3)\) off-policy(数据加权<em>不</em> 是 \(d_\pi\),如 Q-learning 用 behavior policy 探索)。三者<em>同时</em> 在场 ⇒ \(A\) 不再保证正定 ⇒ 算法可<em>发散</em>(\(\|w_k\| \to \infty\))。</li>
+    <li><strong>Baird 反例 (Baird&#39;s counterexample, 1995)</strong>:7 状态 star MDP,2 个动作(<em>solid</em> 和 <em>dashed</em>),behavior policy 偏好 dashed,target policy 偏好 solid;线性 FA 维度 \(d=8\)。教材正文未细写,但<em>结论简单</em>:在<em>纯线性 FA + Q-learning + off-policy</em> 设置下,<em>权重指数爆炸</em> —— 算法不仅不收敛,反而越跑越远。这是 deadly triad <em>不可绕</em> 的实证。</li>
+    <li><strong>缓解策略 (mitigations)</strong>:<em>(i)</em> Experience replay:从 buffer 均匀抽样 ⇒ 数据<em>近似</em> 满足"on-policy 加权"(L7 详谈)。<em>(ii)</em> Target network:用 frozen \(w^-\) 算 target ⇒ 截断 bootstrap 自反馈(L7)。<em>(iii)</em> 小 stepsize:让 \(\|I - \alpha A\| < 1\) 即使 \(A\) 近退化也保边际稳。<em>(iv)</em> Gradient TD (Sutton et al., 2009):Bellman residual 的<em>真</em> 梯度 + 第二组参数 ⇒ off-policy 稳收敛(理论上正,实操少见)。</li>
+  </ul>
+
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节核心是<strong>(a) TD-Linear 收敛到 MSPBE 极小的严格陈述</strong>,以及<strong>(b) deadly triad 触发 \(A\) 失正定的机理</strong>。</p>
+
+  <p><strong>公式 1:确定型收敛(教材 (8.22)-(8.23))</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "w_{t+1} = w_t + \\alpha_t (b - A w_t),\\quad A = \\Phi^\\top D(I - \\gamma P_\\pi)\\Phi,\\quad b = \\Phi^\\top D r_\\pi",
+    "annotations": [
+      {"key": "deterministic", "label": "随机版的期望版", "description": "把 (8.13) 半梯度 SGD 对 (s_t, s_{t+1}, r_{t+1}) 取期望,样本随机性消失 ⇒ 得 (8.22)。SGD 收敛性归约到 (8.22) 收敛性。"},
+      {"key": "fixed_point", "label": "不动点 w* = A^(-1) b", "description": "若 w_t → w*,则 b - A w* = 0 ⇒ w* = A^(-1) b。Box 8.5 证 w* 即 J_PBE(w) 的极小点。"},
+      {"key": "geometric_conv", "label": "几何收敛(线性 FA + on-policy)", "description": "δ_t := w_t - w* 满足 δ_{t+1} = (I - α_t A)δ_t。A 正定 ⇒ ‖I - αA‖_2 < 1(α 足够小)⇒ ‖δ_t‖ 几何下降。"},
+      {"key": "triad_break", "label": "deadly triad 破坏 A 正定", "description": "off-policy 时 D 用 behavior policy 的稳态 d_b,但 P_π 仍用 target policy ⇒ A = Φ^T d_b·(I - γ P_π) Φ。Box 8.4 证明 A ≻ 0 用了 d_π^T P_π = d_π,这条只在 on-policy 成立 ⇒ off-policy A 可有负特征值 ⇒ ‖I - αA‖ ≥ 1 ⇒ 发散。"}
+    ]
+  }'></div>
+
+  <p><strong>公式 2:误差界(教材 (8.32))</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\|\\Phi w^* - v_\\pi\\|_D \\le \\frac{1}{1 - \\gamma}\\, \\min_w \\sqrt{J_E(w)} = \\frac{1}{1 - \\gamma}\\, \\|\\Pi v_\\pi - v_\\pi\\|_D",
+    "annotations": [
+      {"key": "two_distances", "label": "三个 v 的几何", "description": "v_π = 真值。Π v_π = v_π 在线性族上的正交投影(MSE 极小)。Φ w* = TD 收敛点(MSPBE 极小)。三者距离:‖v_π - Πv_π‖_D 是&#39;族容量&#39; 限,‖Πv_π - Φw*‖_D 是&#39;TD 算法选错点&#39; 的额外代价。"},
+      {"key": "blow_up", "label": "(1-γ)^(-1) 因子", "description": "γ=0.9 ⇒ 因子 10;γ=0.99 ⇒ 100;γ=0.999 ⇒ 1000。理论上限会随 γ→1 爆炸。但实际 RL 任务里 ‖Φw* - v_π‖ 远比此界紧,主要是&#39;最坏情况&#39; 警告:长 horizon 任务对逼近误差极敏感。"},
+      {"key": "design_implication", "label": "设计含义", "description": "(i) 选 γ 不要太接近 1(除非任务必须长 horizon);(ii) 选 φ 时尽量让 v_π 在 Φ 张成空间近;(iii) 大 d 比小 d 安全(min_w √J_E 小)。这些是 reward shaping / feature engineering 的根。"}
+    ]
+  }'></div>
+
+  <p><strong>公式 3:Deadly triad 的机理拆分</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "A_{\\text{off-policy}} = \\Phi^\\top D_b (I - \\gamma P_\\pi) \\Phi \\quad\\text{vs}\\quad A_{\\text{on-policy}} = \\Phi^\\top D_\\pi (I - \\gamma P_\\pi) \\Phi",
+    "annotations": [
+      {"key": "weighting_mismatch", "label": "加权失配", "description": "on-policy 时 D = D_π(target policy 的稳态),且 P_π^T d_π = d_π,这条等式让 A 正定证成立。off-policy 时 D = D_b(behavior policy 的稳态),P_π^T d_b ≠ d_b,&#39;对角占优&#39; 不再成立 ⇒ A 可非正定。"},
+      {"key": "triad_three", "label": "三联缺一不发散", "description": "(i) 去掉 FA(用表式)⇒ Φ=I,A 退化为 D(I - γP_π),与加权无关,表式 Q-learning 收敛;(ii) 去掉 bootstrap(用 MC)⇒ target = G_t,无 P_π,A 退化为 Φ^T D Φ ≻ 0,off-policy MC + FA 收敛;(iii) 去掉 off-policy(用 SARSA + on-policy)⇒ D=D_π,A ≻ 0,收敛。"},
+      {"key": "baird", "label": "Baird&#39;s counterexample", "description": "Sutton-Barto §11.2 经典构造:7 状态 star MDP + 8 维线性 FA + Q-learning(off-policy)+ 错误初始化 ⇒ ‖w_k‖ 指数爆炸。证明 deadly triad 不是&#39;理论 paranoid&#39;,是&#39;实际可触发&#39; 的失败模式。"},
+      {"key": "dqn_fix", "label": "DQN 的工程缓解", "description": "DQN 不消除 deadly triad,而是&#39;减弱&#39;:(i) experience replay buffer 抽样 ≈ 均匀分布,接近 on-policy 加权(虽不严格);(ii) target network frozen ⇒ 把 bootstrap 的&#39;追自己影子&#39; 截断成&#39;追固定影子&#39;;(iii) 小 stepsize + 大 batch ⇒ 即便 A 近退化,update 步幅小到不爆。三者合力让 deep RL 在 Atari 等任务上&#39;实操稳&#39;。"}
+    ]
+  }'></div>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>"<em>三者缺一不发散</em>" 的<em>因果链</em></em>。RL 收敛证明的<em>核心引理</em> 是 \(P_\pi^\top d_\pi = d_\pi\)(target policy 的稳态分布在 \(P_\pi\) 下不变),这条让 \(M = D(I - \gamma P_\pi)\) 严格对角占优(Box 8.4)。on-policy 用 \(D_\pi\),引理成立 ⇒ \(A \succ 0\) ⇒ 收敛。off-policy 用 \(D_b\),引理<em>失效</em>。同时 bootstrap 让 target 含 \(P_\pi\),FA 让多状态共享 \(w\) ⇒ 错的加权<em>放大</em> 到所有共享 \(w\) 的状态 ⇒ 发散。每条<em>独立</em> 都不<em>放大</em>,三条凑齐才<em>放大-不收敛</em>。
+  </div>
+
+  <div class="callout">
+    <strong>Step 2.</strong> <em>误差界 \((1-\gamma)^{-1}\) 因子的几何意义</em>。线性 FA 的"<em>最佳逼近</em>" \(\Pi v_\pi\) 在<em>正交投影</em> 意义下离 \(v_\pi\) 最近;但 TD 的不动点 \(\Phi w^*\) 不是 \(\Pi v_\pi\),而是 \(M T_\pi\) 的不动点("<em>先 Bellman 推一步,再投影</em>")。这两个点之间最坏可差 \(\frac{\gamma}{1-\gamma}\) 倍("<em>每过一步贝尔曼,投影偏差被 \(\gamma\) 放缩</em>")。\(\gamma\) 接近 1 时偏差几何累积 ⇒ \((1-\gamma)^{-1}\) 因子。这是<em>"<em>bootstrap 偏差</em>" 在<em>逼近</em> 损耗下的复合效应</em>。
+  </div>
+
+  <div class="callout">
+    <strong>Step 3.</strong> <em>Deadly triad 的<em>工程哲学</em></em>:理论说"<em>三联可发散</em>",但 deep RL <em>必须</em> 同时用三者(NN + TD + replay buffer 抽样 ≈ off-policy)。怎么办?DQN 的回答是<em>"<em>缓解</em>" 而非<em>"<em>消除</em>"</em>:用 target net 削弱 bootstrap 反馈,用 replay 让加权<em>近似</em> 于均匀,用<em>大 batch + 小 lr</em> 让数值上稳。这是<em>实操工程</em> 战胜<em>理论 paranoid</em> 的经典案例 —— 但代价是<em>无理论收敛保证</em>,只有<em>实证</em>(Atari benchmark)。L6-L7 把这套缓解策略<em>逐条展开</em>。
+  </div>
+
+  <h2>§4 数值演示:5×5 grid-world 上的 TD-Linear</h2>
+  <p>教材 §8.2.4 在 5×5 grid 上跑 TD-Linear,500 episodes、每 episode 500 步、\(\alpha = 0.0005\)、\(\gamma=0.9\)。三种特征:\(d=3\) 平面(欠拟合)、\(d=6\) 二次面(中等)、\(d=10\) 三次(接近真值)。</p>
+
+  <div data-component="gridworld" id="gw-ch08-l04" data-config='{
+    "rows": 5, "cols": 5,
+    "target": [3, 2],
+    "forbidden": [[1,1],[2,1],[2,2],[1,3],[3,3]],
+    "policy": [
+      ["↓","↓","↓","↓","↓"],
+      ["→","·","→","·","↓"],
+      ["→","·","·","→","↓"],
+      ["→","→","·","←","←"],
+      ["↑","↑","↑","↑","↑"]
+    ]
+  }'></div>
+
+  <p style="font-size:0.85rem; color:var(--color-muted);">本图为教材 Fig. 8.6(a) 的 schematic 简化:统一 stochastic policy(每动作概率 0.2)在视觉上无法用 4 箭头精准表达;此处取每格"<em>多数概率方向</em>"。\(v_\pi\) 真值大致呈"<em>右下角(target)高、左上低</em>" 的曲面(Fig. 8.6c)。</p>
+
+  <p>下图给出 \(d=3, 6, 10\) 三种特征下 TD-Linear 的 RMSE 收敛曲线 —— 维度越高 RMSE 下界越低,但都<em>不到 0</em>,因为线性族不含真实 \(v_\pi\)。</p>
+
+  <div data-component="convergence-plot" data-config='{
+    "title": "TD-Linear RMSE vs episode index(教材 Fig. 8.7)",
+    "xlabel": "episode index",
+    "ylabel": "state value error (RMSE)",
+    "series": [
+      {"name": "d=3 (plane)", "data": [[0,4.5],[50,2.6],[100,2.1],[200,1.85],[300,1.78],[400,1.75],[500,1.74]]},
+      {"name": "d=6 (quadratic)", "data": [[0,4.7],[50,1.9],[100,1.35],[200,1.05],[300,0.95],[400,0.90],[500,0.88]]},
+      {"name": "d=10 (cubic)", "data": [[0,4.8],[50,1.4],[100,0.85],[200,0.55],[300,0.42],[400,0.36],[500,0.32]]}
+    ]
+  }'></div>
+
+  <p style="font-size:0.85rem; color:var(--color-muted);">读法:三条曲线<em>都</em> 在前 100 episode 急速下降(初始噪声大,SGD 快速校 \(w\) 方向);随后<em>各自</em> 收敛到一条<em>平台线</em> —— 平台高度 = \(\frac{1}{1-\gamma}\min_w \sqrt{J_E(w)}\) 的<em>实测</em> 体现。\(d=3\) 平台高(平面拟合不了曲面);\(d=10\) 平台低(三次面足以近似)。<em>都不到 0</em>,因为 \(v_\pi\) 真值不<em>严格</em> 是 cubic。</p>
+
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"<em>deadly triad</em>" 是<em>理论 paranoid</em> —— 实操中 NN + Q-learning + replay 跑得很好,所以应该不会真发散。<br>
+    <strong>实际上:</strong><strong>Baird 反例是<em>真</em> 发散的实证</strong> —— 7 状态线性 FA + Q-learning,无任何缓解,\(\|w_k\|\) 指数爆炸。deep RL 跑得稳是因为 DQN <em>额外</em> 加了三道防线(target net + replay + 小 lr),不是 deadly triad <em>不存在</em>。一旦把这些 trick 关掉(比如直接 NN + 单步 Q-learning + 在线训练),实测<em>训练曲线发散</em> 是常态(Mnih et al., 2015 的 ablation 验证过)。<br>
+    <strong>因为:</strong>RL 与监督学习的<em>本质区别</em>:监督学习有 i.i.d. 数据 + 固定 target,SGD 收敛性是<em>泛函分析标准结果</em>。RL 数据由<em>策略 induced</em>(non-iid),target 含<em>当前估计器</em>(non-stationary)。三件事(FA + bootstrap + off-policy)各自破坏一条监督学习的<em>前提</em>,凑齐三条 ⇒ 完全脱离 SGD 收敛理论 ⇒ 发散是<em>默认行为</em>,收敛才是<em>需要工程构造</em> 的现象。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"<em>线性 FA on-policy 收敛到 MSPBE 极小</em> ⇒ MSPBE 极小就是 MSE 极小 ⇒ \(\hat v(w^*) \approx v_\pi\)。"<br>
+    <strong>实际上:</strong><strong>MSPBE 极小<em>不</em> 是 MSE 极小</strong>。两个最优点在<em>族错配</em>(\(v_\pi \notin\) 线性族)时<em>不重合</em>,差距由 (8.32) \(\frac{1}{1-\gamma}\min \sqrt{J_E}\) 控制。\(\gamma\) 接近 1 时差距可<em>很大</em>。L2 已用数值例子展示:\(d=2\) 时 MSE 极小 \(w^* = (-9.5, 1.95)\),MSPBE 极小 \(w^* = (-10.2, 2.05)\),两者差 0.5+。这<em>不是 bug</em>,是 TD-FA 的<em>结构特征</em>。<br>
+    <strong>因为:</strong>TD 用 bootstrap target,目标函数是 \(J_{\text{PBE}} = \|\hat v - \Pi T_\pi \hat v\|_D^2\) —— "<em>先贝尔曼一步再投影</em>" 的<em>不动点</em>。这与"<em>正交投影 \(v_\pi\)</em>" 在族错配时不重合。MC 用真回报,目标是 \(J_E = \|\hat v - v_\pi\|_D^2\),收敛点恰是正交投影。两者在 \(v_\pi \in\) 族 时重合。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"<em>experience replay</em> 是为了 <em>data efficiency</em>(每条样本用多次)。"<br>
+    <strong>实际上:</strong><strong>data efficiency 只是<em>副效益</em>;<em>主效益</em> 是<em>打散样本时间相关性</em></strong>。原始 RL 数据 \((s_t, a_t, r_t, s_{t+1})\) 在<em>时间上高度相关</em>(连续步同一轨迹),违反 SGD 的"<em>独立样本</em>" 假设;replay buffer 均匀抽样 ≈ <em>i.i.d.</em>,把数据加权<em>近似</em> 拉到均匀分布。这一<em>近似 on-policy</em> 让 deadly triad 的"<em>off-policy 加权</em>" 那条<em>缓解</em>(虽不严格消除)。data efficiency 只是抽样多次的<em>顺带</em> 好处。<br>
+    <strong>因为:</strong>L7 详细展开。目标函数 (8.37) 假设 \((S, A) \sim \text{Uniform}\),behavior policy 数据<em>不</em> 是均匀;replay buffer + 均匀抽样把"<em>样本路径分布</em>" 撬到"<em>近似 buffer 自身分布</em>",而 buffer 是<em>很多 episode 的混合</em> ≈ 均匀。这是 mathematical 的"<em>把 (8.37) 期望近似算对</em>",不是工程巧思。
+  </div>
+
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> 写出 deadly triad 的三条,并解释"<em>缺一不发散</em>" 的因果链。</summary>
+    <p><strong>A.</strong> 三条:<em>(1)</em> 函数近似(共享参数 \(w\));<em>(2)</em> bootstrap target(\(r + \gamma \hat v(s&#39;; w)\),不是 MC 回报);<em>(3)</em> off-policy(数据加权 \(D_b\) 不是 \(D_\pi\))。<em>缺一不发散</em>:<em>去掉 FA</em> ⇒ 表式,每格独立无放大;<em>去掉 bootstrap</em> ⇒ MC,target 不依赖当前 \(w\) 无反馈;<em>去掉 off-policy</em> ⇒ on-policy,\(d_\pi^\top P_\pi = d_\pi\) 引理让 \(A \succ 0\)。三条凑齐 ⇒ \(A\) 不再正定 + 共享 \(w\) 放大错的加权 + bootstrap 自反馈 ⇒ 权重指数爆炸(Baird 反例)。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> 教材 (8.32) 给出 \(\|\Phi w^* - v_\pi\|_D \le \frac{1}{1-\gamma}\min_w \sqrt{J_E}\)。\(\gamma=0.99\) 时 \(\frac{1}{1-\gamma}=100\),为什么实操不爆?</summary>
+    <p><strong>A.</strong> (8.32) 是<em>最坏情况</em> 上界,实测远松。原因:<em>(i)</em> \(\min_w J_E\) 在<em>合理</em> \(\phi\) 下很小(实测 grid-world 上 \(d=10\) 多项式 \(\min J_E \approx 0.1\),100×0.1 = 10 仍合理);<em>(ii)</em> 上界证明用了几次三角不等式 + Cauchy-Schwarz,常数<em>放大</em> 严重;<em>(iii)</em> 实际 \(\hat v(w^*)\) 在<em>常见</em> 状态(\(d_\pi\) 高密度)拟合好,只在<em>边角</em> 误差大。所以 (8.32) 是<em>结构警告</em>(γ→1 + 族容量小 ⇒ 危险),不是<em>实操精确预测</em>。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> 为什么<em>experience replay 缓解 deadly triad</em>?它<em>消除</em> 了 deadly triad 吗?</summary>
+    <p><strong>A.</strong> Replay buffer 把<em>多个 episode</em> 的样本混合存储,均匀抽样 ⇒ 经验分布接近<em>buffer 平均</em>(很多策略历史的混合,近似均匀)。这让 (8.37) 中"<em>(S, A) ~ Uniform</em>" 的假设<em>近似成立</em>,在数学上把"<em>off-policy 严重加权失配</em>" 缩成"<em>轻微加权失配</em>"。但<em>不消除</em>:buffer 仍由 behavior policy 写入(off-policy 仍在);bootstrap target 仍含 \(\hat q(s&#39;, a; w)\)(target net 减轻但未消);FA 仍是 NN(共享 \(w\) 仍在)。三条<em>都还在</em>,只是<em>每条都被减弱</em>,合力让<em>实操稳</em>。这就是 DQN 工程哲学:<em>"<em>缓解三条都让发散变缓,慢到能在训练 episode 数内收敛</em>"</em>。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=40&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=40" target="_blank">YouTube 备链</a></p>
+
+  <h3>下一节预告</h3>
+  <p>本节把<em>状态值</em> FA 的故事讲完(算法 + 例子 + 理论 + deadly triad 警告)。<strong>L5(教材 §8.3)</strong> 把 \(\hat v(s; w)\) 推到 \(\hat q(s, a; w)\):Sarsa 与 Q-learning 的 FA 版本。形式<em>极简单</em> —— 只是把所有 \(\hat v(s)\) 换成 \(\hat q(s, a)\),把 \(\delta_t\) 中的 \(\hat v(s_{t+1})\) 换成 \(\hat q(s_{t+1}, a_{t+1})\)(Sarsa)或 \(\max_{a&#39;}\hat q(s_{t+1}, a&#39;)\)(Q-learning)。<em>但</em> 这一改动<em>立即</em> 把 deadly triad 三联凑齐:<em>FA + bootstrap + off-policy(Q-learning 的 max 是 off-policy)</em>。所以 L5 给的算法在<em>线性 FA</em> 下 on-policy(Sarsa)收敛、off-policy(Q-learning)<em>形式上</em> 可发散 —— 但教材在 grid-world 上实测<em>稳</em>,这是 \(d_b \approx d_\pi\) + 小 stepsize 让 \(A\) 数值近似正定的<em>幸运</em>。L6-L7 的 DQN 把这个<em>幸运</em> 升级为<em>工程稳</em>。</p>
+
+  <nav class="lesson-nav">
+    <a href="lesson-03.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-05.html">Next →</a>
+  </nav>
+</div>
+
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>

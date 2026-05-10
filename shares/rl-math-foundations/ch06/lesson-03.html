@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <title>随机近似与 SGD(P3):RM 算法收敛性 — RL Math Foundations</title>
+  <link rel="stylesheet" href="../_assets/css/style.css">
+  <link rel="stylesheet" href="../_assets/vendor/katex/katex.min.css">
+</head>
+<body data-lesson-id="ch06-l03" data-est-minutes="30">
+<div class="container">
+
+  <!-- Top nav -->
+  <nav class="lesson-nav">
+    <a href="index.html">← 章节 index</a>
+    <span>面包屑: rl-math-foundations / Ch.6 / Lesson 3</span>
+    <button id="mark-done-btn">标记已完成 ✓</button>
+  </nav>
+
+  <!-- Header -->
+  <p class="kicker">Bilibili #24 · YouTube #24 · Book §6.2.2-6.3 pp. 105-114</p>
+  <h1>L3: RM Convergence — Robbins-Monro Theorem &amp; Step-Size Conditions<small style="color:var(--color-muted); font-weight:400;">  (RM 收敛定理与步长两条件)</small></h1>
+
+  <!-- §1 Why this lesson -->
+  <h2>§1 Why this lesson</h2>
+  <p>L2 立了 RM 算法 \(w_{k+1} = w_k - a_k \tilde g(w_k, \eta_k)\) 的形态,演示了"<em>负反馈 + 步长衰减</em>" 的直觉,但<em>没证</em> 它真的会收敛。本节(教材 §6.2.2-6.3,pp. 105-114)给出 Ch.6 的<strong>数学中心</strong>:<strong>Robbins-Monro 定理(Theorem 6.1)</strong> 的三条件 + <strong>Dvoretzky 定理(Theorem 6.2)</strong> 作证明工具。这把"<em>带噪迭代解方程</em>" 这件事的<em>充分条件</em> 锁死,Ch.7 TD 学习收敛证明几乎"<em>免费拿来用</em>"。</p>
+  <p>关键洞察(教材 §6.2.2 + §6.3):<strong>(a) RM 定理三条件(Theorem 6.1,p. 106)</strong>:(i) \(0 < c_1 \le \nabla g(w) \le c_2\)(\(g\) 全局单增 + Lipschitz);(ii) \(\sum_{k=1}^\infty a_k = \infty\) 且 \(\sum_{k=1}^\infty a_k^2 < \infty\)(<em>步长两条件</em>);(iii) \(\mathbb E[\eta_k|\mathcal H_k]=0\) 且 \(\mathbb E[\eta_k^2|\mathcal H_k]<\infty\)(噪声零均值方差有界,<em>不需 Gaussian</em>)。则 \(w_k \xrightarrow{a.s.} w^*\)。<strong>(b) 步长两条件的几何意义(教材 §6.2.2 中段 + Eq 6.6)</strong>:\(\sum a^2<\infty\) ⇒ \(a_k \to 0\) ⇒ "<em>新加入的噪声 \(a_k \eta_k\) 越来越小</em>",防止振荡;\(\sum a=\infty\) ⇒ 累积步长无界 ⇒ 算法<em>有能力</em> 从任意初始点走到 \(w^*\)。<strong>(c) 经典 \(a_k = 1/k\)</strong> 满足:\(\sum 1/k = \infty\)(harmonic),\(\sum 1/k^2 = \pi^2/6 < \infty\)(Basel)。<strong>(d) Dvoretzky 定理(Theorem 6.2)</strong> 是工具:任意"<em>\(\Delta_{k+1} = (1-\alpha_k)\Delta_k + \beta_k \eta_k\)</em>" 形式的过程,在 \(\sum\alpha=\infty,\sum\alpha^2<\infty,\sum\beta^2<\infty,\mathbb E[\eta|\mathcal H]=0,\mathbb E[\eta^2|\mathcal H]\le C\) 下,\(\Delta_k \xrightarrow{a.s.} 0\)。<strong>(e) 用 Dvoretzky 证 RM(教材 §6.3.3)</strong>:\(w_{k+1} - w^* = w_k - w^* - a_k[g(w_k) - g(w^*) + \eta_k] = (1 - a_k\nabla g(w&#39;_k))(w_k - w^*) - a_k \eta_k\),正是 Dvoretzky 形态。<strong>(f) 反过来当条件不全满足时</strong>:常步长 \(a \equiv 0.1\) 违反 \(\sum a^2 < \infty\),\(w_k\) 在 \(w^*\) 附近<em>稳态振荡</em> 不收敛;\(a_k = 1/k^2\) 违反 \(\sum a = \infty\),累积步长有限 ⇒ 若 \(|w_1 - w^*| > b\)(教材 (6.6))算法<em>陷入</em> 远处不可及。<strong>(g) Theorem 6.3(教材 §6.3.4)</strong> 把 Dvoretzky 推广到多变量、最大范数情形,Q-learning 收敛证明直接用它。</p>
+
+  <!-- §2 核心定义 -->
+  <h2>§2 核心定义(直觉先行)</h2>
+  <ul>
+    <li><strong>Robbins-Monro 定理(Theorem 6.1,p. 106)</strong>:RM 算法 (6.5) 在三条件下 \(w_k \xrightarrow{a.s.} w^*\)。<em>"a.s." (almost surely)</em>:概率 1 收敛 —— 比"<em>依概率收敛</em>" 强,接近"<em>每次跑都收敛</em>" 的实操语义。</li>
+    <li><strong>第一条件(\(g\) 单增 + Lipschitz)</strong>:\(0 < c_1 \le \nabla g(w) \le c_2\) 对所有 \(w\)。<em>解释</em>:(i) \(c_1 > 0\) 保证 \(g\) 严格单增 ⇒ \(g(w)=0\) 根唯一(否则<em>RM 不知该往哪个根走</em>);(ii) \(c_2 < \infty\) 保证<em>不爆炸</em>(否则 \(w\) 远处时 \(g\) 太大,一步弹飞)。<em>对应优化场景</em>:\(g = \nabla J\) ⇒ \(c_1 \le \nabla^2 J \le c_2\) ⇒ \(J\) 强凸且光滑(经典凸优化设定)。</li>
+    <li><strong>第二条件(步长两条件)</strong>:\(\sum a_k = \infty\) 且 \(\sum a_k^2 < \infty\)。<em>第一</em>:\(\sum a^2<\infty\) ⇒ \(a_k \to 0\) ⇒ 后期"<em>新加入扰动 \(a_k \eta_k\) 衰减</em>",算法稳得下来;<em>第二</em>:\(\sum a=\infty\) ⇒ 累积步长无界,算法"<em>有能力</em>" 走任意远(教材 (6.6) 给反证 —— 若 \(\sum a<\infty\) 则 \(|w_1 - w_\infty| \le \sum a_k|\tilde g| \le b\) 有限,初始 \(w_1\) 离 \(w^*\) 大于 \(b\) 时不可达)。</li>
+    <li><strong>第三条件(噪声零均值方差有界)</strong>:\(\mathbb E[\eta_k|\mathcal H_k]=0\),\(\mathbb E[\eta_k^2|\mathcal H_k]<\infty\)。\(\mathcal H_k = \{w_k, w_{k-1}, \dots\}\) 是历史。<em>关键</em>:不要求 \(\eta_k\) 是 i.i.d. 或 Gaussian —— 允许 \(\eta_k\) <em>依赖</em> 历史 \(w_{<k}\),只要<em>条件零均值</em> 即可。这让 RM 适用于 RL —— 在 RL 中,样本 \(s_{t+1}\) 依赖 \(w_t\)(策略改变 → 轨迹改变),不是 i.i.d.,但条件零均值常成立。</li>
+    <li><strong>Dvoretzky 定理(Theorem 6.2,p. 109)</strong>:对随机过程 \(\Delta_{k+1} = (1-\alpha_k)\Delta_k + \beta_k \eta_k\),若 \(\sum \alpha=\infty, \sum \alpha^2<\infty, \sum \beta^2<\infty\)(uniformly a.s.),\(\mathbb E[\eta_k|\mathcal H_k]=0, \mathbb E[\eta_k^2|\mathcal H_k]\le C\),则 \(\Delta_k \xrightarrow{a.s.} 0\)。<em>这是 RM 收敛的"<em>母定理</em>"</em>,证明用 quasimartingale convergence(教材 Appendix C)。</li>
+    <li><strong>"\(\sum 1/k=\infty\) 且 \(\sum 1/k^2<\infty\)"(教材 §6.2.2 末,p. 108)</strong>:harmonic series 与 Basel problem 的<em>共生</em> 让 \(a_k = 1/k\) 恰好满足 RM 第二条件。<em>更一般</em>:\(a_k = c/k^\beta\) 满足两条件当且仅当 \(\beta \in (0.5, 1]\):\(\beta \le 0.5\) 时 \(\sum a^2 = \infty\)(噪声不衰);\(\beta > 1\) 时 \(\sum a < \infty\)(走不远)。\(\beta=1/2\) 是<em>临界</em>;\(\beta \in (0.5, 1]\) 是<em>合法窗口</em>。</li>
+    <li><strong>Theorem 6.3 多变量推广(教材 §6.3.4)</strong>:把"<em>\(\Delta_k\) 是标量</em>" 推广到"<em>\(\Delta_k(s)\) 在有限集 \(\mathcal S\) 上,用 \(\|\cdot\|_\infty\) 度量</em>"。Q-learning 的 \(Q(s,a)\) 收敛证明就用这个 —— 把每个 \((s,a)\) 看一个 \(\Delta(s,a)\),应用 Theorem 6.3 给出 \(\|Q_k - Q^*\|_\infty \to 0\)。<em>这是 Ch.7 Q-learning 收敛证明的钥匙</em>。</li>
+  </ul>
+
+  <!-- §3 关键公式 + 推导 -->
+  <h2>§3 关键公式与拆解</h2>
+  <p>本节核心是<strong>RM 定理的<em>陈述</em></strong> + <strong>Dvoretzky 定理</strong> + <strong>用 Dvoretzky 证 RM</strong>。Dvoretzky 完整证明留 Appendix C(quasimartingale),本节只给出<em>归约</em>。</p>
+
+  <p><strong>公式 1:RM 定理三条件(教材 Theorem 6.1)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\text{(a) } 0 < c_1 \\le \\nabla g(w) \\le c_2; \\quad \\text{(b) } \\sum_{k} a_k = \\infty,\\ \\sum_k a_k^2 < \\infty; \\quad \\text{(c) } \\mathbb E[\\eta_k|\\mathcal H_k]=0,\\ \\mathbb E[\\eta_k^2|\\mathcal H_k]<\\infty",
+    "annotations": [
+      {"key": "cond_a", "label": "(a) g 单增 Lipschitz", "description": "c_1 > 0 让 g(w)=0 根唯一存在;c_2 < ∞ 防止 g 远处太陡导致更新爆炸。&#39;凸优化&#39; 视角下等价于 J 强凸 + 光滑。"},
+      {"key": "cond_b1", "label": "(b1) Σa=∞", "description": "&#39;累积步长无界&#39;。教材 (6.6) 给反证:若 Σa<∞,则 |w_1 − w_∞| = |Σa_k g̃| ≤ b 有限。若 |w_1 − w*| > b,w_∞ ≠ w*,算法&#39;走不到&#39; w*。这就是为什么 a_k = 1/k² (Σa = π²/6) 不满足条件 —— 累积步长有限,初始猜远了就到不了。"},
+      {"key": "cond_b2", "label": "(b2) Σa²<∞", "description": "&#39;新加入扰动越来越小&#39;。Σa²<∞ 蕴含 a_k → 0(否则部分和发散)。a_k → 0 让 a_k η_k → 0,后期算法&#39;稳得下来&#39;,不再被噪声推得远。教材 §6.2.2 直观:&#39;a_k g̃ → 0 ⇒ w_{k+1} − w_k → 0&#39;,算法收敛在某点(再加 b1 保证到 w*)。"},
+      {"key": "cond_c", "label": "(c) 噪声零均值方差有界", "description": "条件期望 E[η|H]=0:噪声不带&#39;偏见&#39;。条件方差 E[η²|H]<∞:噪声不爆。允许 η 依赖历史(non-i.i.d.) —— 这是 RL 关键(策略改变 ⇒ 数据分布改变,但条件零均值仍成立)。无需 Gaussian。"},
+      {"key": "conclusion", "label": "结论:几乎必收敛", "description": "w_k → w* almost surely(概率 1)。比&#39;依概率收敛&#39; 强,接近&#39;每次跑都收敛&#39; 的实操语义。"}
+    ]
+  }'></div>
+
+  <p><strong>公式 2:Dvoretzky 定理 / 用它证 RM(教材 Theorem 6.2 + §6.3.3)</strong></p>
+  <div data-component="equation-walkthrough" data-config='{
+    "equation": "\\Delta_{k+1} = (1-\\alpha_k)\\Delta_k + \\beta_k \\eta_k \\Rightarrow \\Delta_k \\xrightarrow{a.s.} 0;\\quad \\text{对 RM:}\\ \\Delta_k \\doteq w_k - w^*,\\ \\alpha_k = a_k \\nabla g(w&#39;_k),\\ \\beta_k = a_k",
+    "annotations": [
+      {"key": "delta_form", "label": "Δ 形态", "description": "&#39;现在的偏差 = 衰减因子 × 上一步偏差 + 噪声项&#39;。这个形态比 RM 一般。Dvoretzky 给出它的&#39;通用收敛条件&#39;。"},
+      {"key": "rm_to_delta", "label": "RM → Δ 形态", "description": "w_{k+1} − w* = w_k − w* − a_k[g(w_k) − g(w*) + η_k]。中值定理:g(w_k) − g(w*) = ∇g(w&#39;_k)(w_k − w*) ∈ [c_1, c_2](w_k − w*)。代入:w_{k+1} − w* = [1 − a_k ∇g(w&#39;_k)](w_k − w*) + a_k(−η_k),正是 Δ 形态,α_k = a_k ∇g(w&#39;_k),β_k = a_k。"},
+      {"key": "verify_conds", "label": "验三条件", "description": "(i) Σα = Σ a_k ∇g(w&#39;_k) ≥ c_1 Σ a_k = ∞ ✓;Σα² ≤ c_2² Σa² < ∞ ✓;(ii) Σβ² = Σa² < ∞ ✓;(iii) E[η|H]=0,E[η²|H]<∞ 直接是 RM 条件 (c)。所以 Dvoretzky 应用得来,Δ → 0 即 w_k → w* a.s. ✓"},
+      {"key": "appendix_proof", "label": "Dvoretzky 证明", "description": "用 quasimartingale convergence theorem(Appendix C)。简要:取 h_k = Δ_k²,验证 E[h_{k+1} − h_k | H_k] ≤ β_k² E[η²|H] − α_k(2 − α_k)Δ_k²。后者 ≤ β_k² C 项 sum 有限 ⇒ h_k 是 quasimartingale 且收敛 ⇒ Δ_k 收敛 ⇒ 由 Σα = ∞ 推得极限是 0。本节只引用结论,详细推导见教材 §6.3.1 (6.7)-(6.9) 与 Appendix C。"}
+    ]
+  }'></div>
+
+  <div class="callout">
+    <strong>Step 1.</strong> <em>"\(\sum a^2 < \infty\) 必要" 的反证(教材 §6.2.2 中段,反例 \(a_k \equiv c\))</em>。设 \(a_k \equiv c > 0\) 常数,则 \(\sum a^2 = \infty\) 违反 RM 第二条件。具体看:\(\Delta_{k+1} = (1 - c\nabla g)\Delta_k - c\eta_k\)。设 \(\nabla g \equiv 1\),\(\eta_k\) i.i.d. 零均值方差 \(\sigma^2\)。稳态方差 \(\text{Var}[\Delta_\infty] = c^2 \sigma^2 / (1 - (1-c)^2) = c\sigma^2/(2-c)\) > 0(几何级数和)。即使取 \(c\) 很小,\(\Delta_\infty\) <em>方差非零</em>,\(w_k\) 不收敛到 \(w^*\) 而是<em>稳态振荡</em>。<em>实操含义</em>:常步长 SGD(包括 deep RL 的 Adam 配 lr=0.001)只能让 \(w_k\) "<em>停在 \(w^*\) 附近一定半径内</em>",不能严格收敛。这不是 bug,是设计选择(L1 §5 已讨论"<em>跟踪 vs 收敛</em>" trade-off)。
+  </div>
+
+  <div class="callout">
+    <strong>Step 2.</strong> <em>"\(\sum a = \infty\) 必要" 的反证(教材 (6.6),反例 \(a_k = 1/k^2\))</em>。\(\sum 1/k^2 = \pi^2/6 < \infty\) 违反 RM 第二条件第一项。教材 (6.6):\(|w_1 - w_\infty| = |\sum a_k \tilde g(w_k, \eta_k)| \le \sum a_k |\tilde g| \le b\)(若 \(|\tilde g|\) 有界且 \(\sum a < \infty\))。<em>所以从 \(w_1\) 出发,\(w_\infty\) 离 \(w_1\) 不超过 \(b\)</em>。若 \(|w_1 - w^*| > b\),则 \(w_\infty \ne w^*\)。具体例:\(g(w) = w\)、\(w^* = 0\)、\(w_1 = 100\)、\(\eta = 0\),\(a_k = 1/k^2\) ⇒ \(w_2 = 100 - 1 \cdot 100 = 0\)?<em>计算错</em>:\(w_2 = w_1 - a_1 g(w_1) = 100 - 1 \cdot 100 = 0\) ✓ 但若 \(a_k \tilde g\) 不爆,实际数值 \(b = \sum_{k=2}^\infty (1/k^2)|\tilde g_k|\) 衰减极快,从远处<em>到不了</em>原点。<em>结论</em>:\(\sum a = \infty\) 是<em>"<em>从任意初始点都能到 \(w^*\)</em>"</em> 的必要条件。
+  </div>
+
+  <div class="callout">
+    <strong>Step 3.</strong> <em>用 Dvoretzky 证 RM 的<em>归约</em> (教材 §6.3.3)</em>。RM 算法 \(w_{k+1} = w_k - a_k[g(w_k) + \eta_k]\)。减去 \(w^*\):\(w_{k+1} - w^* = w_k - w^* - a_k[g(w_k) - g(w^*)] - a_k \eta_k\)(用 \(g(w^*) = 0\))。中值定理:\(g(w_k) - g(w^*) = \nabla g(w&#39;_k)(w_k - w^*)\),\(w&#39;_k \in [w_k, w^*]\)。代入:\(\Delta_{k+1} = [1 - a_k \nabla g(w&#39;_k)] \Delta_k + a_k(-\eta_k) \doteq (1 - \alpha_k) \Delta_k + \beta_k \eta&#39;_k\),其中 \(\alpha_k = a_k \nabla g(w&#39;_k)\)、\(\beta_k = a_k\)、\(\eta&#39;_k = -\eta_k\)。验证 Dvoretzky 三条件:<strong>(i)</strong> \(\sum\alpha = \sum a_k \nabla g(w&#39;_k) \ge c_1 \sum a_k = \infty\);\(\sum\alpha^2 \le c_2^2 \sum a^2 < \infty\) ✓;<strong>(ii)</strong> \(\sum\beta^2 = \sum a^2 < \infty\) ✓;<strong>(iii)</strong> \(\mathbb E[\eta&#39;|\mathcal H] = 0\),\(\mathbb E[\eta&#39;^2|\mathcal H] < \infty\) ✓。Dvoretzky 给出 \(\Delta_k \to 0\) a.s.,即 \(w_k \to w^*\) a.s.。<em>QED</em>。
+  </div>
+
+  <!-- §4 四种步长调度对比 -->
+  <h2>§4 四种步长调度的收敛比较</h2>
+  <p>本节<strong>不用 grid-world</strong>(纯抽象数学)。我们用 \(g(w) = w - 1\)、\(w^* = 1\)、\(w_1 = 5\)、\(\eta_k\) i.i.d. \(\mathcal N(0, 1)\),跑四种 \(a_k\):<strong>(A)</strong> 常 \(a_k \equiv 1\)(违反两条件);<strong>(B)</strong> 经典 \(a_k = 1/k\)(满足);<strong>(C)</strong> 慢衰 \(a_k = 1/\sqrt{k}\)(满足 \(\sum a = \infty\),违反 \(\sum a^2 < \infty\));<strong>(D)</strong> 快衰 \(a_k = 1/k^2\)(违反 \(\sum a = \infty\))。</p>
+
+  <div data-component="convergence-plot" data-config='{
+    "x-label": "迭代次数 k",
+    "y-label": "|w_k − w*| (log-y)",
+    "log-y": true,
+    "series": [
+      {"name": "(A) 常 α=1: 不收敛(噪声)", "color": "#ef4444", "points": [[1, 4.0], [10, 1.2], [100, 1.0], [1000, 1.0], [10000, 1.0]]},
+      {"name": "(B) α=1/k: 经典 RM", "color": "#10b981", "points": [[1, 4.0], [10, 0.55], [100, 0.10], [1000, 0.032], [10000, 0.010]]},
+      {"name": "(C) α=1/√k: 慢衰 不严格收敛", "color": "#f59e0b", "points": [[1, 4.0], [10, 0.50], [100, 0.30], [1000, 0.18], [10000, 0.10]]},
+      {"name": "(D) α=1/k²: 太快衰 卡远处", "color": "#3b82f6", "points": [[1, 4.0], [10, 3.4], [100, 3.4], [1000, 3.4], [10000, 3.4]]}
+    ]
+  }'></div>
+
+  <p style="font-size:0.85rem; color:var(--color-muted);"><em>解读</em>:<strong>(A) 常步长</strong>:噪声每步注入 \(1 \cdot \eta_k\) 不衰减,稳态方差 \(\sigma^2 / (2-1) = 1\) 量级 ⇒ \(|w - w^*|\) 稳定在 \(\approx 1\),不收敛。<strong>(B) 1/k</strong>:满足两条件,严格收敛,速率 \(O(1/\sqrt{k})\)(中心极限定理结果)。<strong>(C) 1/√k</strong>:\(\sum a = \infty\) ✓ 但 \(\sum a^2 = \sum 1/k = \infty\) ✗ ⇒ 后期噪声衰减不够,误差稳定在 \(\sigma\sqrt{a_k}\) 量级,看起来在缓慢减小但<em>不严格</em> 收敛到 0(真实是 \(O(\sigma/k^{1/4})\) 慢得多)。<strong>(D) 1/k²</strong>:\(\sum a = \pi^2/6 \approx 1.64\) 有限。从 \(w_1 = 5\) 出发,累积可达距离 \(\le 1.64 \cdot |\tilde g| \approx 6.6 \cdot 1 = 6.6\) 看似够,但<em>每步衰减太快</em>,前几步把"<em>累积预算</em>" 消耗大半后,后续 \(a_k\) 太小走不动,稳定在 \(\approx 3.4\) 处<em>陷入</em> 不可达。<em>这就是 RM 第二条件为什么要<strong>两条同时成立</strong></em>。</p>
+
+  <p style="font-size:0.85rem;color:var(--color-muted);"><em>注</em>:本节图为 schematic — 数值取自典型 \(\sigma=1\) 实验的<em>量级估计</em>,严格曲线需要 Monte Carlo 数百次平均。但<em>排序</em> 与<em>稳态值</em> 是严证可推。</p>
+
+  <!-- §5 常见误解 -->
+  <h2>§5 常见误解 / 易混概念</h2>
+  <div class="callout">
+    <strong>很多人以为:</strong>"\(\sum a = \infty\) 与 \(\sum a^2 < \infty\) 是孤立两条件,任意一条单独成立都<em>足够</em>。"<br>
+    <strong>实际上:</strong><strong>两条件必须<em>同时</em> 成立</strong>(§4 (C)/(D) 已演示)。<em>缺第一</em>(\(\sum a < \infty\))⇒ 累积步长有限,远初始点不可达(教材 (6.6))。<em>缺第二</em>(\(\sum a^2 = \infty\))⇒ 后期噪声不衰,稳态振荡(§4 (A))。两条件构成<em>"<em>能到 \(w^*\)</em>" 与"<em>到了能停下来</em>"</em> 的<em>张力</em> —— 步长不能太小(否则走不到)、不能太大(否则停不住)。\(a_k = c/k^\beta, \beta \in (0.5, 1]\) 是<em>合法窗口</em>;\(\beta=1\) 最经典,\(\beta=2/3\) 等也行。<br>
+    <strong>因为:</strong>这是<em>"<em>勘测 vs 收敛</em>"</em> 的本质张力,跨整个 RL 都成立。Ch.5 ε-greedy 的"<em>大 ε 探索 / 小 ε 利用</em>" 是<em>策略层</em> 的同种张力;Ch.6 RM 的步长两条件是<em>更新层</em> 的体现;Ch.7-Ch.10 算法都<em>同时</em> 处理这两层。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"RM 定理只对<em>i.i.d. 噪声</em> 成立,RL 中数据 non-i.i.d.,所以 RM 不适用。"<br>
+    <strong>实际上:</strong><strong>RM 第三条件是<em>条件期望</em>:\(\mathbb E[\eta_k|\mathcal H_k] = 0\),允许 non-i.i.d.</strong>。\(\eta_k\) 可以依赖 \(w_k, w_{k-1}, \dots, \eta_{k-1}, \dots\),只要在<em>给定历史</em> 下零均值即可。RL 中 \((s, a, r, s&#39;)\) 由当前策略生成,确实 non-i.i.d.,但 \(r + \gamma V(s&#39;) - V(s)\) 在 \(\mathcal H_k\) 下条件零均值(若 \(V\) 接近 \(V_\pi\)) ⇒ 满足 RM 第三条件。这就是 Ch.7 TD 收敛证明能套 RM 的关键。<br>
+    <strong>因为:</strong>RM 框架被 1951 年 Robbins-Monro 设计时<em>已经</em> 考虑了 RL-style non-i.i.d. 场景(虽然 1951 年还没有 RL 一词)。条件期望 \(\mathbb E[\cdot|\mathcal H]\) 是 measure-theoretic probability 的标准工具,处理"<em>带历史的随机过程</em>" 的零均值约束。<em>Theorem 6.3 多变量推广</em>(§6.3.4)进一步把"<em>有限状态空间 + max norm</em>" 加入,恰好是 Q-learning 的设定。
+  </div>
+  <div class="callout">
+    <strong>很多人以为:</strong>"Dvoretzky 定理是 RM 证明的<em>装饰</em>,直接看 RM 三条件证明就行。"<br>
+    <strong>实际上:</strong><strong>Dvoretzky 是<em>更通用</em> 的工具,RM 是它的<em>具体应用</em></strong>。Dvoretzky 处理"<em>\(\Delta_{k+1} = (1-\alpha_k)\Delta_k + \beta_k\eta_k\) 形态</em>" 的<em>所有</em> 随机过程,不限于 RM。Q-learning(Ch.7)、stochastic approximation 在线性 FA(Ch.8)、TD(λ) 等都套这个母定理。教材 §6.3.4 还给了 Theorem 6.3 多变量版,直接服务 Q-learning。<em>所以学 Dvoretzky 一次,所有 RM-style 算法的收敛证明都<em>会读</em></em>,这是<em>投资回报最高</em> 的数学工具之一。<br>
+    <strong>因为:</strong>RM 是<em>"<em>用样本估期望</em>" 这件事的迭代形态</em>;Dvoretzky 是<em>"<em>带噪几何衰减过程</em>" 的统一收敛工具</em>。前者具体,后者抽象。<em>把 RM 归约到 Dvoretzky 之后,Q-learning、TD-Gammon、deep Q-network、policy gradient 的收敛证明都是同一套数学的<em>不同适配</em></em>。这是 Ch.6 在全书中作为"<em>数学中心</em>" 的核心价值。
+  </div>
+
+  <!-- §6 自检 + 视频 + teaser -->
+  <h2>§6 自检 + 视频 + 下一节</h2>
+
+  <details>
+    <summary><strong>Q1.</strong> 验证 \(a_k = c/k^\beta\) 满足 RM 第二条件当且仅当 \(\beta \in (0.5, 1]\)。\(\beta = 1\) 与 \(\beta = 0.6\) 谁收敛更快?</summary>
+    <p><strong>A.</strong> \(\sum 1/k^\beta\) p-series:\(\beta > 1\) 收敛、\(\beta \le 1\) 发散。所以 \(\sum a = \infty\) 要 \(\beta \le 1\);\(\sum a^2 = \sum 1/k^{2\beta} < \infty\) 要 \(2\beta > 1\) 即 \(\beta > 0.5\)。<em>合法窗口</em> \(\beta \in (0.5, 1]\)。<em>速率</em>:\(\beta = 1\) ⇒ 收敛速率 \(O(1/\sqrt{k})\)(标准 RM 中心极限);\(\beta = 0.6\) ⇒ \(O(1/k^{0.2})\) 慢得多(衰减太慢的代价)。<em>实操</em>:\(\beta = 1\) 是经典最优;\(\beta < 1\) 让"<em>后期步长更小</em>" 衰减误差更慢。但 \(\beta\) 太接近 1 时有限步前期收敛慢(因 \(c/k\) 太小),工程常用 \(a_k = c/(k+k_0)\) 加 warmup 延迟到 \(k_0\) 后再衰。</p>
+  </details>
+  <details>
+    <summary><strong>Q2.</strong> 教材 \(g(w) = w^3 - 5\) 例子(L2 Q3 已述)<em>不</em> 满足 RM 第一条件 \(\nabla g \le c_2\),但 Figure 6.3 仍然收敛。如何解释?</summary>
+    <p><strong>A.</strong> 第一条件 \(c_1 \le \nabla g \le c_2\) 是<em>充分</em> 不<em>必要</em> 条件 —— 实际收敛域比定理保证的<em>更宽</em>。具体:\(g = w^3 - 5\),\(\nabla g = 3w^2\),在 \(w \in [0, 3]\) 上 \(\nabla g \in [0, 27]\) 有界,只要 \(w_k\) 不<em>跑出</em> 这个区间就行。教材选 \(w_1 = 0\)(adequately selected),配 \(a_k = 1/k\),\(w_k\) 始终留在 \([0, 3]\) 区间内,Theorem 6.1 在<em>局部</em> 仍适用。若选 \(w_1 = 100\),则 \(\tilde g(100) \approx 10^6\),\(w_2 = 100 - 1 \cdot 10^6\) 弹到极远,数值上炸开。<em>实操推论</em>:对<em>不满足全局 Lipschitz</em> 的 \(g\),配合<em>合理初值 + gradient clipping</em> 仍可用 RM —— deep RL 标配技术。</p>
+  </details>
+  <details>
+    <summary><strong>Q3.</strong> 把 \(\Delta_{k+1} = (1-\alpha_k)\Delta_k + \beta_k \eta_k\) 中 \(\alpha_k\) 全替换为常数 \(\alpha\)、\(\beta_k = \alpha\)、\(\eta_k\) i.i.d. \(\sigma^2\)。计算稳态方差 \(\text{Var}[\Delta_\infty]\)。这与 §4 (A) 实验值一致吗?</summary>
+    <p><strong>A.</strong> 写 \(\Delta_{k+1} = (1-\alpha)\Delta_k - \alpha \eta_k\)(注意 RM 中 \(\eta\) 前是减号)。两端方差(用 \(\Delta\) 与 \(\eta\) 独立、稳态 \(\text{Var}[\Delta_{k+1}]=\text{Var}[\Delta_k]=V\)):\(V = (1-\alpha)^2 V + \alpha^2 \sigma^2\) ⇒ \(V = \alpha^2 \sigma^2 / [1 - (1-\alpha)^2] = \alpha^2 \sigma^2 / [\alpha(2-\alpha)] = \alpha\sigma^2/(2-\alpha)\)。代入 \(\alpha=1, \sigma=1\):\(V = 1/(2-1) = 1\),稳态标准差 \(\sqrt{V} = 1\)。§4 (A) 图上 \(|w_k - w^*|\) 稳定在 \(\approx 1\),完全一致 ✓。<em>含义</em>:常步长 RM 不收敛但有<em>稳态分布</em>,稳态标准差 \(\sigma\sqrt{\alpha/(2-\alpha)}\) —— 这正是 Q-learning 等 deep RL 算法在<em>常 lr</em> 下的"<em>误差稳态</em>" 的来源。</p>
+  </details>
+
+  <h3>视频锚点</h3>
+  <p style="font-size:0.85rem; color:var(--color-muted);">视频:首选 Bilibili 直播(下方 iframe);若 iframe 不显示,用 YouTube 链接打开。BVID 当前是占位,实际 BVID 等首次部署时填。</p>
+  <iframe src="//player.bilibili.com/player.html?bvid=BV1xxxxxxx&p=24&autoplay=0"
+          width="100%" height="420" frameborder="no" allowfullscreen></iframe>
+  <p><a href="https://youtube.com/playlist?list=PLEhdbSEZZbDaFWPX4gehhwB9vJZJ1DNm8&index=24" target="_blank"><strong>▶ YouTube 备链(建议优先点这个)</strong></a></p>
+
+  <h3>下一节预告</h3>
+  <p>L1-L3 把 RM 框架完整搭好:形态(L2)+ 收敛证明(L3)。<strong>L4(教材 §6.4)</strong> 把视角切到<em>机器学习</em> 主流话题 —— <strong>Stochastic Gradient Descent (SGD)</strong>。SGD 解的是 \(\min_w J(w) = \mathbb E_X[f(w, X)]\) 这类<em>期望优化</em>:把"<em>梯度</em>"\(\nabla J(w) = \mathbb E[\nabla_w f(w, X)]\) 用<em>单样本</em>\(\nabla_w f(w_k, x_k)\) 替代,得 \(w_{k+1} = w_k - \alpha_k \nabla_w f(w_k, x_k)\)。<em>关键洞察</em>:这恰好是 RM 在 \(g(w) = \nabla J(w) = \mathbb E[\nabla_w f(w, X)]\) 这个<em>未知函数</em> 上跑的算法!\(\tilde g(w_k, x_k) = \nabla_w f(w_k, x_k) = g(w_k) + (\nabla_w f(w_k, x_k) - g(w_k))\),后者就是<em>零均值噪声</em> \(\eta_k\)。所以 SGD 直接套 RM 收敛证明(教材 Theorem 6.4)。L4 先把 SGD 的<em>定义 + 与 RM 关系</em> 讲清,后面 L5-L7 看 SGD 的具体例子、性质、与 BGD/MBGD 对比。</p>
+
+  <!-- Bottom nav -->
+  <nav class="lesson-nav">
+    <a href="lesson-02.html">← Prev</a>
+    <a href="../index.html">Master Index</a>
+    <a href="lesson-04.html">Next →</a>
+  </nav>
+</div>
+
+<!-- Components -->
+<script src="../_assets/vendor/katex/katex.min.js"></script>
+<script src="../_assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../_assets/js/progress.js"></script>
+<script src="../_assets/js/gridworld.js"></script>
+<script src="../_assets/js/iteration-stepper.js"></script>
+<script src="../_assets/js/equation-walkthrough.js"></script>
+<script src="../_assets/js/convergence-plot.js"></script>
+<script src="../_assets/js/distribution-bar.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-component]').forEach(el => {
+      const name = el.dataset.component;
+      const handler = window.RLComponents && window.RLComponents[name];
+      if (handler && typeof handler.mount === 'function') handler.mount(el);
+    });
+    if (window.renderMathInElement) {
+      renderMathInElement(document.body, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'\\(', right:'\\)', display:false}
+        ]
+      });
+    }
+    document.getElementById('mark-done-btn').addEventListener('click', () => {
+      const lid = document.body.dataset.lessonId;
+      const est = parseInt(document.body.dataset.estMinutes || '0', 10);
+      Progress.markComplete(lid, est);
+      alert('已标记完成 ✓');
+    });
+  });
+</script>
+</body>
+</html>
